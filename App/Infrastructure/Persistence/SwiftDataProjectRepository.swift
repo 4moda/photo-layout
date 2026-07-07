@@ -24,10 +24,24 @@ final class SwiftDataProjectRepository: ProjectRepository {
     }
 
     func save(_ project: ProjectEntity) async throws {
+        // upsert: 既存があれば先に削除を確定させ、unique制約(id)の衝突を避ける
         if let existing = try fetchModel(id: project.id) {
             modelContext.delete(existing)
+            try modelContext.save()
         }
-        modelContext.insert(try model(from: project))
+        // SwiftDataは未insertモデルへのリレーション代入でクラッシュしうるため、
+        // 親をinsertしてから子配列を代入する（子は自動insertされる）
+        let model = ProjectModel(
+            id: project.id,
+            title: project.title,
+            presetData: try project.platformPreset.map { try encoder.encode($0) },
+            defaultFrameData: try encoder.encode(project.defaultPhotoFrame),
+            createdAt: project.createdAt,
+            updatedAt: project.updatedAt
+        )
+        modelContext.insert(model)
+        model.pages = try project.pages.map(pageModel(from:))
+        model.placements = try project.placements.map(placementModel(from:))
         try modelContext.save()
     }
 
@@ -92,39 +106,29 @@ final class SwiftDataProjectRepository: ProjectRepository {
         )
     }
 
-    private func model(from entity: ProjectEntity) throws -> ProjectModel {
-        let project = ProjectModel(
-            id: entity.id,
-            title: entity.title,
-            presetData: try entity.platformPreset.map { try encoder.encode($0) },
-            defaultFrameData: try encoder.encode(entity.defaultPhotoFrame),
-            createdAt: entity.createdAt,
-            updatedAt: entity.updatedAt
+    private func pageModel(from page: PageEntity) throws -> PageModel {
+        PageModel(
+            id: page.id,
+            index: page.index,
+            aspectWidth: page.aspect.width,
+            aspectHeight: page.aspect.height,
+            backgroundData: try encoder.encode(page.background)
         )
-        project.pages = try entity.pages.map { page in
-            PageModel(
-                id: page.id,
-                index: page.index,
-                aspectWidth: page.aspect.width,
-                aspectHeight: page.aspect.height,
-                backgroundData: try encoder.encode(page.background)
-            )
-        }
-        project.placements = try entity.placements.map { placement in
-            PlacementModel(
-                id: placement.id,
-                sortIndex: placement.sortIndex,
-                photoFileName: placement.photo.fileName,
-                photoPixelWidth: placement.photo.pixelWidth,
-                photoPixelHeight: placement.photo.pixelHeight,
-                cropX: placement.cropRect.x, cropY: placement.cropRect.y,
-                cropWidth: placement.cropRect.width, cropHeight: placement.cropRect.height,
-                contentModeRaw: placement.contentMode.rawValue,
-                destX: placement.destRect.x, destY: placement.destRect.y,
-                destWidth: placement.destRect.width, destHeight: placement.destRect.height,
-                frameOverrideData: try placement.frameOverride.map { try encoder.encode($0) }
-            )
-        }
-        return project
+    }
+
+    private func placementModel(from placement: PlacementEntity) throws -> PlacementModel {
+        PlacementModel(
+            id: placement.id,
+            sortIndex: placement.sortIndex,
+            photoFileName: placement.photo.fileName,
+            photoPixelWidth: placement.photo.pixelWidth,
+            photoPixelHeight: placement.photo.pixelHeight,
+            cropX: placement.cropRect.x, cropY: placement.cropRect.y,
+            cropWidth: placement.cropRect.width, cropHeight: placement.cropRect.height,
+            contentModeRaw: placement.contentMode.rawValue,
+            destX: placement.destRect.x, destY: placement.destRect.y,
+            destWidth: placement.destRect.width, destHeight: placement.destRect.height,
+            frameOverrideData: try placement.frameOverride.map { try encoder.encode($0) }
+        )
     }
 }
