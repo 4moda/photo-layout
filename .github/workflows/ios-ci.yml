@@ -1,0 +1,112 @@
+name: ios-ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ios-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # macos-15イメージのXcodeを明示固定（"latest"任せによるシミュレータランタイム不整合を防ぐ）
+  DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+  SIMULATOR_DESTINATION: platform=iOS Simulator,name=iPhone 16
+
+jobs:
+  build-test:
+    name: iOS Build & Test
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Show available simulators
+        run: xcrun simctl list devices available
+
+      # コンパイルエラーを最短で検知するため、テスト実行とは分けて先にビルドする
+      - name: Build for testing (simulator)
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing \
+            -project PhotoLayout.xcodeproj \
+            -scheme PhotoLayout \
+            -destination "$SIMULATOR_DESTINATION" \
+            -derivedDataPath DerivedData \
+            | tee build.log
+
+      - name: Run tests (unit + UI screenshots)
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building \
+            -project PhotoLayout.xcodeproj \
+            -scheme PhotoLayout \
+            -destination "$SIMULATOR_DESTINATION" \
+            -derivedDataPath DerivedData \
+            -resultBundlePath TestResults.xcresult \
+            | tee test.log
+
+      # XCUITestが添付したスクリーンショットを取り出す。
+      # Macを持たない開発者が実際の画面を確認する唯一の手段。
+      - name: Export screenshots from xcresult
+        if: always()
+        run: |
+          if [ -e TestResults.xcresult ]; then
+            xcrun xcresulttool export attachments \
+              --path TestResults.xcresult \
+              --output-path screenshots || true
+            ls -R screenshots || true
+          fi
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots
+          if-no-files-found: ignore
+
+      - name: Upload test results and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            TestResults.xcresult
+            build.log
+            test.log
+          if-no-files-found: ignore
+
+      # Sideloadly/AltStoreで手動サイドロードするためのunsignedビルド。
+      # 署名はインストール時にユーザーの無料Apple IDで行われるため、CIでは署名しない。
+      - name: Build unsigned device app (Release)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project PhotoLayout.xcodeproj \
+            -scheme PhotoLayout \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath DerivedDataDevice \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            | tee device-build.log
+
+      - name: Package unsigned .ipa
+        run: |
+          APP_PATH="DerivedDataDevice/Build/Products/Release-iphoneos/PhotoLayout.app"
+          test -d "$APP_PATH"
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qry PhotoLayout-unsigned.ipa Payload
+
+      - name: Upload unsigned .ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: PhotoLayout-unsigned-ipa
+          path: PhotoLayout-unsigned.ipa
