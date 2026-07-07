@@ -43,6 +43,7 @@ targets:
     settings:
       base:
         SWIFT_VERSION: "5.0"
+        GENERATE_INFOPLIST_FILE: YES
 
   PhotoLayoutUITests:
     type: bundle.ui-testing
@@ -54,3 +55,4 @@ targets:
       base:
         SWIFT_VERSION: "5.0"
         TEST_TARGET_NAME: PhotoLayout
+        GENERATE_INFOPLIST_FILE: YES
