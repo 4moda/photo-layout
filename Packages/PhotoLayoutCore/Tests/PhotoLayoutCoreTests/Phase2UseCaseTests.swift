@@ -30,7 +30,7 @@ actor FakeLibrarySaver: PhotoLibrarySaving {
 
 @Suite("Phase 2 UseCases")
 struct Phase2UseCaseTests {
-    @Test("AddPhoto: 保存された参照でplacementが追加され永続化される")
+    @Test("AddPhoto: 保存された参照で全面配置のplacementが追加され永続化される")
     func addPhoto() async throws {
         let repo = InMemoryProjectRepository()
         let project = try await CreateProjectUseCase(repository: repo).execute()
@@ -39,7 +39,9 @@ struct Phase2UseCaseTests {
 
         #expect(updated.placements.count == 1)
         #expect(updated.placements[0].photo.fileName == "stored-42.jpg")
-        #expect(updated.placements[0].destRect == .unit)
+        #expect(updated.placements[0].destRect.isApproximatelyEqual(to: .unit))
+        // 既定4:5ページ（余白なし、contentAspect=0.8）に6000x4000 → クロップ幅=(4000*0.8)/6000
+        #expect(abs(updated.placements[0].cropRect.width - (4000.0 * 0.8) / 6000.0) < 1e-9)
         let persisted = try await repo.fetch(id: project.id)
         #expect(persisted?.placements.count == 1)
     }
@@ -72,19 +74,24 @@ struct Phase2UseCaseTests {
         }
     }
 
-    @Test("Mutations: アスペクト変更・fill/fit切替・プリセット適用")
+    @Test("Mutations: 全面/マット配置とプリセット適用")
     func mutations() {
         var project = ProjectEntity(pages: [PageEntity(index: 0, aspect: AspectRatio(width: 1, height: 1))])
-        project.addPhoto(PhotoRef(fileName: "p.jpg", pixelWidth: 100, pixelHeight: 100))
+        project.addPhoto(PhotoRef(fileName: "p.jpg", pixelWidth: 3000, pixelHeight: 2000))
 
-        project.setPageAspect(AspectRatio(width: 16, height: 9))
-        #expect(project.pages[0].aspect == AspectRatio(width: 16, height: 9))
+        // 既定は全面配置: 1:1領域に3:2写真 → クロップ幅=(2000*1)/3000
+        #expect(project.placements[0].destRect.isApproximatelyEqual(to: .unit))
+        #expect(abs(project.placements[0].cropRect.width - 2000.0 / 3000.0) < 1e-9)
 
-        project.setContentMode(.fit)
-        #expect(project.placements[0].contentMode == .fit)
+        project.placeAllMatted(coverage: 0.8)
+        #expect(project.placements[0].cropRect.isApproximatelyEqual(to: .unit))
+        #expect(abs(project.placements[0].destRect.width - 0.8) < 1e-9)          // 横長写真: 幅が律速
+        #expect(abs(project.placements[0].destRect.aspectRatio - 1.5) < 1e-9)    // 1:1領域なので正規化=px
 
         project.applyFramePreset(.blackBackgroundWhiteBorder)
         #expect(project.pages[0].background.color == .black)
         #expect(project.defaultPhotoFrame.borderColor == .white)
+        // 再配置後もマットのまま・写真全体が見えている
+        #expect(project.placements[0].cropRect.isApproximatelyEqual(to: .unit))
     }
 }

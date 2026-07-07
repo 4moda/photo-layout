@@ -33,7 +33,6 @@ final class PageEditorViewModel {
 
     var page: PageEntity? { project.orderedPages.first }
     var hasPhoto: Bool { !project.placements.isEmpty }
-    var contentMode: ContentMode { project.placements.first?.contentMode ?? .fill }
 
     func onAppear() async {
         await refreshImages()
@@ -53,8 +52,15 @@ final class PageEditorViewModel {
         await persistAndRefresh()
     }
 
-    func toggleContentMode() async {
-        project.setContentMode(contentMode == .fill ? .fit : .fill)
+    /// 全面配置（ワンタップ配置アクション。永続モードではない）
+    func placeFill() async {
+        project.placeAllFillingPage()
+        await persistAndRefresh()
+    }
+
+    /// マット配置（写真全体を余白付きで見せる）
+    func placeMat() async {
+        project.placeAllMatted()
         await persistAndRefresh()
     }
 

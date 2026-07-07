@@ -90,7 +90,6 @@ final class SwiftDataProjectRepository: ProjectRepository {
                             x: placement.cropX, y: placement.cropY,
                             width: placement.cropWidth, height: placement.cropHeight
                         ),
-                        contentMode: ContentMode(rawValue: placement.contentModeRaw) ?? .fill,
                         destRect: LayoutRect(
                             x: placement.destX, y: placement.destY,
                             width: placement.destWidth, height: placement.destHeight
@@ -125,7 +124,6 @@ final class SwiftDataProjectRepository: ProjectRepository {
             photoPixelHeight: placement.photo.pixelHeight,
             cropX: placement.cropRect.x, cropY: placement.cropRect.y,
             cropWidth: placement.cropRect.width, cropHeight: placement.cropRect.height,
-            contentModeRaw: placement.contentMode.rawValue,
             destX: placement.destRect.x, destY: placement.destRect.y,
             destWidth: placement.destRect.width, destHeight: placement.destRect.height,
             frameOverrideData: try placement.frameOverride.map { try encoder.encode($0) }

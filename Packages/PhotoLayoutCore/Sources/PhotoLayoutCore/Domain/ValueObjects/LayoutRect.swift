@@ -48,4 +48,18 @@ public struct LayoutRect: Hashable, Codable, Sendable {
         let h = content.height * scale
         return LayoutRect(x: midX - w / 2, y: midY - h / 2, width: w, height: h)
     }
+
+    /// 中心を保ったまま全体を等倍で拡縮した矩形
+    public func scaled(by factor: Double) -> LayoutRect {
+        let w = width * factor
+        let h = height * factor
+        return LayoutRect(x: midX - w / 2, y: midY - h / 2, width: w, height: h)
+    }
+
+    public func isApproximatelyEqual(to other: LayoutRect, tolerance: Double = 1e-6) -> Bool {
+        abs(x - other.x) < tolerance
+            && abs(y - other.y) < tolerance
+            && abs(width - other.width) < tolerance
+            && abs(height - other.height) < tolerance
+    }
 }

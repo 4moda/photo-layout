@@ -6,7 +6,7 @@ import Foundation
 public enum RenderPlanBuilder {
     /// - Parameters:
     ///   - page: 対象ページ
-    ///   - placements: このページに属する配置（destRectはページ正規化0..1座標）
+    ///   - placements: このページに属する配置（destRectは配置領域の正規化0..1座標）
     ///   - defaultFrame: placement.frameOverrideがnilのときに使うフレーム
     ///   - pagePixelSize: 出力先のピクセル（またはポイント）サイズ。ページのアスペクト比と一致している前提
     public static func build(
@@ -37,33 +37,22 @@ public enum RenderPlanBuilder {
             let cornerRadiusPx = frame.cornerRadiusRatio * ref
             let borderWidthPx = frame.borderWidthRatio * ref
 
-            // destRect（ページ正規化）→ 配置セル（px）
-            let cell = LayoutRect(
+            // destRect（配置領域の正規化座標）→ 写真の表示矩形（px）
+            let imageRect = LayoutRect(
                 x: contentRect.x + placement.destRect.x * contentRect.width,
                 y: contentRect.y + placement.destRect.y * contentRect.height,
                 width: placement.destRect.width * contentRect.width,
                 height: placement.destRect.height * contentRect.height
             )
+            guard imageRect.width > 0, imageRect.height > 0 else { continue }
 
-            // クロップ領域の実ピクセルアスペクト
-            let cropPxW = placement.cropRect.width * Double(placement.photo.pixelWidth)
-            let cropPxH = placement.cropRect.height * Double(placement.photo.pixelHeight)
-            guard cropPxW > 0, cropPxH > 0 else { continue }
-            let cropAspect = cropPxW / cropPxH
-
-            let sourceRect: LayoutRect
-            let imageRect: LayoutRect
-            switch placement.contentMode {
-            case .fill:
-                // セルのアスペクトに合わせてクロップ矩形を中央でさらに絞り込み、
-                // レンダラ側のクリッピングを不要にする
-                sourceRect = subCrop(placement.cropRect, sourceAspect: cropAspect, targetAspect: cell.aspectRatio)
-                imageRect = cell
-            case .fit:
-                // クロップ全体を見せ、セル内に収める（マット仕上げ）
-                sourceRect = placement.cropRect
-                imageRect = cell.fitting(AspectRatio(width: cropPxW, height: cropPxH))
-            }
+            // 不変条件（destRectのpxアスペクト==cropのpxアスペクト）は配置ヘルパが維持するが、
+            // 浮動小数の揺れや不整合データに備えて防御的に正規化する（画像が歪んで描かれることはない）
+            let sourceRect = CropMath.subCrop(
+                placement.cropRect,
+                photo: placement.photo,
+                targetPixelAspect: imageRect.aspectRatio
+            )
 
             commands.append(.drawImage(
                 placementID: placement.id,
@@ -74,7 +63,7 @@ public enum RenderPlanBuilder {
             ))
 
             if borderWidthPx > 0, frame.borderColor.alpha > 0 {
-                // 線は中心線基準で描かれるため、画像の内側に収まるよう半分だけinsetする
+                // 線は中心線基準で描かれるため、写真の内側に収まるよう半分だけinsetする
                 let inset = borderWidthPx / 2
                 commands.append(.strokeBorder(
                     color: frame.borderColor,
@@ -90,20 +79,5 @@ public enum RenderPlanBuilder {
             }
         }
         return commands
-    }
-
-    /// cropRect（元画像正規化）を、実ピクセルアスペクトがtargetAspectになるよう中央で絞り込む。
-    private static func subCrop(_ crop: LayoutRect, sourceAspect: Double, targetAspect: Double) -> LayoutRect {
-        if sourceAspect > targetAspect {
-            // 横に余る → 幅を削る
-            let scale = targetAspect / sourceAspect
-            let newWidth = crop.width * scale
-            return LayoutRect(x: crop.midX - newWidth / 2, y: crop.y, width: newWidth, height: crop.height)
-        } else if sourceAspect < targetAspect {
-            let scale = sourceAspect / targetAspect
-            let newHeight = crop.height * scale
-            return LayoutRect(x: crop.x, y: crop.midY - newHeight / 2, width: crop.width, height: newHeight)
-        }
-        return crop
     }
 }

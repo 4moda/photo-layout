@@ -19,4 +19,16 @@ public struct PageEntity: Hashable, Codable, Sendable, Identifiable {
         self.aspect = aspect
         self.background = background
     }
+
+    /// 余白を差し引いた配置領域の実ピクセルアスペクト（サイズに依存しない）。
+    /// 余白は短辺基準の比率なので、名目サイズ（w=ratio, h=1）で計算できる。
+    public var contentAspect: Double {
+        let width = aspect.ratio
+        let height = 1.0
+        let ref = min(width, height)
+        let contentWidth = width - (background.margins.leading + background.margins.trailing) * ref
+        let contentHeight = height - (background.margins.top + background.margins.bottom) * ref
+        guard contentWidth > 0, contentHeight > 0 else { return aspect.ratio }
+        return contentWidth / contentHeight
+    }
 }

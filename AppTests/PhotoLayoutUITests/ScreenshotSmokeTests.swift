@@ -45,10 +45,10 @@ final class ScreenshotSmokeTests: XCTestCase {
         sleep(2)
         attachScreenshot(named: "04-editor-black-background")
 
-        // fit → fill 切替
-        app.buttons["pageEditor.modeToggle"].tap()
+        // マット配置（写真全体＋余白）へ切替
+        app.buttons["pageEditor.matButton"].tap()
         sleep(2)
-        attachScreenshot(named: "05-editor-mode-toggled")
+        attachScreenshot(named: "05-editor-matted")
     }
 
     @MainActor

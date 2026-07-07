@@ -104,16 +104,18 @@ struct PageEditorView: View {
             .accessibilityIdentifier("pageEditor.aspectMenu")
 
             Button {
-                Task { await viewModel.toggleContentMode() }
+                Task { await viewModel.placeFill() }
             } label: {
-                Label(
-                    viewModel.contentMode == .fill ? "fill" : "fit",
-                    systemImage: viewModel.contentMode == .fill
-                        ? "rectangle.arrowtriangle.2.inward"
-                        : "rectangle.arrowtriangle.2.outward"
-                )
+                Label("全面", systemImage: "rectangle.arrowtriangle.2.inward")
             }
-            .accessibilityIdentifier("pageEditor.modeToggle")
+            .accessibilityIdentifier("pageEditor.fillButton")
+
+            Button {
+                Task { await viewModel.placeMat() }
+            } label: {
+                Label("マット", systemImage: "rectangle.arrowtriangle.2.outward")
+            }
+            .accessibilityIdentifier("pageEditor.matButton")
 
             Menu {
                 ForEach(Self.presetChoices, id: \.label) { choice in
