@@ -11,18 +11,27 @@ final class ProjectListViewModel {
     private let listProjects: ListProjectsUseCase
     private let createProject: CreateProjectUseCase
     private let deleteProject: DeleteProjectUseCase
+    /// --seed-demo時のみ注入される（UIテスト・CIスクショ用）
+    private let seedDemo: (() async -> Void)?
+    private var didSeed = false
 
     init(
         listProjects: ListProjectsUseCase,
         createProject: CreateProjectUseCase,
-        deleteProject: DeleteProjectUseCase
+        deleteProject: DeleteProjectUseCase,
+        seedDemo: (() async -> Void)? = nil
     ) {
         self.listProjects = listProjects
         self.createProject = createProject
         self.deleteProject = deleteProject
+        self.seedDemo = seedDemo
     }
 
     func load() async {
+        if let seedDemo, !didSeed {
+            didSeed = true
+            await seedDemo()
+        }
         do {
             projects = try await listProjects.execute()
         } catch {

@@ -1,7 +1,7 @@
 import SwiftUI
 import PhotoLayoutCore
 
-/// 下書き一覧。新規作成・削除ができる（フェーズ1の最小UI）。
+/// 下書き一覧。行タップでページ編集へ遷移する。
 struct ProjectListView: View {
     @State private var viewModel: ProjectListViewModel
 
@@ -22,7 +22,9 @@ struct ProjectListView: View {
                 } else {
                     List {
                         ForEach(viewModel.projects) { project in
-                            ProjectRow(project: project)
+                            NavigationLink(value: project) {
+                                ProjectRow(project: project)
+                            }
                         }
                         .onDelete { offsets in
                             let ids = offsets.map { viewModel.projects[$0].id }
@@ -35,6 +37,9 @@ struct ProjectListView: View {
                 }
             }
             .navigationTitle("PhotoLayout")
+            .navigationDestination(for: ProjectEntity.self) { project in
+                AppComposition.makePageEditor(project: project)
+            }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -45,7 +50,10 @@ struct ProjectListView: View {
                     .accessibilityIdentifier("projectList.add")
                 }
             }
-            .task { await viewModel.load() }
+            // 編集画面から戻ったときにも最新を読み直す（.taskは初回のみのため）
+            .onAppear {
+                Task { await viewModel.load() }
+            }
         }
     }
 }

@@ -64,7 +64,6 @@ final class PlacementModel {
     var cropY: Double
     var cropWidth: Double
     var cropHeight: Double
-    var contentModeRaw: String
     var destX: Double
     var destY: Double
     var destWidth: Double
@@ -79,7 +78,6 @@ final class PlacementModel {
         photoPixelWidth: Int,
         photoPixelHeight: Int,
         cropX: Double, cropY: Double, cropWidth: Double, cropHeight: Double,
-        contentModeRaw: String,
         destX: Double, destY: Double, destWidth: Double, destHeight: Double,
         frameOverrideData: Data?
     ) {
@@ -92,7 +90,6 @@ final class PlacementModel {
         self.cropY = cropY
         self.cropWidth = cropWidth
         self.cropHeight = cropHeight
-        self.contentModeRaw = contentModeRaw
         self.destX = destX
         self.destY = destY
         self.destWidth = destWidth
