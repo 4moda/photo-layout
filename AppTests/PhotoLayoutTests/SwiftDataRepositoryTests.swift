@@ -7,15 +7,22 @@ import PhotoLayoutCore
 /// Entity → Model → Entity が完全一致することを保証する。
 @MainActor
 final class SwiftDataRepositoryTests: XCTestCase {
+    // コンテナを保持しないとsetUp終了時に解放され、以降のcontext操作がクラッシュする
+    private var container: ModelContainer!
     private var repository: SwiftDataProjectRepository!
 
     override func setUp() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(
+        container = try ModelContainer(
             for: ProjectModel.self, PageModel.self, PlacementModel.self,
             configurations: config
         )
         repository = SwiftDataProjectRepository(modelContext: container.mainContext)
+    }
+
+    override func tearDown() async throws {
+        repository = nil
+        container = nil
     }
 
     private func makeSampleProject() -> ProjectEntity {
