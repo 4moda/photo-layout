@@ -1,0 +1,66 @@
+import SwiftUI
+import PhotoLayoutCore
+
+/// 下書き一覧。新規作成・削除ができる（フェーズ1の最小UI）。
+struct ProjectListView: View {
+    @State private var viewModel: ProjectListViewModel
+
+    init(viewModel: ProjectListViewModel) {
+        _viewModel = State(initialValue: viewModel)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if viewModel.projects.isEmpty {
+                    ContentUnavailableView(
+                        "下書きがありません",
+                        systemImage: "rectangle.3.group",
+                        description: Text("＋で新しいレイアウトを作成")
+                    )
+                    .accessibilityIdentifier("projectList.empty")
+                } else {
+                    List {
+                        ForEach(viewModel.projects) { project in
+                            ProjectRow(project: project)
+                        }
+                        .onDelete { offsets in
+                            let ids = offsets.map { viewModel.projects[$0].id }
+                            Task {
+                                for id in ids { await viewModel.delete(id: id) }
+                            }
+                        }
+                    }
+                    .accessibilityIdentifier("projectList.list")
+                }
+            }
+            .navigationTitle("PhotoLayout")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        Task { await viewModel.createDraft() }
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityIdentifier("projectList.add")
+                }
+            }
+            .task { await viewModel.load() }
+        }
+    }
+}
+
+private struct ProjectRow: View {
+    let project: ProjectEntity
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(project.title ?? "無題のレイアウト")
+                .font(.headline)
+            Text("\(project.pages.count)ページ・\(project.placements.count)枚 — \(project.updatedAt.formatted(date: .abbreviated, time: .shortened))")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .accessibilityIdentifier("projectList.row")
+    }
+}
