@@ -1,0 +1,21 @@
+name: core-tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: core-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-tests:
+    name: Core Tests
+    runs-on: ubuntu-latest
+    # CLAUDE.mdのツールチェーン表と揃えること（Xcode 16.4 = Swift 6.1）
+    container: swift:6.1-noble
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run swift test (PhotoLayoutCore)
+        run: swift test --package-path Packages/PhotoLayoutCore
