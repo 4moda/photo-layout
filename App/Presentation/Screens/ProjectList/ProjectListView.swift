@@ -26,7 +26,10 @@ struct ProjectListView: View {
                     List {
                         ForEach(viewModel.projects) { project in
                             NavigationLink(value: project) {
-                                ProjectRow(project: project)
+                                ProjectRow(
+                                    project: project,
+                                    thumbnailImages: viewModel.thumbnailImages(for: project)
+                                )
                             }
                         }
                         .onDelete { offsets in
@@ -100,14 +103,33 @@ struct ProjectListView: View {
 
 private struct ProjectRow: View {
     let project: ProjectEntity
+    /// 1ページ目の配置ID→サムネイル画像（ViewModelのキャッシュから供給）
+    let thumbnailImages: [UUID: UIImage]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(project.title ?? "無題のレイアウト")
-                .font(.headline)
-            Text("\(project.pages.count)ページ・\(project.placements.count)枚 — \(project.updatedAt.formatted(date: .abbreviated, time: .shortened))")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        HStack(spacing: 12) {
+            if let page = project.orderedPages.first {
+                CanvasRenderView(
+                    page: page,
+                    placements: project.placements(onPage: page.index),
+                    defaultFrame: project.defaultPhotoFrame,
+                    images: thumbnailImages
+                )
+                .frame(height: 64)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(Color(.systemGray4), lineWidth: 0.5)
+                )
+                .accessibilityIdentifier("projectList.thumbnail")
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(project.title ?? "無題のレイアウト")
+                    .font(.headline)
+                Text("\(project.pages.count)ページ・\(project.placements.count)枚 — \(project.updatedAt.formatted(date: .abbreviated, time: .shortened))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .accessibilityIdentifier("projectList.row")
     }

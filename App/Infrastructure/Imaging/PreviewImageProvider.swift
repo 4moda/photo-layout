@@ -6,10 +6,12 @@ import PhotoLayoutCore
 /// クロップの解釈はCanvasRenderViewがDrawCommand.sourceRectから行う。
 final class PreviewImageProvider: PreviewImageProviding {
     private let decoder: ImageIODecoder
-    private let previewMaxPixel = 2048
+    private let previewMaxPixel: Int
 
-    init(decoder: ImageIODecoder) {
+    /// - Parameter maxPixelSize: デコード上限（長辺px）。一覧サムネイルは小さく指定してメモリと速度を守る
+    init(decoder: ImageIODecoder, maxPixelSize: Int = 2048) {
         self.decoder = decoder
+        self.previewMaxPixel = maxPixelSize
     }
 
     func previewImages(project: ProjectEntity) async -> [UUID: UIImage] {

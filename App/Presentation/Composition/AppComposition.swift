@@ -30,6 +30,7 @@ enum AppComposition {
             listProjects: ListProjectsUseCase(repository: repo),
             createProject: CreateProjectUseCase(repository: repo),
             deleteProject: DeleteProjectUseCase(repository: repo),
+            thumbnailProvider: PreviewImageProvider(decoder: decoder, maxPixelSize: 256),
             seedDemo: seeder.map { s in { await s.seedIfNeeded() } }
         )
         return ProjectListView(viewModel: viewModel)
