@@ -29,6 +29,32 @@ extension ProjectEntity {
         }
     }
 
+    /// 重なり順: 同一ページ内で1段前面へ（sortIndexを隣と入替）。最前面なら何もしない
+    public mutating func bringForward(placementID: UUID) {
+        guard let placement = placements.first(where: { $0.id == placementID }) else { return }
+        let samePage = placements(onPage: placement.pageIndex)
+        guard let position = samePage.firstIndex(where: { $0.id == placementID }),
+              position + 1 < samePage.count else { return }
+        swapSortIndex(placementID, samePage[position + 1].id)
+    }
+
+    /// 重なり順: 同一ページ内で1段背面へ。最背面なら何もしない
+    public mutating func sendBackward(placementID: UUID) {
+        guard let placement = placements.first(where: { $0.id == placementID }) else { return }
+        let samePage = placements(onPage: placement.pageIndex)
+        guard let position = samePage.firstIndex(where: { $0.id == placementID }),
+              position > 0 else { return }
+        swapSortIndex(placementID, samePage[position - 1].id)
+    }
+
+    private mutating func swapSortIndex(_ a: UUID, _ b: UUID) {
+        guard let indexA = placements.firstIndex(where: { $0.id == a }),
+              let indexB = placements.firstIndex(where: { $0.id == b }) else { return }
+        let temp = placements[indexA].sortIndex
+        placements[indexA].sortIndex = placements[indexB].sortIndex
+        placements[indexB].sortIndex = temp
+    }
+
     /// 全面配置: クロップを配置領域のアスペクトに絞り込み、領域いっぱいに敷く。
     public mutating func placeFillingPage(placementID: UUID) {
         guard let index = placements.firstIndex(where: { $0.id == placementID }),

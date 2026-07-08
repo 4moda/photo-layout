@@ -768,6 +768,22 @@ struct PageEditorView: View {
             }
             .accessibilityIdentifier("pageEditor.cropButton")
 
+            Menu {
+                Button {
+                    Task { await viewModel.bringSelectedForward() }
+                } label: {
+                    Label("前面へ", systemImage: "square.2.stack.3d.top.filled")
+                }
+                Button {
+                    Task { await viewModel.sendSelectedBackward() }
+                } label: {
+                    Label("背面へ", systemImage: "square.2.stack.3d.bottom.filled")
+                }
+            } label: {
+                Label("レイヤー", systemImage: "square.stack.3d.up")
+            }
+            .accessibilityIdentifier("pageEditor.layerMenu")
+
             Button(role: .destructive) {
                 Task { await viewModel.deleteSelectedPhoto() }
             } label: {

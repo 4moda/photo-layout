@@ -193,3 +193,43 @@ struct RemovePlacementTests {
         #expect(project.placements.count == 1)
     }
 }
+
+@Suite("レイヤー順序（前面へ/背面へ）")
+struct LayerOrderTests {
+    private func makeProject() -> ProjectEntity {
+        var project = ProjectEntity(pages: [
+            PageEntity(index: 0, aspect: AspectRatio(width: 1, height: 1)),
+            PageEntity(index: 1, aspect: AspectRatio(width: 1, height: 1))
+        ])
+        let photo = PhotoRef(fileName: "a.jpg", pixelWidth: 100, pixelHeight: 100)
+        project.placements = [
+            PlacementEntity(sortIndex: 0, pageIndex: 0, photo: photo, destRect: .unit),
+            PlacementEntity(sortIndex: 1, pageIndex: 0, photo: photo, destRect: .unit),
+            PlacementEntity(sortIndex: 2, pageIndex: 1, photo: photo, destRect: .unit)
+        ]
+        return project
+    }
+
+    @Test("bringForward: 同一ページ内で1段前面へ。他ページには影響しない")
+    func bringForwardSwapsWithinPage() {
+        var project = makeProject()
+        let backID = project.placements(onPage: 0)[0].id
+        let otherPageSortIndex = project.placements(onPage: 1)[0].sortIndex
+        project.bringForward(placementID: backID)
+        #expect(project.placements(onPage: 0).last?.id == backID)
+        #expect(project.placements(onPage: 1)[0].sortIndex == otherPageSortIndex)
+        // 最前面からはこれ以上動かない
+        project.bringForward(placementID: backID)
+        #expect(project.placements(onPage: 0).last?.id == backID)
+    }
+
+    @Test("sendBackward: 1段背面へ。最背面では何もしない")
+    func sendBackwardSwaps() {
+        var project = makeProject()
+        let frontID = project.placements(onPage: 0)[1].id
+        project.sendBackward(placementID: frontID)
+        #expect(project.placements(onPage: 0).first?.id == frontID)
+        project.sendBackward(placementID: frontID)
+        #expect(project.placements(onPage: 0).first?.id == frontID)
+    }
+}

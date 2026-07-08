@@ -157,6 +157,22 @@ final class PageEditorViewModel {
         await persist(refreshImages: false)
     }
 
+    /// レイヤー順序: 選択中の写真を1段前面へ
+    func bringSelectedForward() async {
+        guard let id = selectedPlacementID else { return }
+        record()
+        project.bringForward(placementID: id)
+        await persist(refreshImages: false)
+    }
+
+    /// レイヤー順序: 選択中の写真を1段背面へ
+    func sendSelectedBackward() async {
+        guard let id = selectedPlacementID else { return }
+        record()
+        project.sendBackward(placementID: id)
+        await persist(refreshImages: false)
+    }
+
     // MARK: - ジェスチャ（PlacementGesture/SnapEngineの純粋計算をproject状態へ適用する）
 
     /// 指定点（配置領域の正規化座標）にある最前面の配置を返す
