@@ -12,6 +12,17 @@ final class PageEditorViewModel {
     var exportMessage: String?
     var errorMessage: String?
 
+    // MARK: - 編集状態（ジェスチャ）
+
+    var currentPageIndex = 0
+    var selectedPlacementID: UUID?
+    /// non-nil = クロップモード（ダブルタップで枠を固定し中身を動かす）
+    var cropModePlacementID: UUID?
+    /// スナップ発生中に表示するガイド線（配置領域の正規化座標）
+    private(set) var activeGuides: [SnapEngine.Guide] = []
+    /// ジェスチャ開始時点のスナップショット。累積translation/magnificationの基準
+    private var gestureBase: ProjectEntity?
+
     private let saveProject: SaveProjectUseCase
     private let addPhoto: AddPhotoUseCase
     private let exportPage: ExportPageUseCase
@@ -31,16 +42,33 @@ final class PageEditorViewModel {
         self.imageProvider = imageProvider
     }
 
-    var page: PageEntity? { project.orderedPages.first }
+    var page: PageEntity? { project.page(at: currentPageIndex) }
+    var pagePlacements: [PlacementEntity] { project.placements(onPage: currentPageIndex) }
+    var pageCount: Int { project.pages.count }
     var hasPhoto: Bool { !project.placements.isEmpty }
+    var currentPageHasPhoto: Bool { !pagePlacements.isEmpty }
 
     func onAppear() async {
         await refreshImages()
     }
 
+    // MARK: - ページ切替
+
+    func goToPage(_ index: Int) {
+        guard project.page(at: index) != nil else { return }
+        currentPageIndex = index
+        selectedPlacementID = nil
+        cropModePlacementID = nil
+        activeGuides = []
+    }
+
+    // MARK: - 写真・スタイル
+
     func addPhotoData(_ data: Data) async {
         do {
-            project = try await addPhoto.execute(project: project, imageData: data)
+            project = try await addPhoto.execute(
+                project: project, imageData: data, pageIndex: currentPageIndex
+            )
             await refreshImages()
         } catch {
             errorMessage = "写真を読み込めませんでした: \(error.localizedDescription)"
@@ -49,25 +77,111 @@ final class PageEditorViewModel {
 
     func setAspect(_ aspect: AspectRatio) async {
         project.setPageAspect(aspect)
-        await persistAndRefresh()
+        await persist()
     }
 
     /// 全面配置（ワンタップ配置アクション。永続モードではない）
     func placeFill() async {
         project.placeAllFillingPage()
-        await persistAndRefresh()
+        await persist()
     }
 
     /// マット配置（写真全体を余白付きで見せる）
     func placeMat() async {
         project.placeAllMatted()
-        await persistAndRefresh()
+        await persist()
     }
 
     func applyPreset(_ preset: FramePreset) async {
         project.applyFramePreset(preset)
-        await persistAndRefresh()
+        await persist()
     }
+
+    // MARK: - ジェスチャ（PlacementGesture/SnapEngineの純粋計算をproject状態へ適用する）
+
+    /// 指定点（配置領域の正規化座標）にある最前面の配置を返す
+    func placement(atNormalizedX x: Double, y: Double) -> PlacementEntity? {
+        pagePlacements.last { placement in
+            placement.destRect.minX <= x && x <= placement.destRect.maxX
+                && placement.destRect.minY <= y && y <= placement.destRect.maxY
+        }
+    }
+
+    func select(_ placementID: UUID?) {
+        selectedPlacementID = placementID
+        if cropModePlacementID != placementID {
+            cropModePlacementID = nil
+        }
+    }
+
+    /// ダブルタップ: クロップモードの入/切
+    func toggleCropMode(_ placementID: UUID) {
+        selectedPlacementID = placementID
+        cropModePlacementID = (cropModePlacementID == placementID) ? nil : placementID
+    }
+
+    /// ドラッグ移動（通常モード）。translationは配置領域の正規化座標の累積移動量
+    func updateMove(placementID: UUID, translationX: Double, translationY: Double) {
+        guard let base = basePlacement(placementID) else { return }
+        let others = (gestureBase ?? project).placements(onPage: currentPageIndex)
+            .filter { $0.id != placementID }
+            .map(\.destRect)
+        let result = PlacementGesture.move(
+            destRect: base.destRect,
+            translationX: translationX,
+            translationY: translationY,
+            others: others
+        )
+        setDestRect(result.rect, for: placementID)
+        activeGuides = result.guides
+    }
+
+    /// ピンチ拡縮（通常モード・アスペクト固定）。factorはジェスチャ開始からの累積倍率
+    func updateScale(placementID: UUID, factor: Double) {
+        guard let base = basePlacement(placementID) else { return }
+        setDestRect(PlacementGesture.scale(destRect: base.destRect, factor: factor), for: placementID)
+    }
+
+    /// クロップモードのパン。translationは枠（destRect）に対する正規化移動量
+    func updateCropPan(placementID: UUID, translationX: Double, translationY: Double) {
+        guard let base = basePlacement(placementID) else { return }
+        setCropRect(
+            PlacementGesture.panCrop(
+                cropRect: base.cropRect, translationX: translationX, translationY: translationY
+            ),
+            for: placementID
+        )
+    }
+
+    /// クロップモードのズーム。factor > 1 で拡大
+    func updateCropZoom(placementID: UUID, factor: Double) {
+        guard let base = basePlacement(placementID) else { return }
+        setCropRect(PlacementGesture.zoomCrop(cropRect: base.cropRect, factor: factor), for: placementID)
+    }
+
+    /// ジェスチャ終了: ガイドを消して永続化（画像は不変なので再デコードしない）
+    func endGesture() async {
+        gestureBase = nil
+        activeGuides = []
+        await persist(refreshImages: false)
+    }
+
+    private func basePlacement(_ placementID: UUID) -> PlacementEntity? {
+        if gestureBase == nil { gestureBase = project }
+        return gestureBase?.placements.first { $0.id == placementID }
+    }
+
+    private func setDestRect(_ rect: LayoutRect, for placementID: UUID) {
+        guard let index = project.placements.firstIndex(where: { $0.id == placementID }) else { return }
+        project.placements[index].destRect = rect
+    }
+
+    private func setCropRect(_ rect: LayoutRect, for placementID: UUID) {
+        guard let index = project.placements.firstIndex(where: { $0.id == placementID }) else { return }
+        project.placements[index].cropRect = rect
+    }
+
+    // MARK: - 書き出し
 
     func export() async {
         guard hasPhoto else {
@@ -77,24 +191,35 @@ final class PageEditorViewModel {
         isExporting = true
         defer { isExporting = false }
         do {
-            let result = try await exportPage.execute(project: project, pageIndex: 0)
-            let mb = Double(result.byteCount) / 1_000_000
-            exportMessage = String(
-                format: "書き出し完了: %.0f×%.0fpx / %.1fMB\nカメラロールに保存しました",
-                result.pixelSize.width, result.pixelSize.height, mb
-            )
+            if pageCount > 1 {
+                let results = try await exportPage.executeAll(project: project)
+                let totalMB = Double(results.reduce(0) { $0 + $1.byteCount }) / 1_000_000
+                exportMessage = String(
+                    format: "%d枚を投稿順に書き出しました（計%.1fMB）\nカメラロールに保存済み",
+                    results.count, totalMB
+                )
+            } else {
+                let result = try await exportPage.execute(project: project, pageIndex: currentPageIndex)
+                let mb = Double(result.byteCount) / 1_000_000
+                exportMessage = String(
+                    format: "書き出し完了: %.0f×%.0fpx / %.1fMB\nカメラロールに保存しました",
+                    result.pixelSize.width, result.pixelSize.height, mb
+                )
+            }
         } catch {
             exportMessage = "書き出しに失敗しました: \(error.localizedDescription)"
         }
     }
 
-    private func persistAndRefresh() async {
+    private func persist(refreshImages: Bool = true) async {
         do {
             project = try await saveProject.execute(project)
         } catch {
             errorMessage = error.localizedDescription
         }
-        await refreshImages()
+        if refreshImages {
+            await self.refreshImages()
+        }
     }
 
     private func refreshImages() async {

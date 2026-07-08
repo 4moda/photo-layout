@@ -22,6 +22,7 @@ enum AppComposition {
             ? DemoProjectSeeder(
                 createProject: CreateProjectUseCase(repository: repo),
                 addPhoto: AddPhotoUseCase(photoStore: FilePhotoStore(), repository: repo),
+                createXPost: CreateXPostUseCase(photoStore: FilePhotoStore(), repository: repo),
                 listProjects: ListProjectsUseCase(repository: repo)
             )
             : nil
@@ -29,6 +30,7 @@ enum AppComposition {
             listProjects: ListProjectsUseCase(repository: repo),
             createProject: CreateProjectUseCase(repository: repo),
             deleteProject: DeleteProjectUseCase(repository: repo),
+            createXPost: CreateXPostUseCase(photoStore: FilePhotoStore(), repository: repo),
             seedDemo: seeder.map { s in { await s.seedIfNeeded() } }
         )
         return ProjectListView(viewModel: viewModel)

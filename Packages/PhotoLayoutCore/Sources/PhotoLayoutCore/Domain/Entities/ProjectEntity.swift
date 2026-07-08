@@ -40,4 +40,13 @@ public struct ProjectEntity: Hashable, Codable, Sendable, Identifiable {
     public var orderedPlacements: [PlacementEntity] {
         placements.sorted { $0.sortIndex < $1.sortIndex }
     }
+
+    /// 指定ページに属する配置（sortIndex順）
+    public func placements(onPage pageIndex: Int) -> [PlacementEntity] {
+        orderedPlacements.filter { $0.pageIndex == pageIndex }
+    }
+
+    public func page(at index: Int) -> PageEntity? {
+        pages.first { $0.index == index }
+    }
 }

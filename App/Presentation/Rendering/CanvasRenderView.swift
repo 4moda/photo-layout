@@ -8,6 +8,7 @@ struct CanvasRenderView: View {
     let page: PageEntity
     let placements: [PlacementEntity]
     let defaultFrame: PhotoFrameStyle
+    /// 配置ID→フル画像（sourceRect未適用）。クロップはsourceRectの写像で描画時に適用する
     let images: [UUID: UIImage]
 
     var body: some View {
@@ -23,13 +24,23 @@ struct CanvasRenderView: View {
                 case .fillRect(let color, let rect):
                     context.fill(Path(cgRect(rect)), with: .color(swiftUIColor(color)))
 
-                case .drawImage(let placementID, _, _, let destRect, let cornerRadiusPx):
+                case .drawImage(let placementID, _, let sourceRect, let destRect, let cornerRadiusPx):
                     guard let uiImage = images[placementID] else { break }
+                    // sourceRect（元画像の正規化部分矩形）がdestRectへ写るよう、
+                    // フル画像をdestRectより大きい矩形へ描き、destRectでクリップする。
+                    // 書き出し側（ImageIODecoderのピクセルクロップ）と同じ写像の別実装。
+                    let dest = cgRect(destRect)
+                    let fullWidth = dest.width / sourceRect.width
+                    let fullHeight = dest.height / sourceRect.height
+                    let fullRect = CGRect(
+                        x: dest.minX - sourceRect.x * fullWidth,
+                        y: dest.minY - sourceRect.y * fullHeight,
+                        width: fullWidth,
+                        height: fullHeight
+                    )
                     var imageContext = context
-                    if cornerRadiusPx > 0 {
-                        imageContext.clip(to: Path(roundedRect: cgRect(destRect), cornerRadius: cornerRadiusPx))
-                    }
-                    imageContext.draw(Image(uiImage: uiImage), in: cgRect(destRect))
+                    imageContext.clip(to: Path(roundedRect: dest, cornerRadius: cornerRadiusPx))
+                    imageContext.draw(Image(uiImage: uiImage), in: fullRect)
 
                 case .strokeBorder(let color, let lineWidthPx, let cornerRadiusPx, let rect):
                     context.stroke(

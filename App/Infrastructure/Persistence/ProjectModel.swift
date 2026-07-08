@@ -57,6 +57,8 @@ final class PageModel {
 final class PlacementModel {
     @Attribute(.unique) var id: UUID
     var sortIndex: Int
+    // 既存ストアからの軽量マイグレーションのため既定値を持つ
+    var pageIndex: Int = 0
     var photoFileName: String
     var photoPixelWidth: Int
     var photoPixelHeight: Int
@@ -74,6 +76,7 @@ final class PlacementModel {
     init(
         id: UUID,
         sortIndex: Int,
+        pageIndex: Int,
         photoFileName: String,
         photoPixelWidth: Int,
         photoPixelHeight: Int,
@@ -83,6 +86,7 @@ final class PlacementModel {
     ) {
         self.id = id
         self.sortIndex = sortIndex
+        self.pageIndex = pageIndex
         self.photoFileName = photoFileName
         self.photoPixelWidth = photoPixelWidth
         self.photoPixelHeight = photoPixelHeight

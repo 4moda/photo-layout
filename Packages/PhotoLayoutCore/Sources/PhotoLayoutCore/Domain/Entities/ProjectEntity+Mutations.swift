@@ -6,9 +6,10 @@ import Foundation
 /// ここで維持する。fill/fitのような永続モードは存在せず、すべてジオメトリで表現する。
 extension ProjectEntity {
     /// 写真を追加する。既定は全面配置（ページの配置領域いっぱいに敷く）。
-    public mutating func addPhoto(_ photo: PhotoRef) {
+    public mutating func addPhoto(_ photo: PhotoRef, toPage pageIndex: Int = 0) {
         let placement = PlacementEntity(
             sortIndex: placements.count,
+            pageIndex: pageIndex,
             photo: photo,
             destRect: .unit
         )
@@ -18,8 +19,8 @@ extension ProjectEntity {
 
     /// 全面配置: クロップを配置領域のアスペクトに絞り込み、領域いっぱいに敷く。
     public mutating func placeFillingPage(placementID: UUID) {
-        guard let page = orderedPages.first,
-              let index = placements.firstIndex(where: { $0.id == placementID }) else { return }
+        guard let index = placements.firstIndex(where: { $0.id == placementID }),
+              let page = page(at: placements[index].pageIndex) else { return }
         placements[index].cropRect = CropMath.subCrop(
             .unit,
             photo: placements[index].photo,
@@ -31,8 +32,8 @@ extension ProjectEntity {
     /// マット配置: 写真全体を見せ、余白を残して中央に置く。
     /// - Parameter coverage: 配置領域に対する写真の占有率（0..1）
     public mutating func placeMatted(placementID: UUID, coverage: Double = 0.9) {
-        guard let page = orderedPages.first,
-              let index = placements.firstIndex(where: { $0.id == placementID }) else { return }
+        guard let index = placements.firstIndex(where: { $0.id == placementID }),
+              let page = page(at: placements[index].pageIndex) else { return }
         let photo = placements[index].photo
         placements[index].cropRect = .unit
         // destRectは配置領域の正規化座標なので、ピクセルアスペクトを正規化アスペクトへ変換して収める

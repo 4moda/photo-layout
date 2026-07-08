@@ -22,14 +22,8 @@ public enum RenderPlanBuilder {
             .fillRect(color: page.background.color, rect: pageRect)
         ]
 
-        // 余白を差し引いた配置領域（px）
-        let margins = page.background.margins
-        let contentRect = LayoutRect(
-            x: margins.leading * ref,
-            y: margins.top * ref,
-            width: max(0, pagePixelSize.width - (margins.leading + margins.trailing) * ref),
-            height: max(0, pagePixelSize.height - (margins.top + margins.bottom) * ref)
-        )
+        // 余白を差し引いた配置領域（px）。ジェスチャ層と同じ計算を共有する
+        let contentRect = PageGeometry.contentRect(page: page, pageSize: pagePixelSize)
         guard contentRect.width > 0, contentRect.height > 0 else { return commands }
 
         for placement in placements.sorted(by: { $0.sortIndex < $1.sortIndex }) {
@@ -38,12 +32,7 @@ public enum RenderPlanBuilder {
             let borderWidthPx = frame.borderWidthRatio * ref
 
             // destRect（配置領域の正規化座標）→ 写真の表示矩形（px）
-            let imageRect = LayoutRect(
-                x: contentRect.x + placement.destRect.x * contentRect.width,
-                y: contentRect.y + placement.destRect.y * contentRect.height,
-                width: placement.destRect.width * contentRect.width,
-                height: placement.destRect.height * contentRect.height
-            )
+            let imageRect = PageGeometry.imageRect(destRect: placement.destRect, in: contentRect)
             guard imageRect.width > 0, imageRect.height > 0 else { continue }
 
             // 不変条件（destRectのpxアスペクト==cropのpxアスペクト）は配置ヘルパが維持するが、

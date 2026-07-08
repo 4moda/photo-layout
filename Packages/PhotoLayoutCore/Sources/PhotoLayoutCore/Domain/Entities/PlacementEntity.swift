@@ -9,6 +9,9 @@ public struct PlacementEntity: Hashable, Codable, Sendable, Identifiable {
     public var id: UUID
     /// 表示順・重なり順。SwiftDataの配列順序に依存しない明示的な並び順（CLAUDE.md ルール6）
     public var sortIndex: Int
+    /// 所属ページ（PageEntity.index）。X複数枚のような異アスペクトページ構成で必須。
+    /// カルーセルのまたがり配置（フェーズ5）はアンカーページ＋destRectのはみ出しで表現する
+    public var pageIndex: Int
     public var photo: PhotoRef
     /// 元画像に対する正規化(0..1)クロップ矩形（CLAUDE.md ルール3）
     public var cropRect: LayoutRect
@@ -21,6 +24,7 @@ public struct PlacementEntity: Hashable, Codable, Sendable, Identifiable {
     public init(
         id: UUID = UUID(),
         sortIndex: Int,
+        pageIndex: Int = 0,
         photo: PhotoRef,
         cropRect: LayoutRect = .unit,
         destRect: LayoutRect,
@@ -28,6 +32,7 @@ public struct PlacementEntity: Hashable, Codable, Sendable, Identifiable {
     ) {
         self.id = id
         self.sortIndex = sortIndex
+        self.pageIndex = pageIndex
         self.photo = photo
         self.cropRect = cropRect
         self.destRect = destRect

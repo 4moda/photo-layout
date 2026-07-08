@@ -1,16 +1,21 @@
 import SwiftUI
+import PhotosUI
 import PhotoLayoutCore
 
 /// 下書き一覧。行タップでページ編集へ遷移する。
+/// ツールバー: ＋=空の下書き、X=写真1〜4枚を選んでX投稿プロジェクトを自動生成。
 struct ProjectListView: View {
     @State private var viewModel: ProjectListViewModel
+    @State private var path: [ProjectEntity] = []
+    @State private var showXPicker = false
+    @State private var xPickerItems: [PhotosPickerItem] = []
 
     init(viewModel: ProjectListViewModel) {
         _viewModel = State(initialValue: viewModel)
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Group {
                 if viewModel.projects.isEmpty {
                     ContentUnavailableView(
@@ -48,6 +53,37 @@ struct ProjectListView: View {
                         Image(systemName: "plus")
                     }
                     .accessibilityIdentifier("projectList.add")
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showXPicker = true
+                    } label: {
+                        Image(systemName: "rectangle.stack.badge.plus")
+                    }
+                    .accessibilityIdentifier("projectList.addX")
+                }
+            }
+            .photosPicker(
+                isPresented: $showXPicker,
+                selection: $xPickerItems,
+                maxSelectionCount: PlatformSpecTable.xMaxPhotoCount,
+                matching: .images
+            )
+            .onChange(of: xPickerItems) { _, items in
+                guard !items.isEmpty else { return }
+                Task {
+                    // 選択順＝投稿順を保つため直列にロードする
+                    var dataList: [Data] = []
+                    for item in items {
+                        if let data = try? await item.loadTransferable(type: Data.self) {
+                            dataList.append(data)
+                        }
+                    }
+                    xPickerItems = []
+                    guard !dataList.isEmpty else { return }
+                    if let project = await viewModel.createXPost(imageDataList: dataList) {
+                        path.append(project)
+                    }
                 }
             }
             // 編集画面から戻ったときにも最新を読み直す（.taskは初回のみのため）

@@ -1,0 +1,70 @@
+import Testing
+@testable import PhotoLayoutCore
+
+@Suite("PlacementGesture")
+struct PlacementGestureTests {
+    let matted = LayoutRect(x: 0.25, y: 0.25, width: 0.5, height: 0.5)
+
+    @Test("移動: 配置領域からはみ出さずクランプされる")
+    func moveClamps() {
+        let result = PlacementGesture.move(
+            destRect: matted, translationX: 10, translationY: -10, snapThreshold: 0
+        )
+        #expect(result.rect.x == 0.5)  // 1 - width
+        #expect(result.rect.y == 0)
+    }
+
+    @Test("移動: スナップなしでは平行移動、アスペクト不変")
+    func movePreservesSize() {
+        let result = PlacementGesture.move(
+            destRect: matted, translationX: 0.1, translationY: 0.05, snapThreshold: 0
+        )
+        #expect(abs(result.rect.x - 0.35) < 1e-12)
+        #expect(abs(result.rect.y - 0.3) < 1e-12)
+        #expect(result.rect.width == matted.width)
+        #expect(result.rect.height == matted.height)
+    }
+
+    @Test("拡縮: 中心固定・縦横同率（アスペクト固定）")
+    func scaleKeepsCenterAndAspect() {
+        let scaled = PlacementGesture.scale(destRect: matted, factor: 1.5)
+        #expect(abs(scaled.midX - matted.midX) < 1e-12)
+        #expect(abs(scaled.midY - matted.midY) < 1e-12)
+        #expect(abs(scaled.width - 0.75) < 1e-12)
+        #expect(abs(scaled.aspectRatio - matted.aspectRatio) < 1e-12)
+    }
+
+    @Test("拡縮: 最小・最大幅でクランプ")
+    func scaleClamps() {
+        let tooSmall = PlacementGesture.scale(destRect: matted, factor: 0.01)
+        #expect(abs(tooSmall.width - 0.05) < 1e-12)
+        let tooBig = PlacementGesture.scale(destRect: matted, factor: 10)
+        #expect(abs(tooBig.width - 1.0) < 1e-12)
+    }
+
+    @Test("クロップパン: 画像とは逆方向へcropRectが動き、0..1でクランプ")
+    func panCropMovesOppositeAndClamps() {
+        let crop = LayoutRect(x: 0.2, y: 0, width: 0.5, height: 1)
+        // 枠内で画像を右へ10%動かす → cropRectは左へ crop.width*0.1
+        let panned = PlacementGesture.panCrop(cropRect: crop, translationX: 0.1, translationY: 0)
+        #expect(abs(panned.x - (0.2 - 0.05)) < 1e-12)
+        // 大きく動かしても範囲内
+        let far = PlacementGesture.panCrop(cropRect: crop, translationX: -100, translationY: 0)
+        #expect(abs(far.x - 0.5) < 1e-12) // 1 - width
+    }
+
+    @Test("クロップズーム: 中心固定・縦横同率でpxアスペクト不変、限界でクランプ")
+    func zoomCropPreservesAspect() {
+        let crop = LayoutRect(x: 0.25, y: 0.1, width: 0.5, height: 0.8)
+        let zoomedIn = PlacementGesture.zoomCrop(cropRect: crop, factor: 2)
+        #expect(abs(zoomedIn.width - 0.25) < 1e-12)
+        #expect(abs(zoomedIn.height - 0.4) < 1e-12)   // 同率 → pxアスペクト不変
+        #expect(abs(zoomedIn.midX - crop.midX) < 1e-12)
+
+        // ズームアウトは元画像に収まる範囲まで（height=0.8が律速 → 1/0.8倍まで）
+        let zoomedOut = PlacementGesture.zoomCrop(cropRect: crop, factor: 0.1)
+        #expect(abs(zoomedOut.height - 1.0) < 1e-12)
+        #expect(zoomedOut.minY >= 0)
+        #expect(zoomedOut.maxY <= 1 + 1e-12)
+    }
+}

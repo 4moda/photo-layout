@@ -10,10 +10,10 @@ public struct AddPhotoUseCase: Sendable {
         self.repository = repository
     }
 
-    public func execute(project: ProjectEntity, imageData: Data) async throws -> ProjectEntity {
+    public func execute(project: ProjectEntity, imageData: Data, pageIndex: Int = 0) async throws -> ProjectEntity {
         let photo = try await photoStore.store(imageData: imageData)
         var updated = project
-        updated.addPhoto(photo)
+        updated.addPhoto(photo, toPage: pageIndex)
         updated.updatedAt = Date()
         try await repository.save(updated)
         return updated

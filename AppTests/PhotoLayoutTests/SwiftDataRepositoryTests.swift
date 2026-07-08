@@ -42,6 +42,7 @@ final class SwiftDataRepositoryTests: XCTestCase {
                 ),
                 PlacementEntity(
                     sortIndex: 1,
+                    pageIndex: 2,
                     photo: PhotoRef(fileName: "b.jpg", pixelWidth: 6000, pixelHeight: 4000),
                     destRect: LayoutRect(x: 1, y: 0, width: 1, height: 1)
                 )

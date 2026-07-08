@@ -26,10 +26,10 @@ public struct ExportPageUseCase: Sendable {
         pageIndex: Int,
         format: ExportFormat = .defaultJPEG
     ) async throws -> ExportResult {
-        guard let page = project.orderedPages.first(where: { $0.index == pageIndex }) else {
+        guard let page = project.page(at: pageIndex) else {
             throw ExportError.pageNotFound
         }
-        let placements = project.orderedPlacements
+        let placements = project.placements(onPage: pageIndex)
         let pixelSize = ExportSizeCalculator.pageSize(page: page, placements: placements)
         let plan = RenderPlanBuilder.build(
             page: page,
@@ -40,6 +40,19 @@ public struct ExportPageUseCase: Sendable {
         let data = try await renderer.render(plan: plan, pixelSize: pixelSize, format: format)
         try await librarySaver.save(imageData: data)
         return ExportResult(pixelSize: pixelSize, byteCount: data.count)
+    }
+
+    /// 全ページを投稿順（PageEntity.index順）に書き出して保存する。
+    /// カメラロール上でも選択しやすいよう、保存順＝投稿順を保証する。
+    public func executeAll(
+        project: ProjectEntity,
+        format: ExportFormat = .defaultJPEG
+    ) async throws -> [ExportResult] {
+        var results: [ExportResult] = []
+        for page in project.orderedPages {
+            results.append(try await execute(project: project, pageIndex: page.index, format: format))
+        }
+        return results
     }
 }
 

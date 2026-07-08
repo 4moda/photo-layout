@@ -81,6 +81,7 @@ final class SwiftDataProjectRepository: ProjectRepository {
                     PlacementEntity(
                         id: placement.id,
                         sortIndex: placement.sortIndex,
+                        pageIndex: placement.pageIndex,
                         photo: PhotoRef(
                             fileName: placement.photoFileName,
                             pixelWidth: placement.photoPixelWidth,
@@ -119,6 +120,7 @@ final class SwiftDataProjectRepository: ProjectRepository {
         PlacementModel(
             id: placement.id,
             sortIndex: placement.sortIndex,
+            pageIndex: placement.pageIndex,
             photoFileName: placement.photo.fileName,
             photoPixelWidth: placement.photo.pixelWidth,
             photoPixelHeight: placement.photo.pixelHeight,
