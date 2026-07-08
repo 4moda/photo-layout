@@ -186,10 +186,40 @@ final class PageEditorViewModel {
         activeGuides = result.guides
     }
 
-    /// ピンチ拡縮（通常モード・アスペクト固定）。factorはジェスチャ開始からの累積倍率
+    /// ピンチ拡縮（通常モード・アスペクト固定・中心固定）。factorはジェスチャ開始からの累積倍率
     func updateScale(placementID: UUID, factor: Double) {
         guard let base = basePlacement(placementID) else { return }
         setDestRect(PlacementGesture.scale(destRect: base.destRect, factor: factor), for: placementID)
+    }
+
+    /// 角ハンドル拡縮: 触っていない対角（anchor）を固定してアスペクト固定拡縮
+    func updateScaleAnchored(placementID: UUID, factor: Double, anchor: PlacementGesture.Corner) {
+        guard let base = basePlacement(placementID) else { return }
+        setDestRect(
+            PlacementGesture.scaleAnchored(destRect: base.destRect, factor: factor, anchor: anchor),
+            for: placementID
+        )
+    }
+
+    /// 辺ハンドル: 枠のアスペクトを変える（画像は歪まずクロップ窓が変わる）
+    func updateStretchEdge(placementID: UUID, edge: PlacementGesture.Edge, delta: Double) {
+        guard let base = basePlacement(placementID) else { return }
+        let rect = PlacementGesture.stretchEdge(destRect: base.destRect, edge: edge, delta: delta)
+        project.resizeFrame(placementID: placementID, to: rect, recroppingFrom: base.cropRect)
+    }
+
+    /// 枠のpxアスペクトをプリセット値へ変更（写真メニュー）
+    func applyFrameAspect(pixelAspect: Double) async {
+        guard let id = selectedPlacementID else { return }
+        project.setFramePixelAspect(pixelAspect, placementID: id)
+        await persist(refreshImages: false)
+    }
+
+    /// 枠を元画像のアスペクトに合わせる（クロップなしの全体表示になる）
+    func applyPhotoNativeAspect() async {
+        guard let id = selectedPlacementID,
+              let placement = project.placements.first(where: { $0.id == id }) else { return }
+        await applyFrameAspect(pixelAspect: placement.photo.aspectRatio.ratio)
     }
 
     /// クロップモードのパン。translationは枠（destRect）に対する正規化移動量

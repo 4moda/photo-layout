@@ -41,6 +41,79 @@ public enum PlacementGesture {
         return clampVisible(destRect.scaled(by: clampedFactor))
     }
 
+    /// 矩形の角
+    public enum Corner: Sendable {
+        case topLeft, topRight, bottomLeft, bottomRight
+        /// 対角（角ハンドルを掴んだとき固定される側）
+        public var opposite: Corner {
+            switch self {
+            case .topLeft: return .bottomRight
+            case .topRight: return .bottomLeft
+            case .bottomLeft: return .topRight
+            case .bottomRight: return .topLeft
+            }
+        }
+    }
+
+    /// 矩形の辺
+    public enum Edge: Sendable {
+        case top, bottom, leading, trailing
+    }
+
+    /// アンカー（固定する角）を不動点にしたアスペクト固定拡縮。
+    /// 角ハンドルのドラッグでは「触っていない対角の頂点」をアンカーに渡す。
+    public static func scaleAnchored(
+        destRect: LayoutRect,
+        factor: Double,
+        anchor: Corner,
+        minWidth: Double = 0.05,
+        maxWidth: Double = 4.0
+    ) -> LayoutRect {
+        let clampedFactor = min(max(factor, minWidth / destRect.width), maxWidth / destRect.width)
+        let width = destRect.width * clampedFactor
+        let height = destRect.height * clampedFactor
+        let rect: LayoutRect
+        switch anchor {
+        case .topLeft:
+            rect = LayoutRect(x: destRect.minX, y: destRect.minY, width: width, height: height)
+        case .topRight:
+            rect = LayoutRect(x: destRect.maxX - width, y: destRect.minY, width: width, height: height)
+        case .bottomLeft:
+            rect = LayoutRect(x: destRect.minX, y: destRect.maxY - height, width: width, height: height)
+        case .bottomRight:
+            rect = LayoutRect(x: destRect.maxX - width, y: destRect.maxY - height, width: width, height: height)
+        }
+        return clampVisible(rect)
+    }
+
+    /// 辺ドラッグで枠を伸縮する（反対の辺は固定）。**枠のアスペクトが変わる**操作なので、
+    /// 呼び出し側は ProjectEntity.resizeFrame(...) を通じてcropRectの再計算とセットで使うこと
+    /// （画像は歪まず、枠の中で見せる範囲が変わるだけ）。
+    /// - Parameter delta: 配置領域の正規化座標での移動量（leading/trailingはX、top/bottomはY）
+    public static func stretchEdge(
+        destRect: LayoutRect,
+        edge: Edge,
+        delta: Double,
+        minSize: Double = 0.05
+    ) -> LayoutRect {
+        var rect = destRect
+        switch edge {
+        case .trailing:
+            rect.width = max(destRect.width + delta, minSize)
+        case .leading:
+            let newWidth = max(destRect.width - delta, minSize)
+            rect.x = destRect.maxX - newWidth
+            rect.width = newWidth
+        case .bottom:
+            rect.height = max(destRect.height + delta, minSize)
+        case .top:
+            let newHeight = max(destRect.height - delta, minSize)
+            rect.y = destRect.maxY - newHeight
+            rect.height = newHeight
+        }
+        return clampVisible(rect)
+    }
+
     // MARK: - 枠内クロップ（cropRect）の操作
 
     /// クロップモードのパン: 画像を枠内でずらす。

@@ -55,6 +55,42 @@ extension ProjectEntity {
             .scaled(by: coverage)
     }
 
+    /// 枠（destRect）の変更を適用し、pxアスペクトの変化に合わせてcropRectを再計算する。
+    /// 画像は決して歪まない — 枠の中で見せる範囲（クロップ窓）が変わるだけ。
+    /// - Parameter baseCrop: 再クロップの基準（ジェスチャ開始時のcropRect。ドラッグ中に
+    ///   毎フレーム現在値から絞ると単調に狭まってしまうため、基準を固定して渡す）
+    public mutating func resizeFrame(placementID: UUID, to rect: LayoutRect, recroppingFrom baseCrop: LayoutRect) {
+        guard let index = placements.firstIndex(where: { $0.id == placementID }),
+              let page = page(at: placements[index].pageIndex),
+              rect.width > 0, rect.height > 0 else { return }
+        placements[index].destRect = rect
+        // destRect（配置領域の正規化座標）の実ピクセルアスペクト
+        let targetPixelAspect = rect.aspectRatio * page.contentAspect
+        placements[index].cropRect = CropMath.subCrop(
+            baseCrop,
+            photo: placements[index].photo,
+            targetPixelAspect: targetPixelAspect
+        )
+    }
+
+    /// 枠のpxアスペクトを指定値に変更する（中心・幅は維持、高さで調整）。
+    /// クロップは元画像全体から中央で取り直す。
+    public mutating func setFramePixelAspect(_ pixelAspect: Double, placementID: UUID) {
+        guard let index = placements.firstIndex(where: { $0.id == placementID }),
+              let page = page(at: placements[index].pageIndex),
+              pixelAspect > 0 else { return }
+        let dest = placements[index].destRect
+        let normalizedAspect = pixelAspect / page.contentAspect
+        let height = dest.width / normalizedAspect
+        let rect = LayoutRect(
+            x: dest.midX - dest.width / 2,
+            y: dest.midY - height / 2,
+            width: dest.width,
+            height: height
+        )
+        resizeFrame(placementID: placementID, to: rect, recroppingFrom: .unit)
+    }
+
     public mutating func placeAllFillingPage() {
         for placement in placements { placeFillingPage(placementID: placement.id) }
     }

@@ -183,7 +183,7 @@ struct PageEditorView: View {
         }
     }
 
-    /// 選択中の配置の枠・角ハンドル・スナップガイド（スプレッド座標）
+    /// 選択中の配置の枠・ハンドル・スナップガイド（スプレッド座標）
     @ViewBuilder
     private func stripSelectionOverlay(stripHeight: CGFloat) -> some View {
         if let contentStrip = selectedContentRectInStrip(stripHeight: stripHeight),
@@ -192,6 +192,7 @@ struct PageEditorView: View {
             let rect = PageGeometry.imageRect(destRect: placement.destRect, in: contentStrip)
             selectionChrome(
                 rect: rect,
+                contentRect: contentStrip,
                 isCrop: viewModel.cropModePlacementID == selectedID,
                 placementID: selectedID
             )
@@ -373,7 +374,7 @@ struct PageEditorView: View {
         return .photo(id: hit.id, isCrop: false, denom: CGSize(width: content.width, height: content.height))
     }
 
-    /// 選択中配置の角ハンドルのビューポート座標（ドラッグの競合判定用）
+    /// 選択中配置の角・辺ハンドルのビューポート座標（キャンバスドラッグとの競合判定用）
     private func selectedCornersInViewport(geo: GeometryProxy) -> [CGPoint]? {
         let stripHeight = geo.size.height * viewZoom
         guard viewModel.cropModePlacementID == nil,
@@ -382,12 +383,9 @@ struct PageEditorView: View {
               let placement = viewModel.project.placements.first(where: { $0.id == selectedID })
         else { return nil }
         let rect = PageGeometry.imageRect(destRect: placement.destRect, in: contentStrip)
-        return [
-            CGPoint(x: rect.minX, y: rect.minY),
-            CGPoint(x: rect.maxX, y: rect.minY),
-            CGPoint(x: rect.minX, y: rect.maxY),
-            CGPoint(x: rect.maxX, y: rect.maxY)
-        ].map { CGPoint(x: $0.x + panOffset.width, y: $0.y + panOffset.height) }
+        let points = Self.cornerOrder.map { cornerPoint($0, of: rect) }
+            + Self.edgeOrder.map { edgePoint($0, of: rect) }
+        return points.map { CGPoint(x: $0.x + panOffset.width, y: $0.y + panOffset.height) }
     }
 
     /// ピンチ: 写真選択中=写真の拡縮（クロップ中=クロップズーム）/ 非選択=ビューポートズーム
@@ -542,9 +540,31 @@ struct PageEditorView: View {
 
     // MARK: - 選択枠・ハンドル・ガイド（共通部品）
 
-    /// 選択枠＋四隅の拡縮ハンドル（角ドラッグ＝アスペクト固定拡縮）
+    /// 角の位置（ハンドル描画・アンカー計算共用）
+    private func cornerPoint(_ corner: PlacementGesture.Corner, of rect: LayoutRect) -> CGPoint {
+        switch corner {
+        case .topLeft: return CGPoint(x: rect.minX, y: rect.minY)
+        case .topRight: return CGPoint(x: rect.maxX, y: rect.minY)
+        case .bottomLeft: return CGPoint(x: rect.minX, y: rect.maxY)
+        case .bottomRight: return CGPoint(x: rect.maxX, y: rect.maxY)
+        }
+    }
+
+    private static let cornerOrder: [PlacementGesture.Corner] = [.topLeft, .topRight, .bottomLeft, .bottomRight]
+    private static let edgeOrder: [PlacementGesture.Edge] = [.top, .bottom, .leading, .trailing]
+
+    private func edgePoint(_ edge: PlacementGesture.Edge, of rect: LayoutRect) -> CGPoint {
+        switch edge {
+        case .top: return CGPoint(x: rect.midX, y: rect.minY)
+        case .bottom: return CGPoint(x: rect.midX, y: rect.maxY)
+        case .leading: return CGPoint(x: rect.minX, y: rect.midY)
+        case .trailing: return CGPoint(x: rect.maxX, y: rect.midY)
+        }
+    }
+
+    /// 選択枠＋四隅ハンドル（対角固定・アスペクト固定拡縮）＋辺ハンドル（枠アスペクト変更）
     @ViewBuilder
-    private func selectionChrome(rect: LayoutRect, isCrop: Bool, placementID: UUID) -> some View {
+    private func selectionChrome(rect: LayoutRect, contentRect: LayoutRect, isCrop: Bool, placementID: UUID) -> some View {
         let color: Color = isCrop ? .orange : .accentColor
         Rectangle()
             .stroke(color, style: StrokeStyle(lineWidth: 2, dash: isCrop ? [6, 4] : []))
@@ -552,33 +572,44 @@ struct PageEditorView: View {
             .position(x: rect.midX, y: rect.midY)
             .allowsHitTesting(false)
         if !isCrop {
-            let center = CGPoint(x: rect.midX, y: rect.midY)
-            let corners = [
-                CGPoint(x: rect.minX, y: rect.minY),
-                CGPoint(x: rect.maxX, y: rect.minY),
-                CGPoint(x: rect.minX, y: rect.maxY),
-                CGPoint(x: rect.maxX, y: rect.maxY)
-            ]
-            ForEach(Array(corners.enumerated()), id: \.offset) { _, corner in
+            // 角: 対角アンカーのアスペクト固定拡縮
+            ForEach(Array(Self.cornerOrder.enumerated()), id: \.offset) { _, corner in
                 ZStack {
                     Circle().fill(Color.white)
                     Circle().stroke(color, lineWidth: 2)
                 }
                 .frame(width: 16, height: 16)
                 .contentShape(Circle().scale(2)) // 指で掴みやすいよう当たり判定を広げる
-                .position(corner)
-                .gesture(cornerHandleGesture(placementID: placementID, corner: corner, center: center))
+                .position(cornerPoint(corner, of: rect))
+                .gesture(cornerHandleGesture(
+                    placementID: placementID,
+                    handle: cornerPoint(corner, of: rect),
+                    anchor: cornerPoint(corner.opposite, of: rect)
+                ))
+            }
+            // 辺: 枠アスペクト変更（画像は歪まずクロップ窓が変わる）
+            ForEach(Array(Self.edgeOrder.enumerated()), id: \.offset) { _, edge in
+                let vertical = (edge == .leading || edge == .trailing)
+                ZStack {
+                    Capsule().fill(Color.white)
+                    Capsule().stroke(color, lineWidth: 2)
+                }
+                .frame(width: vertical ? 8 : 20, height: vertical ? 20 : 8)
+                .contentShape(Rectangle().scale(2.5))
+                .position(edgePoint(edge, of: rect))
+                .gesture(edgeHandleGesture(placementID: placementID, edge: edge, contentRect: contentRect))
             }
         }
     }
 
-    /// 角ハンドルのドラッグ: 中心からの距離比＝拡縮率（アスペクト固定）。
-    /// 拡縮でハンドル位置自体が動くため、基準の角・中心はドラッグ開始時の値に固定する
-    private func cornerHandleGesture(placementID: UUID, corner: CGPoint, center: CGPoint) -> some Gesture {
-        DragGesture(minimumDistance: 1)
+    /// 角ハンドルのドラッグ: 対角（anchor）からの距離比＝拡縮率（アスペクト固定・対角固定）。
+    /// 拡縮でハンドル位置自体が動くため、基準点はドラッグ開始時の値に固定する
+    private func cornerHandleGesture(placementID: UUID, handle: CGPoint, anchor: CGPoint) -> some Gesture {
+        let anchorCorner = anchorCorner(handle: handle, anchor: anchor)
+        return DragGesture(minimumDistance: 1)
             .onChanged { value in
                 if handleDragBase == nil {
-                    handleDragBase = (corner: corner, center: center)
+                    handleDragBase = (corner: handle, center: anchor)
                 }
                 guard let base = handleDragBase else { return }
                 let baseDistance = hypot(base.corner.x - base.center.x, base.corner.y - base.center.y)
@@ -588,10 +619,41 @@ struct PageEditorView: View {
                     y: base.corner.y + value.translation.height
                 )
                 let distance = hypot(current.x - base.center.x, current.y - base.center.y)
-                viewModel.updateScale(placementID: placementID, factor: distance / baseDistance)
+                viewModel.updateScaleAnchored(
+                    placementID: placementID,
+                    factor: distance / baseDistance,
+                    anchor: anchorCorner
+                )
             }
             .onEnded { _ in
                 handleDragBase = nil
+                Task { await viewModel.endGesture() }
+            }
+    }
+
+    /// ハンドルとアンカーの位置関係からアンカー側の角を判定する
+    private func anchorCorner(handle: CGPoint, anchor: CGPoint) -> PlacementGesture.Corner {
+        if anchor.x <= handle.x {
+            return anchor.y <= handle.y ? .topLeft : .bottomLeft
+        } else {
+            return anchor.y <= handle.y ? .topRight : .bottomRight
+        }
+    }
+
+    /// 辺ハンドルのドラッグ: 枠のアスペクトを変える（反対辺固定・画像は歪まない）
+    private func edgeHandleGesture(placementID: UUID, edge: PlacementGesture.Edge, contentRect: LayoutRect) -> some Gesture {
+        DragGesture(minimumDistance: 1)
+            .onChanged { value in
+                let delta: Double
+                switch edge {
+                case .leading, .trailing:
+                    delta = value.translation.width / contentRect.width
+                case .top, .bottom:
+                    delta = value.translation.height / contentRect.height
+                }
+                viewModel.updateStretchEdge(placementID: placementID, edge: edge, delta: delta)
+            }
+            .onEnded { _ in
                 Task { await viewModel.endGesture() }
             }
     }
@@ -640,9 +702,31 @@ struct PageEditorView: View {
         .accessibilityIdentifier("pageEditor.cropDone")
     }
 
+    /// 枠アスペクトのプリセット（写真は歪まずクロップ窓が変わる）
+    private static let frameAspectChoices: [(label: String, pixelAspect: Double)] = [
+        ("1:1", 1.0),
+        ("4:5 縦", 4.0 / 5.0),
+        ("3:4 縦", 3.0 / 4.0),
+        ("16:9 横", 16.0 / 9.0)
+    ]
+
     /// 写真選択中のメニュー
     private var photoControls: some View {
         HStack(spacing: 12) {
+            Menu {
+                Button("元画像の比率（全体を表示）") {
+                    Task { await viewModel.applyPhotoNativeAspect() }
+                }
+                ForEach(Self.frameAspectChoices, id: \.label) { choice in
+                    Button(choice.label) {
+                        Task { await viewModel.applyFrameAspect(pixelAspect: choice.pixelAspect) }
+                    }
+                }
+            } label: {
+                Label("枠比率", systemImage: "aspectratio")
+            }
+            .accessibilityIdentifier("pageEditor.frameAspectMenu")
+
             Button {
                 Task { await viewModel.placeFillSelected() }
             } label: {
