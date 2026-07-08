@@ -27,6 +27,13 @@ final class ScreenshotSmokeTests: XCTestCase {
         XCTAssertTrue(exportButton.waitForExistence(timeout: 10))
         attachScreenshot(named: "02b-editor-empty-state")
 
+        // ページを追加 → シームレス連結キャンバス（2ページが隙間なく並ぶ）
+        app.buttons["pageEditor.addPage"].tap()
+        let pageLabel = app.staticTexts["pageEditor.pageLabel"]
+        XCTAssertTrue(pageLabel.waitForExistence(timeout: 5))
+        sleep(1)
+        attachScreenshot(named: "02c-seamless-two-pages")
+
         // 一覧へ戻ると下書きが増えている
         app.navigationBars.buttons.firstMatch.tap()
         let row = app.staticTexts["無題のレイアウト"]

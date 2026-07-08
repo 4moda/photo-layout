@@ -62,6 +62,12 @@ final class PageEditorViewModel {
         activeGuides = []
     }
 
+    /// 選択状態を保ったまま「現在ページ」だけ移す（シームレスキャンバスのパン/タップ用）
+    func focusPage(_ index: Int) {
+        guard project.page(at: index) != nil else { return }
+        currentPageIndex = index
+    }
+
     /// ページ追加（自由レイアウト/Instagram複数ページ用。アスペクトは最終ページを引き継ぐ）
     func addPage() async {
         project.appendPage()
@@ -117,8 +123,8 @@ final class PageEditorViewModel {
     // MARK: - ジェスチャ（PlacementGesture/SnapEngineの純粋計算をproject状態へ適用する）
 
     /// 指定点（配置領域の正規化座標）にある最前面の配置を返す
-    func placement(atNormalizedX x: Double, y: Double) -> PlacementEntity? {
-        pagePlacements.last { placement in
+    func placement(atNormalizedX x: Double, y: Double, onPage pageIndex: Int? = nil) -> PlacementEntity? {
+        project.placements(onPage: pageIndex ?? currentPageIndex).last { placement in
             placement.destRect.minX <= x && x <= placement.destRect.maxX
                 && placement.destRect.minY <= y && y <= placement.destRect.maxY
         }

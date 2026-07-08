@@ -3,18 +3,30 @@ import PhotosUI
 import PhotoLayoutCore
 
 /// ページ編集画面。プロジェクト種別で編集面が変わる:
-/// - X投稿: タイムライン合成ビュー（全スロットを1画面に展開し、スロット内で写真をパン/ズーム）
-/// - Instagram/自由: 自由変形エディタ（ドラッグ移動＋スナップ、ピンチ/角ハンドルで拡縮、
-///   ダブルタップでクロップモード→枠外タップで完了）
+/// - X投稿: タイムライン合成ビュー（Issue #15 でテンプレートへ統合予定）
+/// - Instagram/自由: シームレスキャンバス — 全ページを隙間ゼロで横に連結し、
+///   パンで移動・写真非選択時のピンチでビューポートをズームする（Issue #9）。
+///   写真操作は ドラッグ=移動（スナップ）、ピンチ/角ハンドル=アスペクト固定拡縮、
+///   ダブルタップ=クロップモード（枠外タップで完了）
 struct PageEditorView: View {
     @State private var viewModel: PageEditorViewModel
     @State private var photoPickerPresented = false
     @State private var pickerItem: PhotosPickerItem?
-    /// ドラッグ中の対象と種別（ジェスチャ開始時に確定し、指を離すまで変えない）
-    @State private var dragTargetID: UUID?
-    @State private var dragIsCropPan = false
     /// 角ハンドルドラッグ開始時の角と中心（拡縮中に選択枠が動いても基準がぶれないよう固定）
     @State private var handleDragBase: (corner: CGPoint, center: CGPoint)?
+
+    // シームレスキャンバスのビューポート状態
+    @State private var viewZoom: CGFloat = 1
+    @State private var panOffset: CGSize = .zero
+    @State private var pinchBase: (zoom: CGFloat, pan: CGSize)?
+    @State private var dragMode: SpreadDragMode?
+    @State private var didInitialScroll = false
+
+    private enum SpreadDragMode {
+        case photo(id: UUID, isCrop: Bool, denom: CGSize)
+        case pan(base: CGSize)
+        case suppressed // 角ハンドル付近から始まったドラッグはハンドル側に譲る
+    }
 
     init(viewModel: PageEditorViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -45,18 +57,10 @@ struct PageEditorView: View {
                 Text("スロットをタップして写真を追加 — ドラッグ/ピンチで見える範囲を調整")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            } else if let page = viewModel.page {
-                CanvasRenderView(
-                    page: page,
-                    placements: viewModel.pagePlacements,
-                    defaultFrame: viewModel.project.defaultPhotoFrame,
-                    images: viewModel.previewImages
-                )
-                .overlay { editOverlay(page: page) }
-                .shadow(radius: 4)
-                .padding(.horizontal)
-                .frame(maxHeight: .infinity)
-                .accessibilityIdentifier("pageEditor.canvas")
+            } else {
+                spreadCanvas
+                    .frame(maxHeight: .infinity)
+                    .accessibilityIdentifier("pageEditor.canvas")
 
                 if viewModel.cropModePlacementID != nil {
                     Text("クロップ調整中 — ドラッグ/ピンチで位置と拡大を変更、枠の外をタップで完了")
@@ -126,6 +130,321 @@ struct PageEditorView: View {
             Button("OK") { viewModel.exportMessage = nil }
         } message: {
             Text(viewModel.exportMessage ?? "")
+        }
+    }
+
+    // MARK: - シームレスキャンバス（スプレッド表示）
+
+    /// 全ページを SpreadGeometry の座標で隙間なく連結して描画する。
+    /// パン=ドラッグ（空き地から開始）、ズーム=写真非選択時のピンチ。
+    private var spreadCanvas: some View {
+        GeometryReader { geo in
+            let project = viewModel.project
+            let stripHeight = geo.size.height * viewZoom
+            let stripWidth = CGFloat(SpreadGeometry.totalWidth(project: project)) * stripHeight
+
+            ZStack(alignment: .topLeading) {
+                ForEach(project.orderedPages, id: \.id) { page in
+                    if let frame = SpreadGeometry.pageFrame(project: project, pageIndex: page.index) {
+                        CanvasRenderView(
+                            page: page,
+                            placements: project.placements(onPage: page.index),
+                            defaultFrame: project.defaultPhotoFrame,
+                            images: viewModel.previewImages
+                        )
+                        .frame(width: frame.width * stripHeight, height: stripHeight)
+                        .position(
+                            x: (frame.x + frame.width / 2) * stripHeight,
+                            y: stripHeight / 2
+                        )
+                    }
+                }
+                // ページ境界の目印（書き出しには含まれない）
+                ForEach(Array(project.orderedPages.dropFirst()), id: \.id) { page in
+                    if let originX = SpreadGeometry.pageOriginX(project: project, pageIndex: page.index) {
+                        Rectangle()
+                            .fill(Color.secondary.opacity(0.35))
+                            .frame(width: 1, height: stripHeight)
+                            .position(x: CGFloat(originX) * stripHeight, y: stripHeight / 2)
+                            .allowsHitTesting(false)
+                    }
+                }
+                stripSelectionOverlay(stripHeight: stripHeight)
+            }
+            .frame(width: stripWidth, height: stripHeight, alignment: .topLeading)
+            .offset(panOffset)
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
+            .clipped()
+            .contentShape(Rectangle())
+            .gesture(stripDoubleTap(geo: geo).exclusively(before: stripSingleTap(geo: geo)))
+            .simultaneousGesture(stripDrag(geo: geo))
+            .simultaneousGesture(stripMagnify(geo: geo))
+            .onAppear {
+                if !didInitialScroll {
+                    didInitialScroll = true
+                    panOffset = clampedPan(desired: initialPan(geo: geo), geo: geo)
+                }
+            }
+            // ページ追加/削除後は現在ページへスクロールを合わせる
+            .onChange(of: viewModel.pageCount) { _, _ in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    panOffset = clampedPan(desired: initialPan(geo: geo), geo: geo)
+                }
+            }
+        }
+    }
+
+    /// 選択中の配置の枠・角ハンドル・スナップガイド（スプレッド座標）
+    @ViewBuilder
+    private func stripSelectionOverlay(stripHeight: CGFloat) -> some View {
+        if let contentStrip = selectedContentRectInStrip(stripHeight: stripHeight),
+           let selectedID = viewModel.selectedPlacementID,
+           let placement = viewModel.project.placements.first(where: { $0.id == selectedID }) {
+            let rect = PageGeometry.imageRect(destRect: placement.destRect, in: contentStrip)
+            selectionChrome(
+                rect: rect,
+                isCrop: viewModel.cropModePlacementID == selectedID,
+                placementID: selectedID
+            )
+            ForEach(Array(viewModel.activeGuides.enumerated()), id: \.offset) { _, guide in
+                guideLine(guide, contentRect: contentStrip)
+            }
+        }
+    }
+
+    /// 選択中の配置が属するページの配置領域（スプレッド空間のpt矩形）
+    private func selectedContentRectInStrip(stripHeight: CGFloat) -> LayoutRect? {
+        guard let selectedID = viewModel.selectedPlacementID,
+              let placement = viewModel.project.placements.first(where: { $0.id == selectedID }),
+              let page = viewModel.project.page(at: placement.pageIndex),
+              let originX = SpreadGeometry.pageOriginX(project: viewModel.project, pageIndex: placement.pageIndex)
+        else { return nil }
+        let pageSize = LayoutSize(width: page.aspect.ratio * stripHeight, height: stripHeight)
+        let content = PageGeometry.contentRect(page: page, pageSize: pageSize)
+        return LayoutRect(
+            x: content.x + originX * stripHeight,
+            y: content.y,
+            width: content.width,
+            height: content.height
+        )
+    }
+
+    // MARK: - キャンバス座標変換
+
+    /// 画面点 →（ページindex, 配置領域の正規化座標）
+    private func locate(_ point: CGPoint, geo: GeometryProxy) -> (pageIndex: Int, nx: Double, ny: Double)? {
+        let stripHeight = geo.size.height * viewZoom
+        let sp = CGPoint(x: point.x - panOffset.width, y: point.y - panOffset.height)
+        guard sp.y >= 0, sp.y <= stripHeight else { return nil }
+        let spreadX = Double(sp.x / stripHeight)
+        guard let pageIndex = SpreadGeometry.pageIndex(atSpreadX: spreadX, project: viewModel.project),
+              let page = viewModel.project.page(at: pageIndex),
+              let originX = SpreadGeometry.pageOriginX(project: viewModel.project, pageIndex: pageIndex)
+        else { return nil }
+        let pagePt = CGPoint(x: sp.x - CGFloat(originX) * stripHeight, y: sp.y)
+        let pageSize = LayoutSize(width: page.aspect.ratio * stripHeight, height: stripHeight)
+        let content = PageGeometry.contentRect(page: page, pageSize: pageSize)
+        guard content.width > 0, content.height > 0 else { return nil }
+        return (
+            pageIndex,
+            (Double(pagePt.x) - content.x) / content.width,
+            (Double(pagePt.y) - content.y) / content.height
+        )
+    }
+
+    private func initialPan(geo: GeometryProxy) -> CGSize {
+        let stripHeight = geo.size.height * viewZoom
+        let originX = SpreadGeometry.pageOriginX(
+            project: viewModel.project, pageIndex: viewModel.currentPageIndex
+        ) ?? 0
+        return CGSize(width: -CGFloat(originX) * stripHeight, height: 0)
+    }
+
+    /// パンの可動域: キャンバスがビューポートより小さい軸は中央固定、大きい軸は端まで
+    private func clampedPan(desired: CGSize, geo: GeometryProxy, zoom: CGFloat? = nil) -> CGSize {
+        let z = zoom ?? viewZoom
+        let stripHeight = geo.size.height * z
+        let stripWidth = CGFloat(SpreadGeometry.totalWidth(project: viewModel.project)) * stripHeight
+        var x = desired.width
+        var y = desired.height
+        if stripWidth <= geo.size.width {
+            x = (geo.size.width - stripWidth) / 2
+        } else {
+            x = min(max(x, geo.size.width - stripWidth), 0)
+        }
+        if stripHeight <= geo.size.height {
+            y = (geo.size.height - stripHeight) / 2
+        } else {
+            y = min(max(y, geo.size.height - stripHeight), 0)
+        }
+        return CGSize(width: x, height: y)
+    }
+
+    // MARK: - キャンバスのジェスチャ
+
+    private func stripSingleTap(geo: GeometryProxy) -> some Gesture {
+        SpatialTapGesture().onEnded { value in
+            guard let loc = locate(value.location, geo: geo) else {
+                if viewModel.cropModePlacementID != nil {
+                    viewModel.exitCropMode()
+                } else {
+                    viewModel.select(nil)
+                }
+                return
+            }
+            viewModel.focusPage(loc.pageIndex)
+            let hit = viewModel.placement(atNormalizedX: loc.nx, y: loc.ny, onPage: loc.pageIndex)
+            if let cropID = viewModel.cropModePlacementID {
+                if hit?.id != cropID {
+                    viewModel.exitCropMode()
+                }
+            } else {
+                viewModel.select(hit?.id)
+            }
+        }
+    }
+
+    private func stripDoubleTap(geo: GeometryProxy) -> some Gesture {
+        SpatialTapGesture(count: 2).onEnded { value in
+            guard let loc = locate(value.location, geo: geo),
+                  let hit = viewModel.placement(atNormalizedX: loc.nx, y: loc.ny, onPage: loc.pageIndex)
+            else { return }
+            viewModel.focusPage(loc.pageIndex)
+            viewModel.toggleCropMode(hit.id)
+        }
+    }
+
+    /// 写真の上から開始=写真の移動（クロップ中はクロップパン）、それ以外=ビューポートのパン
+    private func stripDrag(geo: GeometryProxy) -> some Gesture {
+        DragGesture(minimumDistance: 2)
+            .onChanged { value in
+                if dragMode == nil {
+                    dragMode = beginStripDrag(at: value.startLocation, geo: geo)
+                }
+                switch dragMode {
+                case .photo(let id, let isCrop, let denom):
+                    if isCrop {
+                        viewModel.updateCropPan(
+                            placementID: id,
+                            translationX: value.translation.width / denom.width,
+                            translationY: value.translation.height / denom.height
+                        )
+                    } else {
+                        viewModel.updateMove(
+                            placementID: id,
+                            translationX: value.translation.width / denom.width,
+                            translationY: value.translation.height / denom.height
+                        )
+                    }
+                case .pan(let base):
+                    panOffset = clampedPan(
+                        desired: CGSize(
+                            width: base.width + value.translation.width,
+                            height: base.height + value.translation.height
+                        ),
+                        geo: geo
+                    )
+                case .suppressed, nil:
+                    break
+                }
+            }
+            .onEnded { _ in
+                if case .photo = dragMode {
+                    Task { await viewModel.endGesture() }
+                }
+                if case .pan = dragMode {
+                    focusCenterPage(geo: geo)
+                }
+                dragMode = nil
+            }
+    }
+
+    private func beginStripDrag(at start: CGPoint, geo: GeometryProxy) -> SpreadDragMode {
+        // 角ハンドル付近はハンドルのジェスチャに譲る
+        if let corners = selectedCornersInViewport(geo: geo),
+           corners.contains(where: { hypot($0.x - start.x, $0.y - start.y) < 24 }) {
+            return .suppressed
+        }
+        guard let loc = locate(start, geo: geo),
+              let hit = viewModel.placement(atNormalizedX: loc.nx, y: loc.ny, onPage: loc.pageIndex),
+              let page = viewModel.project.page(at: loc.pageIndex)
+        else {
+            return .pan(base: panOffset)
+        }
+        viewModel.focusPage(loc.pageIndex)
+        let stripHeight = geo.size.height * viewZoom
+        let pageSize = LayoutSize(width: page.aspect.ratio * stripHeight, height: stripHeight)
+        let content = PageGeometry.contentRect(page: page, pageSize: pageSize)
+        let isCrop = viewModel.cropModePlacementID == hit.id
+        if isCrop {
+            let imageRect = PageGeometry.imageRect(destRect: hit.destRect, in: content)
+            return .photo(id: hit.id, isCrop: true, denom: CGSize(width: imageRect.width, height: imageRect.height))
+        }
+        viewModel.select(hit.id)
+        return .photo(id: hit.id, isCrop: false, denom: CGSize(width: content.width, height: content.height))
+    }
+
+    /// 選択中配置の角ハンドルのビューポート座標（ドラッグの競合判定用）
+    private func selectedCornersInViewport(geo: GeometryProxy) -> [CGPoint]? {
+        let stripHeight = geo.size.height * viewZoom
+        guard viewModel.cropModePlacementID == nil,
+              let contentStrip = selectedContentRectInStrip(stripHeight: stripHeight),
+              let selectedID = viewModel.selectedPlacementID,
+              let placement = viewModel.project.placements.first(where: { $0.id == selectedID })
+        else { return nil }
+        let rect = PageGeometry.imageRect(destRect: placement.destRect, in: contentStrip)
+        return [
+            CGPoint(x: rect.minX, y: rect.minY),
+            CGPoint(x: rect.maxX, y: rect.minY),
+            CGPoint(x: rect.minX, y: rect.maxY),
+            CGPoint(x: rect.maxX, y: rect.maxY)
+        ].map { CGPoint(x: $0.x + panOffset.width, y: $0.y + panOffset.height) }
+    }
+
+    /// ピンチ: 写真選択中=写真の拡縮（クロップ中=クロップズーム）/ 非選択=ビューポートズーム
+    private func stripMagnify(geo: GeometryProxy) -> some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                if let targetID = viewModel.cropModePlacementID ?? viewModel.selectedPlacementID {
+                    if viewModel.cropModePlacementID == targetID {
+                        viewModel.updateCropZoom(placementID: targetID, factor: value.magnification)
+                    } else {
+                        viewModel.updateScale(placementID: targetID, factor: value.magnification)
+                    }
+                } else {
+                    if pinchBase == nil {
+                        pinchBase = (zoom: viewZoom, pan: panOffset)
+                    }
+                    guard let base = pinchBase else { return }
+                    let newZoom = min(max(base.zoom * value.magnification, 0.25), 4)
+                    // ビューポート中央を不動点にする
+                    let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
+                    let ratio = newZoom / base.zoom
+                    let newPan = CGSize(
+                        width: center.x - (center.x - base.pan.width) * ratio,
+                        height: center.y - (center.y - base.pan.height) * ratio
+                    )
+                    viewZoom = newZoom
+                    panOffset = clampedPan(desired: newPan, geo: geo, zoom: newZoom)
+                }
+            }
+            .onEnded { _ in
+                if pinchBase == nil {
+                    Task { await viewModel.endGesture() }
+                } else {
+                    pinchBase = nil
+                    focusCenterPage(geo: geo)
+                }
+            }
+    }
+
+    /// ビューポート中央にあるページを「現在ページ」にする
+    private func focusCenterPage(geo: GeometryProxy) {
+        let stripHeight = geo.size.height * viewZoom
+        guard stripHeight > 0 else { return }
+        let spreadX = Double((geo.size.width / 2 - panOffset.width) / stripHeight)
+        if let index = SpreadGeometry.pageIndex(atSpreadX: spreadX, project: viewModel.project) {
+            viewModel.focusPage(index)
         }
     }
 
@@ -232,36 +551,7 @@ struct PageEditorView: View {
             }
     }
 
-    // MARK: - 自由変形エディタ（Instagram/自由レイアウト）
-
-    /// 選択枠・角ハンドル・スナップガイドの描画とジェスチャの受付。
-    /// 座標変換はRenderPlanBuilderと同じPageGeometryを使う（触った場所＝描かれる場所）。
-    private func editOverlay(page: PageEntity) -> some View {
-        GeometryReader { geo in
-            let size = LayoutSize(width: geo.size.width, height: geo.size.height)
-            let contentRect = PageGeometry.contentRect(page: page, pageSize: size)
-
-            ZStack {
-                // スナップガイド線
-                ForEach(Array(viewModel.activeGuides.enumerated()), id: \.offset) { _, guide in
-                    guideLine(guide, contentRect: contentRect)
-                }
-                // 選択中の配置の枠と角ハンドル
-                if let selectedID = viewModel.selectedPlacementID,
-                   let placement = viewModel.pagePlacements.first(where: { $0.id == selectedID }) {
-                    let rect = PageGeometry.imageRect(destRect: placement.destRect, in: contentRect)
-                    let isCrop = viewModel.cropModePlacementID == selectedID
-                    selectionChrome(rect: rect, isCrop: isCrop, placementID: selectedID)
-                }
-            }
-            .frame(width: geo.size.width, height: geo.size.height)
-            .contentShape(Rectangle())
-            .gesture(doubleTapGesture(contentRect: contentRect)
-                .exclusively(before: singleTapGesture(contentRect: contentRect)))
-            .simultaneousGesture(dragGesture(contentRect: contentRect))
-            .simultaneousGesture(magnifyGesture())
-        }
-    }
+    // MARK: - 選択枠・ハンドル・ガイド（共通部品）
 
     /// 選択枠＋四隅の拡縮ハンドル（角ドラッグ＝アスペクト固定拡縮）
     @ViewBuilder
@@ -334,118 +624,17 @@ struct PageEditorView: View {
         .allowsHitTesting(false)
     }
 
-    private func normalized(_ point: CGPoint, in contentRect: LayoutRect) -> (x: Double, y: Double) {
-        (
-            x: (point.x - contentRect.x) / contentRect.width,
-            y: (point.y - contentRect.y) / contentRect.height
-        )
-    }
-
-    private func doubleTapGesture(contentRect: LayoutRect) -> some Gesture {
-        SpatialTapGesture(count: 2).onEnded { value in
-            let p = normalized(value.location, in: contentRect)
-            if let placement = viewModel.placement(atNormalizedX: p.x, y: p.y) {
-                viewModel.toggleCropMode(placement.id)
-            }
-        }
-    }
-
-    /// 通常時: タップで選択/解除。クロップ中: 写真の外をタップしたら完了
-    private func singleTapGesture(contentRect: LayoutRect) -> some Gesture {
-        SpatialTapGesture().onEnded { value in
-            let p = normalized(value.location, in: contentRect)
-            let hit = viewModel.placement(atNormalizedX: p.x, y: p.y)
-            if let cropID = viewModel.cropModePlacementID {
-                if hit?.id != cropID {
-                    viewModel.exitCropMode()
-                }
-            } else {
-                viewModel.select(hit?.id)
-            }
-        }
-    }
-
-    private func dragGesture(contentRect: LayoutRect) -> some Gesture {
-        DragGesture(minimumDistance: 2)
-            .onChanged { value in
-                // 対象はジェスチャ開始位置で1度だけ確定する
-                if dragTargetID == nil {
-                    let p = normalized(value.startLocation, in: contentRect)
-                    guard let placement = viewModel.placement(atNormalizedX: p.x, y: p.y) else { return }
-                    dragTargetID = placement.id
-                    dragIsCropPan = viewModel.cropModePlacementID == placement.id
-                    if !dragIsCropPan {
-                        viewModel.select(placement.id)
-                    }
-                }
-                guard let targetID = dragTargetID else { return }
-                if dragIsCropPan,
-                   let placement = viewModel.pagePlacements.first(where: { $0.id == targetID }) {
-                    // クロップパンは枠（imageRect）に対する相対移動量
-                    let rect = PageGeometry.imageRect(destRect: placement.destRect, in: contentRect)
-                    viewModel.updateCropPan(
-                        placementID: targetID,
-                        translationX: value.translation.width / rect.width,
-                        translationY: value.translation.height / rect.height
-                    )
-                } else {
-                    viewModel.updateMove(
-                        placementID: targetID,
-                        translationX: value.translation.width / contentRect.width,
-                        translationY: value.translation.height / contentRect.height
-                    )
-                }
-            }
-            .onEnded { _ in
-                dragTargetID = nil
-                dragIsCropPan = false
-                Task { await viewModel.endGesture() }
-            }
-    }
-
-    private func magnifyGesture() -> some Gesture {
-        MagnifyGesture()
-            .onChanged { value in
-                guard let targetID = viewModel.cropModePlacementID
-                    ?? viewModel.selectedPlacementID
-                    ?? viewModel.pagePlacements.last?.id else { return }
-                if viewModel.cropModePlacementID == targetID {
-                    viewModel.updateCropZoom(placementID: targetID, factor: value.magnification)
-                } else {
-                    viewModel.select(targetID)
-                    viewModel.updateScale(placementID: targetID, factor: value.magnification)
-                }
-            }
-            .onEnded { _ in
-                Task { await viewModel.endGesture() }
-            }
-    }
-
     // MARK: - コントロール
 
-    /// ページ切替＋追加/削除（Instagramカルーセルや自由レイアウトの複数ページ用）
+    /// ページ追加/削除（Instagramカルーセルや自由レイアウトの複数ページ用）。
+    /// ページ移動はキャンバスの横パン（現在ページ=ビューポート中央）
     private var pageControls: some View {
         HStack(spacing: 16) {
             if viewModel.pageCount > 1 {
-                Button {
-                    viewModel.goToPage(viewModel.currentPageIndex - 1)
-                } label: {
-                    Image(systemName: "chevron.left")
-                }
-                .disabled(viewModel.currentPageIndex == 0)
-                .accessibilityIdentifier("pageEditor.prevPage")
-
-                Text("\(viewModel.currentPageIndex + 1) / \(viewModel.pageCount)")
+                Text("ページ \(viewModel.currentPageIndex + 1) / \(viewModel.pageCount)")
                     .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(.secondary)
                     .accessibilityIdentifier("pageEditor.pageLabel")
-
-                Button {
-                    viewModel.goToPage(viewModel.currentPageIndex + 1)
-                } label: {
-                    Image(systemName: "chevron.right")
-                }
-                .disabled(viewModel.currentPageIndex == viewModel.pageCount - 1)
-                .accessibilityIdentifier("pageEditor.nextPage")
             }
 
             Button {
