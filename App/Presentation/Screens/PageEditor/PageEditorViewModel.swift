@@ -22,6 +22,11 @@ final class PageEditorViewModel {
     private(set) var activeGuides: [SnapEngine.Guide] = []
     /// ジェスチャ開始時点のスナップショット。累積translation/magnificationの基準
     private var gestureBase: ProjectEntity?
+    /// undo/redo履歴（操作の確定単位で積む。ジェスチャ中の中間状態は積まない）
+    private var history = EditHistory()
+
+    var canUndo: Bool { history.canUndo }
+    var canRedo: Bool { history.canRedo }
 
     private let saveProject: SaveProjectUseCase
     private let addPhoto: AddPhotoUseCase
@@ -70,6 +75,7 @@ final class PageEditorViewModel {
 
     /// ページ追加（自由レイアウト/Instagram複数ページ用。アスペクトは最終ページを引き継ぐ）
     func addPage() async {
+        record()
         project.appendPage()
         currentPageIndex = pageCount - 1
         await persist(refreshImages: false)
@@ -78,6 +84,7 @@ final class PageEditorViewModel {
     /// 現在ページを削除（最後の1ページは不可）
     func deleteCurrentPage() async {
         guard pageCount > 1 else { return }
+        record()
         project.removePage(at: currentPageIndex)
         currentPageIndex = min(currentPageIndex, pageCount - 1)
         selectedPlacementID = nil
@@ -89,6 +96,7 @@ final class PageEditorViewModel {
 
     func addPhotoData(_ data: Data) async {
         do {
+            record()
             project = try await addPhoto.execute(
                 project: project, imageData: data, pageIndex: currentPageIndex
             )
@@ -99,23 +107,27 @@ final class PageEditorViewModel {
     }
 
     func setAspect(_ aspect: AspectRatio) async {
+        record()
         project.setPageAspect(aspect)
         await persist()
     }
 
     /// 全面配置（ワンタップ配置アクション。永続モードではない）
     func placeFill() async {
+        record()
         project.placeAllFillingPage()
         await persist()
     }
 
     /// マット配置（写真全体を余白付きで見せる）
     func placeMat() async {
+        record()
         project.placeAllMatted()
         await persist()
     }
 
     func applyPreset(_ preset: FramePreset) async {
+        record()
         project.applyFramePreset(preset)
         await persist()
     }
@@ -124,6 +136,7 @@ final class PageEditorViewModel {
 
     func deleteSelectedPhoto() async {
         guard let id = selectedPlacementID else { return }
+        record()
         project.removePlacement(id: id)
         selectedPlacementID = nil
         cropModePlacementID = nil
@@ -132,12 +145,14 @@ final class PageEditorViewModel {
 
     func placeFillSelected() async {
         guard let id = selectedPlacementID else { return }
+        record()
         project.placeFillingPage(placementID: id)
         await persist(refreshImages: false)
     }
 
     func placeMatSelected() async {
         guard let id = selectedPlacementID else { return }
+        record()
         project.placeMatted(placementID: id)
         await persist(refreshImages: false)
     }
@@ -211,6 +226,7 @@ final class PageEditorViewModel {
     /// 枠のpxアスペクトをプリセット値へ変更（写真メニュー）
     func applyFrameAspect(pixelAspect: Double) async {
         guard let id = selectedPlacementID else { return }
+        record()
         project.setFramePixelAspect(pixelAspect, placementID: id)
         await persist(refreshImages: false)
     }
@@ -239,8 +255,12 @@ final class PageEditorViewModel {
         setCropRect(PlacementGesture.zoomCrop(cropRect: base.cropRect, factor: factor), for: placementID)
     }
 
-    /// ジェスチャ終了: ガイドを消して永続化（画像は不変なので再デコードしない）
+    /// ジェスチャ終了: ガイドを消して永続化（画像は不変なので再デコードしない）。
+    /// 変更があった場合のみジェスチャ開始時点の状態をundo履歴へ積む
     func endGesture() async {
+        if let base = gestureBase, base != project {
+            history.push(base)
+        }
         gestureBase = nil
         activeGuides = []
         await persist(refreshImages: false)
@@ -259,6 +279,33 @@ final class PageEditorViewModel {
     private func setCropRect(_ rect: LayoutRect, for placementID: UUID) {
         guard let index = project.placements.firstIndex(where: { $0.id == placementID }) else { return }
         project.placements[index].cropRect = rect
+    }
+
+    // MARK: - Undo/Redo
+
+    /// 操作の確定直前に呼ぶ（この後projectを変更する）
+    private func record() {
+        history.push(project)
+    }
+
+    func undo() async {
+        guard let previous = history.undo(current: project) else { return }
+        project = previous
+        selectedPlacementID = nil
+        cropModePlacementID = nil
+        activeGuides = []
+        currentPageIndex = min(currentPageIndex, max(pageCount - 1, 0))
+        await persist()
+    }
+
+    func redo() async {
+        guard let next = history.redo(current: project) else { return }
+        project = next
+        selectedPlacementID = nil
+        cropModePlacementID = nil
+        activeGuides = []
+        currentPageIndex = min(currentPageIndex, max(pageCount - 1, 0))
+        await persist()
     }
 
     // MARK: - 書き出し

@@ -77,6 +77,24 @@ struct PageEditorView: View {
         .navigationTitle(viewModel.project.title ?? "レイアウト")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    Task { await viewModel.undo() }
+                } label: {
+                    Image(systemName: "arrow.uturn.backward")
+                }
+                .disabled(!viewModel.canUndo)
+                .accessibilityIdentifier("pageEditor.undo")
+            }
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    Task { await viewModel.redo() }
+                } label: {
+                    Image(systemName: "arrow.uturn.forward")
+                }
+                .disabled(!viewModel.canRedo)
+                .accessibilityIdentifier("pageEditor.redo")
+            }
             if !viewModel.project.isXPost {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
