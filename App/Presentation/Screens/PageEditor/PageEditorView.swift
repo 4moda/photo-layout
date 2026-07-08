@@ -69,17 +69,6 @@ struct PageEditorView: View {
                         .accessibilityIdentifier("pageEditor.cropModeHint")
                 }
 
-                if !viewModel.currentPageHasPhoto {
-                    Button {
-                        photoPickerPresented = true
-                    } label: {
-                        Label("写真を追加", systemImage: "photo.badge.plus")
-                            .font(.headline)
-                    }
-                    .accessibilityIdentifier("pageEditor.addPhotoEmpty")
-                }
-
-                pageControls
             }
 
             controls
@@ -624,52 +613,82 @@ struct PageEditorView: View {
         .allowsHitTesting(false)
     }
 
-    // MARK: - コントロール
+    // MARK: - コントロール（コンテキスト依存メニュー）
 
-    /// ページ追加/削除（Instagramカルーセルや自由レイアウトの複数ページ用）。
-    /// ページ移動はキャンバスの横パン（現在ページ=ビューポート中央）
-    private var pageControls: some View {
-        HStack(spacing: 16) {
-            if viewModel.pageCount > 1 {
-                Text("ページ \(viewModel.currentPageIndex + 1) / \(viewModel.pageCount)")
-                    .font(.subheadline.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("pageEditor.pageLabel")
+    /// 選択状態に応じて出すメニューを切り替える:
+    /// クロップ中=完了のみ / 写真選択中=写真メニュー / 非選択=ページ全体メニュー
+    @ViewBuilder
+    private var controls: some View {
+        if viewModel.project.isXPost {
+            xControls
+        } else if viewModel.cropModePlacementID != nil {
+            cropControls
+        } else if viewModel.selectedPlacementID != nil {
+            photoControls
+        } else {
+            pageMenuControls
+        }
+    }
+
+    private var cropControls: some View {
+        Button {
+            viewModel.exitCropMode()
+        } label: {
+            Label("クロップ完了", systemImage: "checkmark")
+        }
+        .buttonStyle(.borderedProminent)
+        .accessibilityIdentifier("pageEditor.cropDone")
+    }
+
+    /// 写真選択中のメニュー
+    private var photoControls: some View {
+        HStack(spacing: 12) {
+            Button {
+                Task { await viewModel.placeFillSelected() }
+            } label: {
+                Label("全面", systemImage: "rectangle.arrowtriangle.2.inward")
             }
+            .accessibilityIdentifier("pageEditor.fillSelected")
 
             Button {
-                Task { await viewModel.addPage() }
+                Task { await viewModel.placeMatSelected() }
             } label: {
-                Image(systemName: "plus.rectangle.on.rectangle")
+                Label("マット", systemImage: "rectangle.arrowtriangle.2.outward")
             }
-            .accessibilityIdentifier("pageEditor.addPage")
+            .accessibilityIdentifier("pageEditor.matSelected")
 
-            if viewModel.pageCount > 1 {
-                Button(role: .destructive) {
-                    Task { await viewModel.deleteCurrentPage() }
-                } label: {
-                    Image(systemName: "minus.rectangle")
+            Button {
+                if let id = viewModel.selectedPlacementID {
+                    viewModel.toggleCropMode(id)
                 }
-                .accessibilityIdentifier("pageEditor.deletePage")
+            } label: {
+                Label("クロップ", systemImage: "crop")
             }
+            .accessibilityIdentifier("pageEditor.cropButton")
+
+            Button(role: .destructive) {
+                Task { await viewModel.deleteSelectedPhoto() }
+            } label: {
+                Label("削除", systemImage: "trash")
+            }
+            .accessibilityIdentifier("pageEditor.deletePhoto")
         }
         .buttonStyle(.bordered)
     }
 
-    private var controls: some View {
+    /// 非選択時のページ全体メニュー
+    private var pageMenuControls: some View {
         HStack(spacing: 12) {
-            if !viewModel.project.isXPost {
-                Menu {
-                    ForEach(Self.aspectChoices, id: \.label) { choice in
-                        Button(choice.label) {
-                            Task { await viewModel.setAspect(choice.aspect) }
-                        }
+            Menu {
+                ForEach(Self.aspectChoices, id: \.label) { choice in
+                    Button(choice.label) {
+                        Task { await viewModel.setAspect(choice.aspect) }
                     }
-                } label: {
-                    Label("比率", systemImage: "aspectratio")
                 }
-                .accessibilityIdentifier("pageEditor.aspectMenu")
+            } label: {
+                Label("比率", systemImage: "aspectratio")
             }
+            .accessibilityIdentifier("pageEditor.aspectMenu")
 
             Button {
                 Task { await viewModel.placeFill() }
@@ -685,17 +704,64 @@ struct PageEditorView: View {
             }
             .accessibilityIdentifier("pageEditor.matButton")
 
-            Menu {
-                ForEach(Self.presetChoices, id: \.label) { choice in
-                    Button(choice.label) {
-                        Task { await viewModel.applyPreset(choice.preset) }
-                    }
-                }
+            framePresetMenu
+
+            Button {
+                Task { await viewModel.addPage() }
             } label: {
-                Label("枠", systemImage: "square.dashed")
+                Image(systemName: "plus.rectangle.on.rectangle")
             }
-            .accessibilityIdentifier("pageEditor.presetMenu")
+            .accessibilityIdentifier("pageEditor.addPage")
+
+            if viewModel.pageCount > 1 {
+                Button(role: .destructive) {
+                    Task { await viewModel.deleteCurrentPage() }
+                } label: {
+                    Image(systemName: "minus.rectangle")
+                }
+                .accessibilityIdentifier("pageEditor.deletePage")
+
+                Text("\(viewModel.currentPageIndex + 1)/\(viewModel.pageCount)")
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("pageEditor.pageLabel")
+            }
         }
         .buttonStyle(.bordered)
+    }
+
+    /// X投稿（タイムライン合成）のメニュー。比率・ページ増減はX仕様固定なので出さない
+    private var xControls: some View {
+        HStack(spacing: 12) {
+            Button {
+                Task { await viewModel.placeFill() }
+            } label: {
+                Label("全面", systemImage: "rectangle.arrowtriangle.2.inward")
+            }
+            .accessibilityIdentifier("pageEditor.fillButton")
+
+            Button {
+                Task { await viewModel.placeMat() }
+            } label: {
+                Label("マット", systemImage: "rectangle.arrowtriangle.2.outward")
+            }
+            .accessibilityIdentifier("pageEditor.matButton")
+
+            framePresetMenu
+        }
+        .buttonStyle(.bordered)
+    }
+
+    private var framePresetMenu: some View {
+        Menu {
+            ForEach(Self.presetChoices, id: \.label) { choice in
+                Button(choice.label) {
+                    Task { await viewModel.applyPreset(choice.preset) }
+                }
+            }
+        } label: {
+            Label("枠", systemImage: "square.dashed")
+        }
+        .accessibilityIdentifier("pageEditor.presetMenu")
     }
 }

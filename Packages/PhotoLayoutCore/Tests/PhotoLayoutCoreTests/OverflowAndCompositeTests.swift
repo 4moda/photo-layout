@@ -164,3 +164,32 @@ struct PageMutationTests {
         #expect(project.pages.count == 1)
     }
 }
+
+@Suite("配置の削除")
+struct RemovePlacementTests {
+    @Test("削除でsortIndexが0からの連番に詰まる")
+    func removeCompactsSortIndex() {
+        var project = ProjectEntity(pages: [PageEntity(index: 0, aspect: AspectRatio(width: 1, height: 1))])
+        let photo = PhotoRef(fileName: "a.jpg", pixelWidth: 100, pixelHeight: 100)
+        project.placements = (0..<3).map { i in
+            PlacementEntity(sortIndex: i, photo: photo, destRect: .unit)
+        }
+        let middleID = project.orderedPlacements[1].id
+        project.removePlacement(id: middleID)
+        #expect(project.placements.count == 2)
+        #expect(project.orderedPlacements.map(\.sortIndex) == [0, 1])
+        #expect(!project.placements.contains { $0.id == middleID })
+    }
+
+    @Test("存在しないIDの削除は何もしない")
+    func removeUnknownIDIsNoop() {
+        var project = ProjectEntity(pages: [PageEntity(index: 0, aspect: AspectRatio(width: 1, height: 1))])
+        project.placements = [PlacementEntity(
+            sortIndex: 0,
+            photo: PhotoRef(fileName: "a.jpg", pixelWidth: 100, pixelHeight: 100),
+            destRect: .unit
+        )]
+        project.removePlacement(id: UUID())
+        #expect(project.placements.count == 1)
+    }
+}

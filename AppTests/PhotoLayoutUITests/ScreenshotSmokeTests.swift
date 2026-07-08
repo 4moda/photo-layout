@@ -70,6 +70,16 @@ final class ScreenshotSmokeTests: XCTestCase {
         app.buttons["pageEditor.matButton"].tap()
         sleep(2)
         attachScreenshot(named: "05-editor-matted")
+
+        // キャンバス中央をタップ→写真が選択され、写真メニュー（削除・クロップ等）に切り替わる
+        let canvas = app.otherElements["pageEditor.canvas"].firstMatch
+        if canvas.exists {
+            canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            let deleteButton = app.buttons["pageEditor.deletePhoto"]
+            if deleteButton.waitForExistence(timeout: 5) {
+                attachScreenshot(named: "05b-photo-selected-menu")
+            }
+        }
     }
 
     @MainActor

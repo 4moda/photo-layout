@@ -120,6 +120,28 @@ final class PageEditorViewModel {
         await persist()
     }
 
+    // MARK: - 選択中の写真への操作（写真メニュー）
+
+    func deleteSelectedPhoto() async {
+        guard let id = selectedPlacementID else { return }
+        project.removePlacement(id: id)
+        selectedPlacementID = nil
+        cropModePlacementID = nil
+        await persist()
+    }
+
+    func placeFillSelected() async {
+        guard let id = selectedPlacementID else { return }
+        project.placeFillingPage(placementID: id)
+        await persist(refreshImages: false)
+    }
+
+    func placeMatSelected() async {
+        guard let id = selectedPlacementID else { return }
+        project.placeMatted(placementID: id)
+        await persist(refreshImages: false)
+    }
+
     // MARK: - ジェスチャ（PlacementGesture/SnapEngineの純粋計算をproject状態へ適用する）
 
     /// 指定点（配置領域の正規化座標）にある最前面の配置を返す

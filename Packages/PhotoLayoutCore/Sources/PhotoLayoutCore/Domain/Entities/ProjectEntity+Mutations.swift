@@ -17,6 +17,18 @@ extension ProjectEntity {
         placeFillingPage(placementID: placement.id)
     }
 
+    /// 配置（写真）を削除し、sortIndexを0からの連番に詰め直す。
+    public mutating func removePlacement(id: UUID) {
+        guard placements.contains(where: { $0.id == id }) else { return }
+        placements.removeAll { $0.id == id }
+        let orderedIDs = orderedPlacements.map(\.id)
+        for (newIndex, placementID) in orderedIDs.enumerated() {
+            if let index = placements.firstIndex(where: { $0.id == placementID }) {
+                placements[index].sortIndex = newIndex
+            }
+        }
+    }
+
     /// 全面配置: クロップを配置領域のアスペクトに絞り込み、領域いっぱいに敷く。
     public mutating func placeFillingPage(placementID: UUID) {
         guard let index = placements.firstIndex(where: { $0.id == placementID }),
