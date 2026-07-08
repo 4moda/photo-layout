@@ -69,11 +69,13 @@ final class ProjectListViewModel {
         thumbnailCache = thumbnailCache.filter { ids.contains($0.key) }
     }
 
-    /// 新規プロジェクト作成。写真は後からエディタ内で追加する（一覧では選ばせない）。
+    /// 新規プロジェクト作成。用紙サイズ（キャンバスのアスペクト）だけ決め、写真は後から
+    /// エディタ内で追加する（一覧では写真選択を誘導しない）。枠付けもレイアウトも同じ
+    /// 汎用プロジェクト — 1枚＋余白なら枠付け、複数枚＋テンプレートならレイアウトになる。
     /// 成功時は作成したプロジェクトを返す（呼び出し側でエディタへ遷移する）。
-    func create(preset: PlatformPreset?, title: String?) async -> ProjectEntity? {
+    func create(aspect: AspectRatio, title: String?) async -> ProjectEntity? {
         do {
-            let project = try await createProject.execute(title: title, preset: preset)
+            let project = try await createProject.execute(title: title, aspect: aspect)
             projects = try await listProjects.execute()
             return project
         } catch {

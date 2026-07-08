@@ -13,15 +13,15 @@ final class ScreenshotSmokeTests: XCTestCase {
         XCTAssertTrue(navTitle.waitForExistence(timeout: 15))
         attachScreenshot(named: "01-project-list")
 
-        // ＋メニュー → 自由レイアウト → 作成後は自動でエディタへ遷移する
+        // ＋メニュー → 用紙サイズ（正方形）を選ぶ → 作成後は自動でエディタへ遷移する
         // SwiftUIのツールバーMenuは.tap()がkAXErrorCannotCompleteになることがあるため座標タップ
         let addButton = app.buttons["projectList.add"]
         XCTAssertTrue(addButton.waitForExistence(timeout: 5))
         addButton.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        let freeButton = app.buttons["projectList.newFree"]
-        XCTAssertTrue(freeButton.waitForExistence(timeout: 5))
+        let squareButton = app.buttons["projectList.new_square"]
+        XCTAssertTrue(squareButton.waitForExistence(timeout: 5))
         attachScreenshot(named: "02-new-project-menu")
-        freeButton.tap()
+        squareButton.tap()
 
         let exportButton = app.buttons["pageEditor.export"]
         XCTAssertTrue(exportButton.waitForExistence(timeout: 10))

@@ -59,10 +59,6 @@ struct PageEditorView: View {
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .accessibilityIdentifier("pageEditor.cropModeHint")
-            } else if viewModel.project.isXPost {
-                Text("Xタイムライン表示 — 書き出すと各写真が個別画像になります")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
 
             controls
@@ -89,28 +85,16 @@ struct PageEditorView: View {
                 .disabled(!viewModel.canRedo)
                 .accessibilityIdentifier("pageEditor.redo")
             }
-            if !viewModel.project.isXPost {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        photoPickerPresented = true
-                    } label: {
-                        Image(systemName: "photo.badge.plus")
-                    }
-                    .accessibilityIdentifier("pageEditor.addPhoto")
-                }
-            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    Task { await viewModel.export() }
+                    photoPickerPresented = true
                 } label: {
-                    if viewModel.isExporting {
-                        ProgressView()
-                    } else {
-                        Image(systemName: "square.and.arrow.down")
-                    }
+                    Image(systemName: "photo.badge.plus")
                 }
-                .disabled(viewModel.isExporting || !viewModel.hasPhoto)
-                .accessibilityIdentifier("pageEditor.export")
+                .accessibilityIdentifier("pageEditor.addPhoto")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                exportMenu
             }
         }
         .fullScreenCover(isPresented: Binding(
@@ -622,6 +606,41 @@ struct PageEditorView: View {
         .accessibilityIdentifier("pageEditor.cropDone")
     }
 
+    /// 書き出し: ページを1枚で / 各写真を個別に（汎用。SNS別モードは持たない）
+    @ViewBuilder
+    private var exportMenu: some View {
+        if viewModel.isExporting {
+            ProgressView()
+        } else if viewModel.currentPagePhotoCount >= 2 {
+            Menu {
+                Button {
+                    Task { await viewModel.exportPages() }
+                } label: {
+                    Label(viewModel.pageCount > 1 ? "各ページを1枚ずつ書き出す" : "ページを1枚で書き出す",
+                          systemImage: "doc")
+                }
+                Button {
+                    Task { await viewModel.exportIndividualPhotos() }
+                } label: {
+                    Label("各写真を個別に書き出す（\(viewModel.currentPagePhotoCount)枚）",
+                          systemImage: "square.grid.2x2")
+                }
+            } label: {
+                Image(systemName: "square.and.arrow.down")
+            }
+            .disabled(!viewModel.hasPhoto)
+            .accessibilityIdentifier("pageEditor.export")
+        } else {
+            Button {
+                Task { await viewModel.exportPages() }
+            } label: {
+                Image(systemName: "square.and.arrow.down")
+            }
+            .disabled(!viewModel.hasPhoto)
+            .accessibilityIdentifier("pageEditor.export")
+        }
+    }
+
     /// 枠アスペクトのプリセット（写真は歪まずクロップ窓が変わる）
     private static let frameAspectChoices: [(label: String, pixelAspect: Double)] = [
         ("1:1", 1.0),
@@ -696,21 +715,19 @@ struct PageEditorView: View {
         .buttonStyle(.bordered)
     }
 
-    /// 非選択時のページ全体メニュー。X投稿はページ数・比率が固定なので比率/ページ操作は出さない
+    /// 非選択時のページ全体メニュー（全プロジェクト共通。SNS別の分岐はしない）
     private var pageMenuControls: some View {
         HStack(spacing: 12) {
-            if !viewModel.project.isXPost {
-                Menu {
-                    ForEach(Self.aspectChoices, id: \.label) { choice in
-                        Button(choice.label) {
-                            Task { await viewModel.setAspect(choice.aspect) }
-                        }
+            Menu {
+                ForEach(Self.aspectChoices, id: \.label) { choice in
+                    Button(choice.label) {
+                        Task { await viewModel.setAspect(choice.aspect) }
                     }
-                } label: {
-                    Label("比率", systemImage: "aspectratio")
                 }
-                .accessibilityIdentifier("pageEditor.aspectMenu")
+            } label: {
+                Label("比率", systemImage: "aspectratio")
             }
+            .accessibilityIdentifier("pageEditor.aspectMenu")
 
             if viewModel.currentPageHasPhoto {
                 templateMenu
@@ -732,21 +749,19 @@ struct PageEditorView: View {
 
             framePresetMenu
 
-            if !viewModel.project.isXPost {
-                // ページの追加・削除・並べ替えは俯瞰モードで行う（キャンバスをピンチアウトでも入れる）
-                Button {
-                    viewModel.enterOverview()
-                } label: {
-                    Label("ページ", systemImage: "rectangle.stack")
-                }
-                .accessibilityIdentifier("pageEditor.overview")
+            // ページの追加・削除・並べ替えは俯瞰モードで行う（キャンバスをピンチアウトでも入れる）
+            Button {
+                viewModel.enterOverview()
+            } label: {
+                Label("ページ", systemImage: "rectangle.stack")
+            }
+            .accessibilityIdentifier("pageEditor.overview")
 
-                if viewModel.pageCount > 1 {
-                    Text("\(viewModel.currentPageIndex + 1)/\(viewModel.pageCount)")
-                        .font(.subheadline.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("pageEditor.pageLabel")
-                }
+            if viewModel.pageCount > 1 {
+                Text("\(viewModel.currentPageIndex + 1)/\(viewModel.pageCount)")
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("pageEditor.pageLabel")
             }
         }
         .buttonStyle(.bordered)

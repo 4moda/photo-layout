@@ -58,43 +58,35 @@ struct ProjectListView: View {
         }
     }
 
+    /// 新規作成は「用紙サイズ（キャンバスのアスペクト）」だけ選ぶ。SNS別のモードは持たず、
+    /// ラベルは用途のヒントに留める。枠付けもレイアウトも同じ汎用プロジェクトで行う。
+    private static let canvasChoices: [(id: String, label: String, aspect: AspectRatio)] = [
+        ("square", "正方形 1:1", AspectRatio(width: 1, height: 1)),
+        ("portrait45", "縦長 4:5（Instagram）", AspectRatio(width: 4, height: 5)),
+        ("portrait34", "縦 3:4（X 1枚）", AspectRatio(width: 3, height: 4)),
+        ("landscape169", "横 16:9", AspectRatio(width: 16, height: 9)),
+        ("landscape191", "横長 1.91:1（Instagram）", AspectRatio(width: 1.91, height: 1))
+    ]
+
     private var newProjectMenu: some View {
         Menu {
-            Section("X投稿（タイムライン表示で編集）") {
-                ForEach(1...4, id: \.self) { count in
-                    Button("写真\(count)枚") {
-                        createAndOpen(preset: .x(photoCount: count), title: "X投稿（\(count)枚）")
+            Section("用紙サイズを選んで新規作成") {
+                ForEach(Self.canvasChoices, id: \.id) { choice in
+                    Button(choice.label) {
+                        createAndOpen(aspect: choice.aspect, title: nil)
                     }
-                    .accessibilityIdentifier("projectList.newX\(count)")
+                    .accessibilityIdentifier("projectList.new_\(choice.id)")
                 }
             }
-            Section("Instagram") {
-                Button("正方形 1:1") {
-                    createAndOpen(preset: .instagram(aspect: .square, pageCount: 1), title: "Instagram 1:1")
-                }
-                .accessibilityIdentifier("projectList.newInstagramSquare")
-                Button("縦長 4:5") {
-                    createAndOpen(preset: .instagram(aspect: .portrait, pageCount: 1), title: "Instagram 4:5")
-                }
-                .accessibilityIdentifier("projectList.newInstagramPortrait")
-                Button("横長 1.91:1") {
-                    createAndOpen(preset: .instagram(aspect: .landscape, pageCount: 1), title: "Instagram 1.91:1")
-                }
-                .accessibilityIdentifier("projectList.newInstagramLandscape")
-            }
-            Button("自由レイアウト") {
-                createAndOpen(preset: nil, title: nil)
-            }
-            .accessibilityIdentifier("projectList.newFree")
         } label: {
             Image(systemName: "plus")
         }
         .accessibilityIdentifier("projectList.add")
     }
 
-    private func createAndOpen(preset: PlatformPreset?, title: String?) {
+    private func createAndOpen(aspect: AspectRatio, title: String?) {
         Task {
-            if let project = await viewModel.create(preset: preset, title: title) {
+            if let project = await viewModel.create(aspect: aspect, title: title) {
                 path.append(project)
             }
         }
