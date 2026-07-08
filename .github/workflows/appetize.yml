@@ -1,0 +1,83 @@
+name: Appetize Deploy
+
+# シミュレータ向けビルドを Appetize.io にアップロードし、ブラウザで動作確認できるようにする
+# （Macなし開発で「シミュレータを触る」手段。photo-sheet と同じ構成）。
+# 必要な Secrets:
+#   APPETIZE_API_TOKEN  … Appetize のアカウントページで発行した API トークン（必須）
+#   APPETIZE_PUBLIC_KEY … 初回アップロードで発行される publicKey（設定すると同じ URL を更新し続ける）
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: appetize-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build & upload to Appetize
+    runs-on: macos-15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check secret
+        env:
+          APPETIZE_API_TOKEN: ${{ secrets.APPETIZE_API_TOKEN }}
+        run: |
+          if [ -z "$APPETIZE_API_TOKEN" ]; then
+            echo "::error::APPETIZE_API_TOKEN secret が未設定です。Appetize.io で API トークンを発行し、リポジトリの Secrets に登録してください。"
+            exit 1
+          fi
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build for iOS Simulator
+        run: |
+          xcodebuild build \
+            -project PhotoLayout.xcodeproj \
+            -scheme PhotoLayout \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -derivedDataPath DerivedData \
+            ARCHS="x86_64 arm64" \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Zip .app bundle
+        run: |
+          cd DerivedData/Build/Products/Release-iphonesimulator
+          zip -qry "$GITHUB_WORKSPACE/PhotoLayout-simulator.zip" PhotoLayout.app
+
+      - name: Upload to Appetize
+        env:
+          APPETIZE_API_TOKEN: ${{ secrets.APPETIZE_API_TOKEN }}
+          APPETIZE_PUBLIC_KEY: ${{ secrets.APPETIZE_PUBLIC_KEY }}
+        run: |
+          if [ -n "$APPETIZE_PUBLIC_KEY" ]; then
+            URL="https://api.appetize.io/v1/apps/$APPETIZE_PUBLIC_KEY"
+          else
+            URL="https://api.appetize.io/v1/apps"
+          fi
+          RESPONSE=$(curl -sS -f -u "$APPETIZE_API_TOKEN:" "$URL" \
+            -F "file=@PhotoLayout-simulator.zip" \
+            -F "platform=ios")
+          PUBLIC_KEY=$(echo "$RESPONSE" | jq -r '.publicKey')
+          echo "publicKey=$PUBLIC_KEY"
+          echo "appUrl=https://appetize.io/app/$PUBLIC_KEY"
+          {
+            echo "## Appetize デプロイ完了 🎉"
+            echo ""
+            echo "- **ブラウザで開く**: https://appetize.io/app/$PUBLIC_KEY"
+            echo "- publicKey: \`$PUBLIC_KEY\`"
+            if [ -z "$APPETIZE_PUBLIC_KEY" ]; then
+              echo ""
+              echo "> 次回以降も同じ URL を使うには、この publicKey をリポジトリ Secret \`APPETIZE_PUBLIC_KEY\` に登録してください。"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

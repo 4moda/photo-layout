@@ -48,11 +48,12 @@ xcodegen generate
 5. プレビューと書き出しは共通の `RenderPlanBuilder` が生成する `[DrawCommand]` を解釈する。描画ロジックを2箇所に書かない
 6. 並び順はSwiftDataの配列順序に依存せず明示的な `index` フィールドで管理
 
-## 開発ワークフロー
+## 開発ワークフロー（2026-07-08 改定: trunkベース）
 
-- GitHub Flow。1フェーズ＝1 Issue＝1ブランチ（`feature/phase-N-xxx`）＝1 PR
-- PRは機能的にまとまった単位（細切れにしない）。**動作することを差分の小ささより優先**
-- PR本文: `Closes #N`、受け入れ条件の充足状況、CIスクショartifactへの言及
-- **マージは必ずユーザーが行う。自動マージ・自己マージ禁止**
-- mainは常にグリーン維持（Branch Protectionで両CI必須）
-- CIのXCUITestスクリーンショット（artifact）がMacなしで画面を確認する唯一の手段。画面を追加・変更したらスクショテストも更新する
+- **動く段階まで仕上げて main へ直接コミット**する（Issue/PR単位の開発は廃止。大きな設計変更の相談はIssueを使ってもよい）
+- push前の必須条件: ① Core `swift test` グリーン ② App層差分の型・API自己レビュー（CI往復10分を無駄にしない）
+- push後はCI（core-tests / ios-ci）を監視し、赤くなったら**即fix-forward**（revertより前進修正を優先）
+- mainへのpushで自動デプロイ:
+  - **Appetize**（`appetize.yml`）: ブラウザ上のシミュレータで動作確認（要 `APPETIZE_API_TOKEN` Secret）
+  - **unsigned .ipa**（ios-ci artifact）: Sideloadlyで実機確認
+- CIのXCUITestスクリーンショット（artifact）も画面確認の手段。画面を追加・変更したらスクショテストも更新する
