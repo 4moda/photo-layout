@@ -55,6 +55,26 @@ extension ProjectEntity {
         placements[indexB].sortIndex = temp
     }
 
+    /// テンプレートを適用する: ページ上の配置を sortIndex 順にスロットへ全面配置する。
+    /// 写真がスロット数より少なければ余ったスロットは空のまま。多ければ余りは最後のスロットに重なる。
+    /// - Parameter template: 適用するテンプレート（スロットはページ配置領域の正規化座標）
+    public mutating func applyTemplate(_ template: LayoutTemplate, toPage pageIndex: Int) {
+        guard let page = page(at: pageIndex) else { return }
+        let ordered = placements(onPage: pageIndex)
+        for (offset, placement) in ordered.enumerated() {
+            guard let index = placements.firstIndex(where: { $0.id == placement.id }) else { continue }
+            let slot = template.slots[min(offset, template.slots.count - 1)]
+            placements[index].destRect = slot
+            // スロットの実ピクセルアスペクトに合わせて中央クロップ（画像は歪まない）
+            let slotPixelAspect = slot.aspectRatio * page.contentAspect
+            placements[index].cropRect = CropMath.subCrop(
+                .unit,
+                photo: placements[index].photo,
+                targetPixelAspect: slotPixelAspect
+            )
+        }
+    }
+
     /// 全面配置: クロップを配置領域のアスペクトに絞り込み、領域いっぱいに敷く。
     public mutating func placeFillingPage(placementID: UUID) {
         guard let index = placements.firstIndex(where: { $0.id == placementID }),
