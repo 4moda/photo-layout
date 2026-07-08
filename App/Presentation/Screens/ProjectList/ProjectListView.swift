@@ -1,14 +1,12 @@
 import SwiftUI
-import PhotosUI
 import PhotoLayoutCore
 
 /// 下書き一覧。行タップでページ編集へ遷移する。
-/// ツールバー: ＋=空の下書き、X=写真1〜4枚を選んでX投稿プロジェクトを自動生成。
+/// 新規作成は［＋］メニューで投稿先（X / Instagram / 自由）を選んでから。
+/// 写真はエディタ内で追加する（一覧では選ばせない）。
 struct ProjectListView: View {
     @State private var viewModel: ProjectListViewModel
     @State private var path: [ProjectEntity] = []
-    @State private var showXPicker = false
-    @State private var xPickerItems: [PhotosPickerItem] = []
 
     init(viewModel: ProjectListViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -47,48 +45,54 @@ struct ProjectListView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        Task { await viewModel.createDraft() }
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .accessibilityIdentifier("projectList.add")
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showXPicker = true
-                    } label: {
-                        Image(systemName: "rectangle.stack.badge.plus")
-                    }
-                    .accessibilityIdentifier("projectList.addX")
-                }
-            }
-            .photosPicker(
-                isPresented: $showXPicker,
-                selection: $xPickerItems,
-                maxSelectionCount: PlatformSpecTable.xMaxPhotoCount,
-                matching: .images
-            )
-            .onChange(of: xPickerItems) { _, items in
-                guard !items.isEmpty else { return }
-                Task {
-                    // 選択順＝投稿順を保つため直列にロードする
-                    var dataList: [Data] = []
-                    for item in items {
-                        if let data = try? await item.loadTransferable(type: Data.self) {
-                            dataList.append(data)
-                        }
-                    }
-                    xPickerItems = []
-                    guard !dataList.isEmpty else { return }
-                    if let project = await viewModel.createXPost(imageDataList: dataList) {
-                        path.append(project)
-                    }
+                    newProjectMenu
                 }
             }
             // 編集画面から戻ったときにも最新を読み直す（.taskは初回のみのため）
             .onAppear {
                 Task { await viewModel.load() }
+            }
+        }
+    }
+
+    private var newProjectMenu: some View {
+        Menu {
+            Section("X投稿（タイムライン表示で編集）") {
+                ForEach(1...4, id: \.self) { count in
+                    Button("写真\(count)枚") {
+                        createAndOpen(preset: .x(photoCount: count), title: "X投稿（\(count)枚）")
+                    }
+                    .accessibilityIdentifier("projectList.newX\(count)")
+                }
+            }
+            Section("Instagram") {
+                Button("正方形 1:1") {
+                    createAndOpen(preset: .instagram(aspect: .square, pageCount: 1), title: "Instagram 1:1")
+                }
+                .accessibilityIdentifier("projectList.newInstagramSquare")
+                Button("縦長 4:5") {
+                    createAndOpen(preset: .instagram(aspect: .portrait, pageCount: 1), title: "Instagram 4:5")
+                }
+                .accessibilityIdentifier("projectList.newInstagramPortrait")
+                Button("横長 1.91:1") {
+                    createAndOpen(preset: .instagram(aspect: .landscape, pageCount: 1), title: "Instagram 1.91:1")
+                }
+                .accessibilityIdentifier("projectList.newInstagramLandscape")
+            }
+            Button("自由レイアウト") {
+                createAndOpen(preset: nil, title: nil)
+            }
+            .accessibilityIdentifier("projectList.newFree")
+        } label: {
+            Image(systemName: "plus")
+        }
+        .accessibilityIdentifier("projectList.add")
+    }
+
+    private func createAndOpen(preset: PlatformPreset?, title: String?) {
+        Task {
+            if let project = await viewModel.create(preset: preset, title: title) {
+                path.append(project)
             }
         }
     }

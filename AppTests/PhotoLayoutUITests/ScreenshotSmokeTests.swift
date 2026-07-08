@@ -13,10 +13,21 @@ final class ScreenshotSmokeTests: XCTestCase {
         XCTAssertTrue(navTitle.waitForExistence(timeout: 15))
         attachScreenshot(named: "01-project-list")
 
+        // ＋メニュー → 自由レイアウト → 作成後は自動でエディタへ遷移する
         app.buttons["projectList.add"].tap()
+        let freeButton = app.buttons["projectList.newFree"]
+        XCTAssertTrue(freeButton.waitForExistence(timeout: 5))
+        attachScreenshot(named: "02-new-project-menu")
+        freeButton.tap()
+
+        let exportButton = app.buttons["pageEditor.export"]
+        XCTAssertTrue(exportButton.waitForExistence(timeout: 10))
+        attachScreenshot(named: "02b-editor-empty-state")
+
+        // 一覧へ戻ると下書きが増えている
+        app.navigationBars.buttons.firstMatch.tap()
         let row = app.staticTexts["無題のレイアウト"]
         XCTAssertTrue(row.waitForExistence(timeout: 10))
-        attachScreenshot(named: "02-project-created")
     }
 
     @MainActor
@@ -52,35 +63,20 @@ final class ScreenshotSmokeTests: XCTestCase {
     }
 
     @MainActor
-    func testXPostMultiPageFlow() throws {
+    func testXPostTimelineComposite() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--seed-demo"]
         app.launch()
 
-        // X 3枚デモ（8:9 + 16:9 x 2 のページ自動生成）を開く
+        // X 3枚デモ（左大＋右2段のタイムライン合成ビュー）を開く
         let xRow = app.staticTexts["X投稿（3枚）"]
         XCTAssertTrue(xRow.waitForExistence(timeout: 15))
         xRow.tap()
 
         let exportButton = app.buttons["pageEditor.export"]
         XCTAssertTrue(exportButton.waitForExistence(timeout: 15))
-
-        // 3ページ構成の確認とページ巡回
-        let pageLabel = app.staticTexts["pageEditor.pageLabel"]
-        XCTAssertTrue(pageLabel.waitForExistence(timeout: 5))
-        XCTAssertEqual(pageLabel.label, "1 / 3")
         sleep(2) // プレビュー画像の非同期ロードを待つ
-        attachScreenshot(named: "06-x-editor-page1-8x9")
-
-        app.buttons["pageEditor.nextPage"].tap()
-        XCTAssertEqual(pageLabel.label, "2 / 3")
-        sleep(1)
-        attachScreenshot(named: "07-x-editor-page2-16x9")
-
-        app.buttons["pageEditor.nextPage"].tap()
-        XCTAssertEqual(pageLabel.label, "3 / 3")
-        sleep(1)
-        attachScreenshot(named: "08-x-editor-page3-16x9")
+        attachScreenshot(named: "06-x-timeline-composite")
     }
 
     @MainActor

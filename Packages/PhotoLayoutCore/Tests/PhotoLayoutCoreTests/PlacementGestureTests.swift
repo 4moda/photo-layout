@@ -5,13 +5,22 @@ import Testing
 struct PlacementGestureTests {
     let matted = LayoutRect(x: 0.25, y: 0.25, width: 0.5, height: 0.5)
 
-    @Test("移動: 配置領域からはみ出さずクランプされる")
-    func moveClamps() {
+    @Test("移動: はみ出しは許可しつつ最小の重なりでクランプされる")
+    func moveClampsToMinVisible() {
         let result = PlacementGesture.move(
             destRect: matted, translationX: 10, translationY: -10, snapThreshold: 0
         )
-        #expect(result.rect.x == 0.5)  // 1 - width
-        #expect(result.rect.y == 0)
+        #expect(abs(result.rect.x - (1 - PlacementGesture.minVisible)) < 1e-12)
+        #expect(abs(result.rect.y - (PlacementGesture.minVisible - matted.height)) < 1e-12)
+    }
+
+    @Test("移動: 全面配置の写真も動かせる（はみ出し＝クロップ調整になる）")
+    func movingFullBleedOverflows() {
+        let result = PlacementGesture.move(
+            destRect: .unit, translationX: 0.2, translationY: 0, snapThreshold: 0
+        )
+        #expect(abs(result.rect.x - 0.2) < 1e-12)
+        #expect(result.rect.width == 1)
     }
 
     @Test("移動: スナップなしでは平行移動、アスペクト不変")
@@ -34,12 +43,14 @@ struct PlacementGestureTests {
         #expect(abs(scaled.aspectRatio - matted.aspectRatio) < 1e-12)
     }
 
-    @Test("拡縮: 最小・最大幅でクランプ")
+    @Test("拡縮: 最小・最大幅でクランプ（全面配置からの拡大＝クロップ詰めも可能）")
     func scaleClamps() {
         let tooSmall = PlacementGesture.scale(destRect: matted, factor: 0.01)
         #expect(abs(tooSmall.width - 0.05) < 1e-12)
-        let tooBig = PlacementGesture.scale(destRect: matted, factor: 10)
-        #expect(abs(tooBig.width - 1.0) < 1e-12)
+        let tooBig = PlacementGesture.scale(destRect: matted, factor: 100)
+        #expect(abs(tooBig.width - 4.0) < 1e-12)
+        let fullBleedZoom = PlacementGesture.scale(destRect: .unit, factor: 1.5)
+        #expect(abs(fullBleedZoom.width - 1.5) < 1e-12)
     }
 
     @Test("クロップパン: 画像とは逆方向へcropRectが動き、0..1でクランプ")

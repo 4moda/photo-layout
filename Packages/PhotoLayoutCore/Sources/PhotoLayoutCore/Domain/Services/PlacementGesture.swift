@@ -1,10 +1,14 @@
 /// ジェスチャ→ジオメトリ変更の純粋計算。
 /// 操作体系（SCRL/Canva型・ユーザー確定仕様）:
 /// - ドラッグ: destRect（枠）を移動。スナップあり
-/// - ピンチ/角ドラッグ: destRectを中心固定・**アスペクト固定**で拡縮
-/// - ダブルタップ後（クロップモード）: 枠を固定したまま中身（cropRect）をパン/ズーム
+/// - ピンチ/角ハンドル: destRectを中心固定・**アスペクト固定**で拡縮
+/// - ダブルタップ後（クロップモード）: 枠を固定したまま中身（cropRect）をパン/ズーム。枠外タップで完了
+/// 写真は配置領域からはみ出してよい（Canva同様）。見える部分だけ描くのはRenderPlanBuilderの責務。
 /// いずれも不変条件「destRectのpxアスペクト==cropRectのpxアスペクト」を壊さない。
 public enum PlacementGesture {
+    /// 配置領域と重なり続けることを保証する最小の見え幅（正規化座標）
+    public static let minVisible = 0.05
+
     // MARK: - 枠（destRect）の操作
 
     /// ドラッグ移動。translationは配置領域の正規化座標での移動量。
@@ -20,21 +24,21 @@ public enum PlacementGesture {
         rect.y += translationY
         let snapped = SnapEngine.snap(moving: rect, others: others, threshold: snapThreshold)
         return SnapEngine.Result(
-            rect: clampInsideUnit(snapped.rect),
+            rect: clampVisible(snapped.rect),
             guides: snapped.guides
         )
     }
 
-    /// 中心固定・アスペクト固定の拡縮。
+    /// 中心固定・アスペクト固定の拡縮。全面配置からさらに拡大してクロップを詰めることもできる。
     public static func scale(
         destRect: LayoutRect,
         factor: Double,
         minWidth: Double = 0.05,
-        maxWidth: Double = 1.0
+        maxWidth: Double = 4.0
     ) -> LayoutRect {
         let currentWidth = destRect.width
         let clampedFactor = min(max(factor, minWidth / currentWidth), maxWidth / currentWidth)
-        return clampInsideUnit(destRect.scaled(by: clampedFactor))
+        return clampVisible(destRect.scaled(by: clampedFactor))
     }
 
     // MARK: - 枠内クロップ（cropRect）の操作
@@ -69,20 +73,12 @@ public enum PlacementGesture {
 
     // MARK: - クランプ
 
-    /// 枠を配置領域(0..1)内に収める
-    private static func clampInsideUnit(_ rect: LayoutRect) -> LayoutRect {
+    /// はみ出しは許可しつつ、配置領域(0..1)と最低限の重なりは維持する
+    /// （画面外へ飛んで触れなくなる事故を防ぐ）
+    private static func clampVisible(_ rect: LayoutRect) -> LayoutRect {
         var result = rect
-        if result.width <= 1 {
-            result.x = min(max(result.x, 0), 1 - result.width)
-        } else {
-            // 領域より大きい枠は中央寄せを許容（将来のはみ出し配置に備え両端を覆う範囲で）
-            result.x = min(max(result.x, 1 - result.width), 0)
-        }
-        if result.height <= 1 {
-            result.y = min(max(result.y, 0), 1 - result.height)
-        } else {
-            result.y = min(max(result.y, 1 - result.height), 0)
-        }
+        result.x = min(max(result.x, minVisible - result.width), 1 - minVisible)
+        result.y = min(max(result.y, minVisible - result.height), 1 - minVisible)
         return result
     }
 

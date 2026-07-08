@@ -62,6 +62,23 @@ final class PageEditorViewModel {
         activeGuides = []
     }
 
+    /// ページ追加（自由レイアウト/Instagram複数ページ用。アスペクトは最終ページを引き継ぐ）
+    func addPage() async {
+        project.appendPage()
+        currentPageIndex = pageCount - 1
+        await persist(refreshImages: false)
+    }
+
+    /// 現在ページを削除（最後の1ページは不可）
+    func deleteCurrentPage() async {
+        guard pageCount > 1 else { return }
+        project.removePage(at: currentPageIndex)
+        currentPageIndex = min(currentPageIndex, pageCount - 1)
+        selectedPlacementID = nil
+        cropModePlacementID = nil
+        await persist()
+    }
+
     // MARK: - 写真・スタイル
 
     func addPhotoData(_ data: Data) async {
@@ -118,6 +135,11 @@ final class PageEditorViewModel {
     func toggleCropMode(_ placementID: UUID) {
         selectedPlacementID = placementID
         cropModePlacementID = (cropModePlacementID == placementID) ? nil : placementID
+    }
+
+    /// クロップ完了（枠外タップ）。選択は維持する
+    func exitCropMode() {
+        cropModePlacementID = nil
     }
 
     /// ドラッグ移動（通常モード）。translationは配置領域の正規化座標の累積移動量
@@ -187,6 +209,13 @@ final class PageEditorViewModel {
         guard hasPhoto else {
             exportMessage = "写真を追加してください"
             return
+        }
+        if project.isXPost {
+            let emptyPages = project.orderedPages.filter { project.placements(onPage: $0.index).isEmpty }
+            guard emptyPages.isEmpty else {
+                exportMessage = "空のスロットがあります。すべてのスロットに写真を追加してください"
+                return
+            }
         }
         isExporting = true
         defer { isExporting = false }

@@ -11,7 +11,6 @@ final class ProjectListViewModel {
     private let listProjects: ListProjectsUseCase
     private let createProject: CreateProjectUseCase
     private let deleteProject: DeleteProjectUseCase
-    private let createXPost: CreateXPostUseCase
     /// --seed-demo時のみ注入される（UIテスト・CIスクショ用）
     private let seedDemo: (() async -> Void)?
     private var didSeed = false
@@ -20,13 +19,11 @@ final class ProjectListViewModel {
         listProjects: ListProjectsUseCase,
         createProject: CreateProjectUseCase,
         deleteProject: DeleteProjectUseCase,
-        createXPost: CreateXPostUseCase,
         seedDemo: (() async -> Void)? = nil
     ) {
         self.listProjects = listProjects
         self.createProject = createProject
         self.deleteProject = deleteProject
-        self.createXPost = createXPost
         self.seedDemo = seedDemo
     }
 
@@ -42,24 +39,15 @@ final class ProjectListViewModel {
         }
     }
 
-    func createDraft() async {
-        do {
-            _ = try await createProject.execute()
-            projects = try await listProjects.execute()
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    /// X投稿プロジェクト作成: 選んだ1〜4枚から枚数別アスペクトのページを自動生成する。
+    /// 新規プロジェクト作成。写真は後からエディタ内で追加する（一覧では選ばせない）。
     /// 成功時は作成したプロジェクトを返す（呼び出し側でエディタへ遷移する）。
-    func createXPost(imageDataList: [Data]) async -> ProjectEntity? {
+    func create(preset: PlatformPreset?, title: String?) async -> ProjectEntity? {
         do {
-            let project = try await createXPost.execute(imageDataList: imageDataList)
+            let project = try await createProject.execute(title: title, preset: preset)
             projects = try await listProjects.execute()
             return project
         } catch {
-            errorMessage = "X投稿プロジェクトを作成できませんでした: \(error.localizedDescription)"
+            errorMessage = error.localizedDescription
             return nil
         }
     }

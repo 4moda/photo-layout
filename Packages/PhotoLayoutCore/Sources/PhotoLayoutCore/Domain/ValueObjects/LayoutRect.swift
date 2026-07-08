@@ -24,6 +24,18 @@ public struct LayoutRect: Hashable, Codable, Sendable {
     public var midY: Double { y + height / 2 }
     public var aspectRatio: Double { width / height }
 
+    /// 交差矩形。重ならない場合はwidth/heightが0以下になる。
+    public func intersection(_ other: LayoutRect) -> LayoutRect {
+        let x0 = max(minX, other.minX)
+        let y0 = max(minY, other.minY)
+        return LayoutRect(
+            x: x0,
+            y: y0,
+            width: min(maxX, other.maxX) - x0,
+            height: min(maxY, other.maxY) - y0
+        )
+    }
+
     public func contains(_ other: LayoutRect, tolerance: Double = 1e-9) -> Bool {
         other.minX >= minX - tolerance
             && other.minY >= minY - tolerance

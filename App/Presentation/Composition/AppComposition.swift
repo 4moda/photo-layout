@@ -30,7 +30,6 @@ enum AppComposition {
             listProjects: ListProjectsUseCase(repository: repo),
             createProject: CreateProjectUseCase(repository: repo),
             deleteProject: DeleteProjectUseCase(repository: repo),
-            createXPost: CreateXPostUseCase(photoStore: FilePhotoStore(), repository: repo),
             seedDemo: seeder.map { s in { await s.seedIfNeeded() } }
         )
         return ProjectListView(viewModel: viewModel)

@@ -31,7 +31,7 @@ public enum RenderPlanBuilder {
             let cornerRadiusPx = frame.cornerRadiusRatio * ref
             let borderWidthPx = frame.borderWidthRatio * ref
 
-            // destRect（配置領域の正規化座標）→ 写真の表示矩形（px）
+            // destRect（配置領域の正規化座標）→ 写真の表示矩形（px）。配置領域からはみ出しうる
             let imageRect = PageGeometry.imageRect(destRect: placement.destRect, in: contentRect)
             guard imageRect.width > 0, imageRect.height > 0 else { continue }
 
@@ -43,11 +43,23 @@ public enum RenderPlanBuilder {
                 targetPixelAspect: imageRect.aspectRatio
             )
 
+            // はみ出した写真は配置領域内の見える部分だけ描く。
+            // 描画矩形を切ると同時にsourceRectも同比率で切ることで、拡縮・平行移動が
+            // そのままクロップ調整として振る舞う（プレビューと書き出しで同一の計算）
+            let visibleRect = imageRect.intersection(contentRect)
+            guard visibleRect.width > 0, visibleRect.height > 0 else { continue }
+            let visibleSource = LayoutRect(
+                x: sourceRect.x + (visibleRect.x - imageRect.x) / imageRect.width * sourceRect.width,
+                y: sourceRect.y + (visibleRect.y - imageRect.y) / imageRect.height * sourceRect.height,
+                width: visibleRect.width / imageRect.width * sourceRect.width,
+                height: visibleRect.height / imageRect.height * sourceRect.height
+            )
+
             commands.append(.drawImage(
                 placementID: placement.id,
                 photo: placement.photo,
-                sourceRect: sourceRect,
-                destRect: imageRect,
+                sourceRect: visibleSource,
+                destRect: visibleRect,
                 cornerRadiusPx: cornerRadiusPx
             ))
 
@@ -59,10 +71,10 @@ public enum RenderPlanBuilder {
                     lineWidthPx: borderWidthPx,
                     cornerRadiusPx: max(0, cornerRadiusPx - inset),
                     rect: LayoutRect(
-                        x: imageRect.x + inset,
-                        y: imageRect.y + inset,
-                        width: imageRect.width - borderWidthPx,
-                        height: imageRect.height - borderWidthPx
+                        x: visibleRect.x + inset,
+                        y: visibleRect.y + inset,
+                        width: visibleRect.width - borderWidthPx,
+                        height: visibleRect.height - borderWidthPx
                     )
                 ))
             }
