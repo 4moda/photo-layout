@@ -59,14 +59,6 @@ final class PageEditorViewModel {
 
     // MARK: - ページ切替
 
-    func goToPage(_ index: Int) {
-        guard project.page(at: index) != nil else { return }
-        currentPageIndex = index
-        selectedPlacementID = nil
-        cropModePlacementID = nil
-        activeGuides = []
-    }
-
     /// 選択状態を保ったまま「現在ページ」だけ移す（シームレスキャンバスのパン/タップ用）
     func focusPage(_ index: Int) {
         guard project.page(at: index) != nil else { return }
@@ -162,6 +154,18 @@ final class PageEditorViewModel {
         record()
         project.applyFramePreset(preset)
         await persist()
+    }
+
+    /// 現在ページの写真枚数に応じた適用可能テンプレート
+    var templatesForCurrentPage: [LayoutTemplate] {
+        LayoutTemplateTable.templates(forPhotoCount: pagePlacements.count)
+    }
+
+    /// テンプレートを現在ページへ適用（写真をスロットへ全面配置）
+    func applyTemplate(_ template: LayoutTemplate) async {
+        record()
+        project.applyTemplate(template, toPage: currentPageIndex)
+        await persist(refreshImages: false)
     }
 
     // MARK: - 選択中の写真への操作（写真メニュー）
@@ -363,17 +367,18 @@ final class PageEditorViewModel {
             exportMessage = "写真を追加してください"
             return
         }
-        if project.isXPost {
-            let emptyPages = project.orderedPages.filter { project.placements(onPage: $0.index).isEmpty }
-            guard emptyPages.isEmpty else {
-                exportMessage = "空のスロットがあります。すべてのスロットに写真を追加してください"
-                return
-            }
-        }
         isExporting = true
         defer { isExporting = false }
         do {
-            if pageCount > 1 {
+            if project.isXPost {
+                // Xは1ページの各スロットを個別画像として書き出す（投稿順＝表示順）
+                let results = try await exportPage.executeSlots(project: project, pageIndex: 0)
+                let totalMB = Double(results.reduce(0) { $0 + $1.byteCount }) / 1_000_000
+                exportMessage = String(
+                    format: "X用に%d枚を個別画像で書き出しました（計%.1fMB）\nカメラロールに保存済み",
+                    results.count, totalMB
+                )
+            } else if pageCount > 1 {
                 let results = try await exportPage.executeAll(project: project)
                 let totalMB = Double(results.reduce(0) { $0 + $1.byteCount }) / 1_000_000
                 exportMessage = String(

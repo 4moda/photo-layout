@@ -20,20 +20,22 @@ public struct CreateXPostUseCase: Sendable {
             throw CreateXPostError.invalidPhotoCount(count)
         }
 
-        let aspects = PlatformSpecTable.xPageAspects(photoCount: count)
+        // 1ページにXタイムライン合成テンプレートを敷き、各写真をスロットへ当てはめる。
+        // 書き出し時にスロット個別画像へ分割する（ExportPageUseCase.executeSlots）。
+        let template = LayoutTemplateTable.xTimeline(photoCount: count)
+        let pageAspect = template.recommendedAspect ?? XTimelineComposite.canvasAspect(photoCount: count)
         var project = ProjectEntity(
             title: "X投稿（\(count)枚）",
             platformPreset: .x(photoCount: count),
-            pages: aspects.enumerated().map { index, aspect in
-                PageEntity(index: index, aspect: aspect, background: framePreset.background)
-            },
+            pages: [PageEntity(index: 0, aspect: pageAspect, background: framePreset.background)],
             defaultPhotoFrame: framePreset.photoFrame
         )
 
-        for (index, data) in imageDataList.enumerated() {
+        for data in imageDataList {
             let photo = try await photoStore.store(imageData: data)
-            project.addPhoto(photo, toPage: index)
+            project.addPhoto(photo, toPage: 0)
         }
+        project.applyTemplate(template, toPage: 0)
 
         try await repository.save(project)
         return project

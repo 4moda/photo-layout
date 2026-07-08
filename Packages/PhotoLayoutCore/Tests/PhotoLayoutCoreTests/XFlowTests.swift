@@ -2,9 +2,9 @@ import Foundation
 import Testing
 @testable import PhotoLayoutCore
 
-@Suite("X複数枚フロー")
+@Suite("X複数枚フロー（1ページ＋タイムラインテンプレート）")
 struct XFlowTests {
-    @Test("3枚: 枚数別アスペクトのページが生成され、各写真が対応ページへ全面配置される")
+    @Test("3枚: 1ページにXタイムラインテンプレートが適用され、各写真がスロットへ収まる")
     func createXPostThreePhotos() async throws {
         let repo = InMemoryProjectRepository()
         let useCase = CreateXPostUseCase(photoStore: FakePhotoStore(), repository: repo)
@@ -14,21 +14,18 @@ struct XFlowTests {
         )
 
         #expect(project.platformPreset == .x(photoCount: 3))
-        let pages = project.orderedPages
-        #expect(pages.map(\.aspect) == PlatformSpecTable.xPageAspects(photoCount: 3))
+        #expect(project.isXPost)
+        // 単一ページ・16:9
+        #expect(project.pages.count == 1)
+        #expect(project.pages[0].aspect == AspectRatio(width: 16, height: 9))
 
-        // 各ページに1枚ずつ、全面配置＋そのページのアスペクトでクロップ
-        for pageIndex in 0..<3 {
-            let onPage = project.placements(onPage: pageIndex)
-            #expect(onPage.count == 1)
-            #expect(onPage[0].destRect.isApproximatelyEqual(to: .unit))
-            let page = pages[pageIndex]
-            let crop = onPage[0].cropRect
-            let photo = onPage[0].photo
-            let cropPxAspect = (crop.width * Double(photo.pixelWidth)) / (crop.height * Double(photo.pixelHeight))
-            #expect(abs(cropPxAspect - page.contentAspect) < 1e-9)
+        // 3枚がタイムラインの3スロットへ配置される
+        let onPage = project.placements(onPage: 0)
+        #expect(onPage.count == 3)
+        let slots = XTimelineComposite.slots(photoCount: 3)
+        for (offset, placement) in onPage.enumerated() {
+            #expect(placement.destRect.isApproximatelyEqual(to: slots[offset]))
         }
-        // 永続化確認
         #expect(try await repo.fetch(id: project.id) == project)
     }
 
@@ -43,8 +40,8 @@ struct XFlowTests {
         }
     }
 
-    @Test("executeAll: 全ページが投稿順に書き出される")
-    func exportAllInOrder() async throws {
+    @Test("executeSlots: 各スロットが個別画像として投稿順に書き出される")
+    func exportSlotsInOrder() async throws {
         let repo = InMemoryProjectRepository()
         let project = try await CreateXPostUseCase(photoStore: FakePhotoStore(), repository: repo)
             .execute(imageDataList: [Data(count: 1), Data(count: 2), Data(count: 3)])
@@ -52,28 +49,32 @@ struct XFlowTests {
         let exporter = FakeImageExporter()
         let saver = FakeLibrarySaver()
         let results = try await ExportPageUseCase(renderer: exporter, librarySaver: saver)
-            .executeAll(project: project)
+            .executeSlots(project: project, pageIndex: 0)
 
         #expect(results.count == 3)
         #expect(await saver.savedCount == 3)
-        // ページ1(8:9・縦長)とページ2(16:9・横長)で出力アスペクトが異なる
+        // スロット0(左大・8:9寄り)とスロット1(右上・16:9寄り)で出力アスペクトが異なる
+        let slots = XTimelineComposite.slots(photoCount: 3)
+        let canvas = XTimelineComposite.canvasAspect(photoCount: 3).ratio
+        let expected0 = slots[0].aspectRatio * canvas
+        let expected1 = slots[1].aspectRatio * canvas
         let aspect0 = results[0].pixelSize.width / results[0].pixelSize.height
         let aspect1 = results[1].pixelSize.width / results[1].pixelSize.height
-        #expect(abs(aspect0 - 8.0 / 9.0) < 0.01)
-        #expect(abs(aspect1 - 16.0 / 9.0) < 0.01)
+        #expect(abs(aspect0 - expected0) / expected0 < 0.03)
+        #expect(abs(aspect1 - expected1) / expected1 < 0.03)
     }
 
-    @Test("書き出しは各ページに属する写真だけを含む")
-    func exportUsesOnlyPagePlacements() async throws {
+    @Test("executeSlots: 各スロット画像は写真1枚だけを含む")
+    func slotExportContainsSinglePhoto() async throws {
         let repo = InMemoryProjectRepository()
         let project = try await CreateXPostUseCase(photoStore: FakePhotoStore(), repository: repo)
             .execute(imageDataList: [Data(count: 1), Data(count: 2)])
 
         let exporter = FakeImageExporter()
         _ = try await ExportPageUseCase(renderer: exporter, librarySaver: FakeLibrarySaver())
-            .execute(project: project, pageIndex: 1)
+            .executeSlots(project: project, pageIndex: 0)
         let plan = await exporter.lastPlan
         let imageCommands = plan.filter { if case .drawImage = $0 { return true }; return false }
-        #expect(imageCommands.count == 1)
+        #expect(imageCommands.count == 1) // 最後に描画したスロット
     }
 }

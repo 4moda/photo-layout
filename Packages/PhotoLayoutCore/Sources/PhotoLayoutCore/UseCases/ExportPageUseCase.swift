@@ -29,17 +29,12 @@ public struct ExportPageUseCase: Sendable {
         guard let page = project.page(at: pageIndex) else {
             throw ExportError.pageNotFound
         }
-        let placements = project.placements(onPage: pageIndex)
-        let pixelSize = ExportSizeCalculator.pageSize(page: page, placements: placements)
-        let plan = RenderPlanBuilder.build(
+        return try await render(
             page: page,
-            placements: placements,
+            placements: project.placements(onPage: pageIndex),
             defaultFrame: project.defaultPhotoFrame,
-            pagePixelSize: pixelSize
+            format: format
         )
-        let data = try await renderer.render(plan: plan, pixelSize: pixelSize, format: format)
-        try await librarySaver.save(imageData: data)
-        return ExportResult(pixelSize: pixelSize, byteCount: data.count)
     }
 
     /// 全ページを投稿順（PageEntity.index順）に書き出して保存する。
@@ -53,6 +48,57 @@ public struct ExportPageUseCase: Sendable {
             results.append(try await execute(project: project, pageIndex: page.index, format: format))
         }
         return results
+    }
+
+    /// X組写真の書き出し: 1ページ上の各配置（スロット）を個別の実解像度画像として書き出す。
+    /// スロット間のガター・ページ余白は含めず、各画像はスロットの内容を縁いっぱいに描く
+    /// （写真ごとの枠線は保持される）。保存順＝表示順（sortIndex順）＝X投稿順。
+    public func executeSlots(
+        project: ProjectEntity,
+        pageIndex: Int,
+        format: ExportFormat = .defaultJPEG
+    ) async throws -> [ExportResult] {
+        guard let page = project.page(at: pageIndex) else {
+            throw ExportError.pageNotFound
+        }
+        var results: [ExportResult] = []
+        for placement in project.placements(onPage: pageIndex) {
+            // スロットを1枚の仮想ページとして扱う（余白なし・スロットのpxアスペクト）
+            let slotPixelAspect = placement.destRect.aspectRatio * page.contentAspect
+            let slotPage = PageEntity(
+                index: 0,
+                aspect: AspectRatio(width: slotPixelAspect, height: 1),
+                background: .plainWhite
+            )
+            var slotPlacement = placement
+            slotPlacement.destRect = .unit
+            slotPlacement.pageIndex = 0
+            results.append(try await render(
+                page: slotPage,
+                placements: [slotPlacement],
+                defaultFrame: project.defaultPhotoFrame,
+                format: format
+            ))
+        }
+        return results
+    }
+
+    private func render(
+        page: PageEntity,
+        placements: [PlacementEntity],
+        defaultFrame: PhotoFrameStyle,
+        format: ExportFormat
+    ) async throws -> ExportResult {
+        let pixelSize = ExportSizeCalculator.pageSize(page: page, placements: placements)
+        let plan = RenderPlanBuilder.build(
+            page: page,
+            placements: placements,
+            defaultFrame: defaultFrame,
+            pagePixelSize: pixelSize
+        )
+        let data = try await renderer.render(plan: plan, pixelSize: pixelSize, format: format)
+        try await librarySaver.save(imageData: data)
+        return ExportResult(pixelSize: pixelSize, byteCount: data.count)
     }
 }
 

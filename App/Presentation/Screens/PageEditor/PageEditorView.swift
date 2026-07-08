@@ -50,25 +50,19 @@ struct PageEditorView: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            if viewModel.project.isXPost {
-                xComposite
-                    .padding(.horizontal)
-                    .frame(maxHeight: .infinity)
-                Text("スロットをタップして写真を追加 — ドラッグ/ピンチで見える範囲を調整")
+            spreadCanvas
+                .frame(maxHeight: .infinity)
+                .accessibilityIdentifier("pageEditor.canvas")
+
+            if viewModel.cropModePlacementID != nil {
+                Text("クロップ調整中 — ドラッグ/ピンチで位置と拡大を変更、枠の外をタップで完了")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .accessibilityIdentifier("pageEditor.cropModeHint")
+            } else if viewModel.project.isXPost {
+                Text("Xタイムライン表示 — 書き出すと各写真が個別画像になります")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            } else {
-                spreadCanvas
-                    .frame(maxHeight: .infinity)
-                    .accessibilityIdentifier("pageEditor.canvas")
-
-                if viewModel.cropModePlacementID != nil {
-                    Text("クロップ調整中 — ドラッグ/ピンチで位置と拡大を変更、枠の外をタップで完了")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                        .accessibilityIdentifier("pageEditor.cropModeHint")
-                }
-
             }
 
             controls
@@ -466,109 +460,6 @@ struct PageEditorView: View {
         }
     }
 
-    // MARK: - Xタイムライン合成ビュー
-
-    /// 全ページをXタイムラインの並び（左右/左大＋右2段/田の字）で1画面に展開する。
-    /// スロット内のドラッグ/ピンチはそのページの写真のクロップ調整（枠は固定）。
-    private var xComposite: some View {
-        let count = viewModel.pageCount
-        let aspect = XTimelineComposite.canvasAspect(photoCount: count)
-        let slots = XTimelineComposite.slots(photoCount: count)
-        return GeometryReader { geo in
-            ZStack(alignment: .topLeading) {
-                ForEach(viewModel.project.orderedPages, id: \.id) { page in
-                    if page.index < slots.count {
-                        let rect = slotDisplayRect(
-                            slot: slots[page.index], pageAspect: page.aspect, canvasSize: geo.size
-                        )
-                        slotView(page: page, size: rect.size)
-                            .frame(width: rect.width, height: rect.height)
-                            .position(x: rect.midX, y: rect.midY)
-                    }
-                }
-            }
-        }
-        .aspectRatio(aspect.ratio, contentMode: .fit)
-        .accessibilityIdentifier("pageEditor.xComposite")
-    }
-
-    /// スロット矩形（正規化）→表示pt矩形。ページの正確なアスペクトに内接させる
-    private func slotDisplayRect(slot: LayoutRect, pageAspect: AspectRatio, canvasSize: CGSize) -> CGRect {
-        let raw = LayoutRect(
-            x: slot.x * canvasSize.width,
-            y: slot.y * canvasSize.height,
-            width: slot.width * canvasSize.width,
-            height: slot.height * canvasSize.height
-        )
-        let fitted = raw.fitting(pageAspect)
-        return CGRect(x: fitted.x, y: fitted.y, width: fitted.width, height: fitted.height)
-    }
-
-    @ViewBuilder
-    private func slotView(page: PageEntity, size: CGSize) -> some View {
-        let placements = viewModel.project.placements(onPage: page.index)
-        let isSelected = viewModel.currentPageIndex == page.index
-        if let placement = placements.first {
-            CanvasRenderView(
-                page: page,
-                placements: placements,
-                defaultFrame: viewModel.project.defaultPhotoFrame,
-                images: viewModel.previewImages
-            )
-            .overlay {
-                if isSelected {
-                    Rectangle().stroke(Color.accentColor, lineWidth: 2)
-                }
-            }
-            .contentShape(Rectangle())
-            .onTapGesture { viewModel.goToPage(page.index) }
-            .gesture(slotCropDragGesture(placementID: placement.id, pageIndex: page.index, slotSize: size))
-            .simultaneousGesture(slotCropZoomGesture(placementID: placement.id, pageIndex: page.index))
-            .accessibilityIdentifier("pageEditor.slot\(page.index)")
-        } else {
-            Button {
-                viewModel.goToPage(page.index)
-                photoPickerPresented = true
-            } label: {
-                ZStack {
-                    Rectangle().fill(Color(.systemGray5))
-                    Image(systemName: "plus")
-                        .font(.title)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("pageEditor.emptySlot\(page.index)")
-        }
-    }
-
-    private func slotCropDragGesture(placementID: UUID, pageIndex: Int, slotSize: CGSize) -> some Gesture {
-        DragGesture(minimumDistance: 2)
-            .onChanged { value in
-                viewModel.goToPage(pageIndex)
-                // スロット（＝枠）サイズに対する相対移動量
-                viewModel.updateCropPan(
-                    placementID: placementID,
-                    translationX: value.translation.width / max(slotSize.width, 1),
-                    translationY: value.translation.height / max(slotSize.height, 1)
-                )
-            }
-            .onEnded { _ in
-                Task { await viewModel.endGesture() }
-            }
-    }
-
-    private func slotCropZoomGesture(placementID: UUID, pageIndex: Int) -> some Gesture {
-        MagnifyGesture()
-            .onChanged { value in
-                viewModel.goToPage(pageIndex)
-                viewModel.updateCropZoom(placementID: placementID, factor: value.magnification)
-            }
-            .onEnded { _ in
-                Task { await viewModel.endGesture() }
-            }
-    }
-
     // MARK: - 選択枠・ハンドル・ガイド（共通部品）
 
     /// 角の位置（ハンドル描画・アンカー計算共用）
@@ -712,9 +603,7 @@ struct PageEditorView: View {
     /// クロップ中=完了のみ / 写真選択中=写真メニュー / 非選択=ページ全体メニュー
     @ViewBuilder
     private var controls: some View {
-        if viewModel.project.isXPost {
-            xControls
-        } else if viewModel.cropModePlacementID != nil {
+        if viewModel.cropModePlacementID != nil {
             cropControls
         } else if viewModel.selectedPlacementID != nil {
             photoControls
@@ -807,19 +696,25 @@ struct PageEditorView: View {
         .buttonStyle(.bordered)
     }
 
-    /// 非選択時のページ全体メニュー
+    /// 非選択時のページ全体メニュー。X投稿はページ数・比率が固定なので比率/ページ操作は出さない
     private var pageMenuControls: some View {
         HStack(spacing: 12) {
-            Menu {
-                ForEach(Self.aspectChoices, id: \.label) { choice in
-                    Button(choice.label) {
-                        Task { await viewModel.setAspect(choice.aspect) }
+            if !viewModel.project.isXPost {
+                Menu {
+                    ForEach(Self.aspectChoices, id: \.label) { choice in
+                        Button(choice.label) {
+                            Task { await viewModel.setAspect(choice.aspect) }
+                        }
                     }
+                } label: {
+                    Label("比率", systemImage: "aspectratio")
                 }
-            } label: {
-                Label("比率", systemImage: "aspectratio")
+                .accessibilityIdentifier("pageEditor.aspectMenu")
             }
-            .accessibilityIdentifier("pageEditor.aspectMenu")
+
+            if viewModel.currentPageHasPhoto {
+                templateMenu
+            }
 
             Button {
                 Task { await viewModel.placeFill() }
@@ -837,44 +732,38 @@ struct PageEditorView: View {
 
             framePresetMenu
 
-            // ページの追加・削除・並べ替えは俯瞰モードで行う（キャンバスをピンチアウトでも入れる）
-            Button {
-                viewModel.enterOverview()
-            } label: {
-                Label("ページ", systemImage: "rectangle.stack")
-            }
-            .accessibilityIdentifier("pageEditor.overview")
+            if !viewModel.project.isXPost {
+                // ページの追加・削除・並べ替えは俯瞰モードで行う（キャンバスをピンチアウトでも入れる）
+                Button {
+                    viewModel.enterOverview()
+                } label: {
+                    Label("ページ", systemImage: "rectangle.stack")
+                }
+                .accessibilityIdentifier("pageEditor.overview")
 
-            if viewModel.pageCount > 1 {
-                Text("\(viewModel.currentPageIndex + 1)/\(viewModel.pageCount)")
-                    .font(.subheadline.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("pageEditor.pageLabel")
+                if viewModel.pageCount > 1 {
+                    Text("\(viewModel.currentPageIndex + 1)/\(viewModel.pageCount)")
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("pageEditor.pageLabel")
+                }
             }
         }
         .buttonStyle(.bordered)
     }
 
-    /// X投稿（タイムライン合成）のメニュー。比率・ページ増減はX仕様固定なので出さない
-    private var xControls: some View {
-        HStack(spacing: 12) {
-            Button {
-                Task { await viewModel.placeFill() }
-            } label: {
-                Label("全面", systemImage: "rectangle.arrowtriangle.2.inward")
+    /// テンプレート（スロット枠）ピッカー: 現在ページの写真枚数に応じた配置を適用する
+    private var templateMenu: some View {
+        Menu {
+            ForEach(viewModel.templatesForCurrentPage) { template in
+                Button(template.name) {
+                    Task { await viewModel.applyTemplate(template) }
+                }
             }
-            .accessibilityIdentifier("pageEditor.fillButton")
-
-            Button {
-                Task { await viewModel.placeMat() }
-            } label: {
-                Label("マット", systemImage: "rectangle.arrowtriangle.2.outward")
-            }
-            .accessibilityIdentifier("pageEditor.matButton")
-
-            framePresetMenu
+        } label: {
+            Label("テンプレート", systemImage: "rectangle.split.2x2")
         }
-        .buttonStyle(.bordered)
+        .accessibilityIdentifier("pageEditor.templateMenu")
     }
 
     private var framePresetMenu: some View {
