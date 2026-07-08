@@ -119,6 +119,12 @@ struct PageEditorView: View {
                 .accessibilityIdentifier("pageEditor.export")
             }
         }
+        .fullScreenCover(isPresented: Binding(
+            get: { viewModel.isOverviewMode },
+            set: { if !$0 { viewModel.cancelOverview() } }
+        )) {
+            PageOverviewView(viewModel: viewModel, thumbnailImages: viewModel.previewImages)
+        }
         .photosPicker(isPresented: $photoPickerPresented, selection: $pickerItem, matching: .images)
         .onChange(of: pickerItem) { _, newItem in
             guard let newItem else { return }
@@ -438,7 +444,14 @@ struct PageEditorView: View {
                     Task { await viewModel.endGesture() }
                 } else {
                     pinchBase = nil
-                    focusCenterPage(geo: geo)
+                    // 十分に引いた（縮小した）ら俯瞰モードへ。ズームは戻しておく
+                    if viewZoom <= 0.55, viewModel.pageCount > 1 {
+                        viewZoom = 1
+                        panOffset = clampedPan(desired: initialPan(geo: geo), geo: geo)
+                        viewModel.enterOverview()
+                    } else {
+                        focusCenterPage(geo: geo)
+                    }
                 }
             }
     }
@@ -824,21 +837,15 @@ struct PageEditorView: View {
 
             framePresetMenu
 
+            // ページの追加・削除・並べ替えは俯瞰モードで行う（キャンバスをピンチアウトでも入れる）
             Button {
-                Task { await viewModel.addPage() }
+                viewModel.enterOverview()
             } label: {
-                Image(systemName: "plus.rectangle.on.rectangle")
+                Label("ページ", systemImage: "rectangle.stack")
             }
-            .accessibilityIdentifier("pageEditor.addPage")
+            .accessibilityIdentifier("pageEditor.overview")
 
             if viewModel.pageCount > 1 {
-                Button(role: .destructive) {
-                    Task { await viewModel.deleteCurrentPage() }
-                } label: {
-                    Image(systemName: "minus.rectangle")
-                }
-                .accessibilityIdentifier("pageEditor.deletePage")
-
                 Text("\(viewModel.currentPageIndex + 1)/\(viewModel.pageCount)")
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(.secondary)

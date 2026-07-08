@@ -73,23 +73,55 @@ final class PageEditorViewModel {
         currentPageIndex = index
     }
 
-    /// ページ追加（自由レイアウト/Instagram複数ページ用。アスペクトは最終ページを引き継ぐ）
-    func addPage() async {
-        record()
-        project.appendPage()
-        currentPageIndex = pageCount - 1
-        await persist(refreshImages: false)
-    }
+    // MARK: - ページ俯瞰モード（挿入・削除・並べ替え。確定までは保存しない）
 
-    /// 現在ページを削除（最後の1ページは不可）
-    func deleteCurrentPage() async {
-        guard pageCount > 1 else { return }
-        record()
-        project.removePage(at: currentPageIndex)
-        currentPageIndex = min(currentPageIndex, pageCount - 1)
+    var isOverviewMode = false
+    /// 俯瞰モード開始時点の状態（キャンセル復帰用）
+    private var overviewBase: ProjectEntity?
+
+    func enterOverview() {
+        guard !isOverviewMode else { return }
+        overviewBase = project
+        isOverviewMode = true
         selectedPlacementID = nil
         cropModePlacementID = nil
-        await persist()
+        activeGuides = []
+    }
+
+    /// 左上キャンセル: 俯瞰モード開始時点の状態へ復帰
+    func cancelOverview() {
+        if let base = overviewBase {
+            project = base
+        }
+        overviewBase = nil
+        isOverviewMode = false
+    }
+
+    /// 右上完了: 変更があればundo履歴に積んで保存
+    func confirmOverview() async {
+        if let base = overviewBase, base != project {
+            history.push(base)
+            await persist()
+        }
+        overviewBase = nil
+        isOverviewMode = false
+        currentPageIndex = min(currentPageIndex, max(pageCount - 1, 0))
+    }
+
+    func overviewInsertPage(at index: Int) {
+        project.insertPage(at: index)
+    }
+
+    func overviewDeletePage(at index: Int) {
+        guard pageCount > 1 else { return }
+        project.removePage(at: index)
+    }
+
+    /// List.onMoveのオフセットをCoreのmovePage（削除後の最終位置）へ変換する
+    func overviewMovePage(fromOffsets: IndexSet, toOffset: Int) {
+        guard let from = fromOffsets.first else { return }
+        let to = toOffset > from ? toOffset - 1 : toOffset
+        project.movePage(from: from, to: to)
     }
 
     // MARK: - 写真・スタイル

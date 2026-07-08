@@ -233,3 +233,61 @@ struct LayerOrderTests {
         #expect(project.placements(onPage: 0).first?.id == frontID)
     }
 }
+
+@Suite("ページの挿入・並び替え")
+struct PageInsertMoveTests {
+    private func makeProject() -> ProjectEntity {
+        var project = ProjectEntity(pages: [
+            PageEntity(index: 0, aspect: AspectRatio(width: 1, height: 1)),
+            PageEntity(index: 1, aspect: AspectRatio(width: 4, height: 5)),
+            PageEntity(index: 2, aspect: AspectRatio(width: 16, height: 9))
+        ])
+        let photo = PhotoRef(fileName: "a.jpg", pixelWidth: 100, pixelHeight: 100)
+        project.placements = (0..<3).map { i in
+            PlacementEntity(sortIndex: i, pageIndex: i, photo: photo, destRect: .unit)
+        }
+        return project
+    }
+
+    @Test("insertPage: 途中挿入で後続ページと配置がずれ、直前ページのアスペクトを引き継ぐ")
+    func insertShiftsFollowers() {
+        var project = makeProject()
+        project.insertPage(at: 1)
+        #expect(project.pages.count == 4)
+        #expect(project.page(at: 1)?.aspect == AspectRatio(width: 1, height: 1)) // 直前(=旧ページ0)を継承
+        #expect(project.page(at: 2)?.aspect == AspectRatio(width: 4, height: 5)) // 旧ページ1
+        // 配置: 旧ページ1,2の写真はページ2,3へ
+        #expect(project.placements(onPage: 2).count == 1)
+        #expect(project.placements(onPage: 3).count == 1)
+        #expect(project.placements(onPage: 1).isEmpty)
+    }
+
+    @Test("insertPage: 先頭挿入は直後ページのアスペクトを引き継ぐ")
+    func insertAtHead() {
+        var project = makeProject()
+        project.insertPage(at: 0)
+        #expect(project.page(at: 0)?.aspect == AspectRatio(width: 1, height: 1))
+        #expect(project.placements(onPage: 0).isEmpty)
+        #expect(project.placements(onPage: 1).count == 1)
+    }
+
+    @Test("movePage: 並び替えで配置のpageIndexが追随する")
+    func moveRemapsPlacements() {
+        var project = makeProject()
+        let photoOnPage0 = project.placements(onPage: 0)[0].photo.fileName
+        project.movePage(from: 0, to: 2) // 先頭を末尾へ
+        #expect(project.orderedPages.map(\.index) == [0, 1, 2])
+        #expect(project.page(at: 2)?.aspect == AspectRatio(width: 1, height: 1))
+        #expect(project.placements(onPage: 2)[0].photo.fileName == photoOnPage0)
+    }
+
+    @Test("movePage: 範囲外・同位置は何もしない")
+    func moveInvalidIsNoop() {
+        var project = makeProject()
+        let before = project
+        project.movePage(from: 0, to: 0)
+        project.movePage(from: -1, to: 2)
+        project.movePage(from: 0, to: 5)
+        #expect(project == before)
+    }
+}
