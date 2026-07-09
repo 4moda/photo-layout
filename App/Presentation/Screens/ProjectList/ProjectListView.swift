@@ -121,7 +121,8 @@ private struct ProjectCell: View {
             }
             .accessibilityIdentifier("projectList.menu")
         }
-        .accessibilityIdentifier("projectList.row")
+        // 注: ここで .accessibilityIdentifier を付けると子（NavigationLink）へ伝播して
+        // タイトルidentifierを上書きしてしまうため付けない（UIテストはタイトルでタップする）
     }
 
     private var thumbnail: some View {
@@ -147,7 +148,6 @@ private struct ProjectCell: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color(.systemGray5), lineWidth: 0.5)
         )
-        .accessibilityIdentifier("projectList.thumbnail")
     }
 
     private var pageBadge: some View {
