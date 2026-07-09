@@ -109,21 +109,29 @@ final class PageEditorViewModel {
         project.removePage(at: index)
     }
 
-    /// List.onMoveのオフセットをCoreのmovePage（削除後の最終位置）へ変換する
-    func overviewMovePage(fromOffsets: IndexSet, toOffset: Int) {
-        guard let from = fromOffsets.first else { return }
-        let to = toOffset > from ? toOffset - 1 : toOffset
+    /// 横並び俯瞰の「左へ/右へ」ボタン用。ページを1つ隣へ動かす。
+    func overviewMovePage(from: Int, to: Int) {
+        guard from != to, (0..<pageCount).contains(from), (0..<pageCount).contains(to) else { return }
         project.movePage(from: from, to: to)
     }
 
     // MARK: - 写真・スタイル
 
     func addPhotoData(_ data: Data) async {
+        await addPhotosData([data])
+    }
+
+    /// 複数の写真データを一括で現在ページへ追加する（ピッカーの複数選択に対応）。
+    /// undoは1操作にまとめる。各写真は全面配置で重なるので、必要ならこの後テンプレートで並べる。
+    func addPhotosData(_ dataList: [Data]) async {
+        guard !dataList.isEmpty else { return }
+        record()
         do {
-            record()
-            project = try await addPhoto.execute(
-                project: project, imageData: data, pageIndex: currentPageIndex
-            )
+            for data in dataList {
+                project = try await addPhoto.execute(
+                    project: project, imageData: data, pageIndex: currentPageIndex
+                )
+            }
             await refreshImages()
         } catch {
             errorMessage = "写真を読み込めませんでした: \(error.localizedDescription)"

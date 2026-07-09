@@ -11,7 +11,7 @@ import PhotoLayoutCore
 struct PageEditorView: View {
     @State private var viewModel: PageEditorViewModel
     @State private var photoPickerPresented = false
-    @State private var pickerItem: PhotosPickerItem?
+    @State private var pickerItems: [PhotosPickerItem] = []
     /// 角ハンドルドラッグ開始時の角と中心（拡縮中に選択枠が動いても基準がぶれないよう固定）
     @State private var handleDragBase: (corner: CGPoint, center: CGPoint)?
 
@@ -103,14 +103,19 @@ struct PageEditorView: View {
         )) {
             PageOverviewView(viewModel: viewModel, thumbnailImages: viewModel.previewImages)
         }
-        .photosPicker(isPresented: $photoPickerPresented, selection: $pickerItem, matching: .images)
-        .onChange(of: pickerItem) { _, newItem in
-            guard let newItem else { return }
+        .photosPicker(isPresented: $photoPickerPresented, selection: $pickerItems, matching: .images)
+        .onChange(of: pickerItems) { _, newItems in
+            guard !newItems.isEmpty else { return }
+            let items = newItems
+            pickerItems = []
             Task {
-                if let data = try? await newItem.loadTransferable(type: Data.self) {
-                    await viewModel.addPhotoData(data)
+                var datas: [Data] = []
+                for item in items {
+                    if let data = try? await item.loadTransferable(type: Data.self) {
+                        datas.append(data)
+                    }
                 }
-                pickerItem = nil
+                await viewModel.addPhotosData(datas)
             }
         }
         .task { await viewModel.onAppear() }
@@ -144,6 +149,9 @@ struct PageEditorView: View {
                             images: viewModel.previewImages
                         )
                         .frame(width: frame.width * stripHeight, height: stripHeight)
+                        // 暗いキャンバス地に対してページの外周を薄く縁取り、
+                        // 黒背景プリセットのページでも境界が分かるようにする
+                        .overlay(Rectangle().stroke(Color.white.opacity(0.18), lineWidth: 0.5))
                         .position(
                             x: (frame.x + frame.width / 2) * stripHeight,
                             y: stripHeight / 2
@@ -165,6 +173,8 @@ struct PageEditorView: View {
             .frame(width: stripWidth, height: stripHeight, alignment: .topLeading)
             .offset(panOffset)
             .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
+            // ページ内（白）とページ外を明確に区別するため、キャンバス地を暗くする
+            .background(Color(white: 0.11))
             .clipped()
             .contentShape(Rectangle())
             .gesture(stripDoubleTap(geo: geo).exclusively(before: stripSingleTap(geo: geo)))
@@ -606,6 +616,46 @@ struct PageEditorView: View {
         .accessibilityIdentifier("pageEditor.cropDone")
     }
 
+    // MARK: - 下部ツールバーの共通部品（アイコン＋ラベル縦積み・横スクロールで崩れ防止）
+
+    /// ツールバー1項目の見た目（アイコンの上に小さなラベル）。等幅にして整列させる。
+    private func toolItemLabel(_ title: String, systemImage: String, tint: Color = .accentColor) -> some View {
+        VStack(spacing: 3) {
+            Image(systemName: systemImage)
+                .font(.system(size: 20))
+                .frame(height: 24)
+            Text(title)
+                .font(.caption2)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .foregroundStyle(tint)
+        .frame(width: 62)
+        .padding(.vertical, 6)
+        .contentShape(Rectangle())
+    }
+
+    private func toolButton(
+        _ title: String, systemImage: String, role: ButtonRole? = nil,
+        identifier: String, action: @escaping () -> Void
+    ) -> some View {
+        Button(role: role, action: action) {
+            toolItemLabel(title, systemImage: systemImage, tint: role == .destructive ? .red : .accentColor)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
+    }
+
+    /// 項目が画面幅を超えても崩れないよう横スクロールに載せる共通コンテナ
+    private func toolbarStrip<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                content()
+            }
+            .padding(.horizontal, 12)
+        }
+    }
+
     /// 書き出し: ページを1枚で / 各写真を個別に（汎用。SNS別モードは持たない）
     @ViewBuilder
     private var exportMenu: some View {
@@ -651,7 +701,7 @@ struct PageEditorView: View {
 
     /// 写真選択中のメニュー
     private var photoControls: some View {
-        HStack(spacing: 12) {
+        toolbarStrip {
             Menu {
                 Button("元画像の比率（全体を表示）") {
                     Task { await viewModel.applyPhotoNativeAspect() }
@@ -662,32 +712,25 @@ struct PageEditorView: View {
                     }
                 }
             } label: {
-                Label("枠比率", systemImage: "aspectratio")
+                toolItemLabel("枠比率", systemImage: "aspectratio")
             }
             .accessibilityIdentifier("pageEditor.frameAspectMenu")
 
-            Button {
+            toolButton("全面", systemImage: "rectangle.arrowtriangle.2.inward",
+                       identifier: "pageEditor.fillSelected") {
                 Task { await viewModel.placeFillSelected() }
-            } label: {
-                Label("全面", systemImage: "rectangle.arrowtriangle.2.inward")
             }
-            .accessibilityIdentifier("pageEditor.fillSelected")
 
-            Button {
+            toolButton("マット", systemImage: "rectangle.arrowtriangle.2.outward",
+                       identifier: "pageEditor.matSelected") {
                 Task { await viewModel.placeMatSelected() }
-            } label: {
-                Label("マット", systemImage: "rectangle.arrowtriangle.2.outward")
             }
-            .accessibilityIdentifier("pageEditor.matSelected")
 
-            Button {
+            toolButton("クロップ", systemImage: "crop", identifier: "pageEditor.cropButton") {
                 if let id = viewModel.selectedPlacementID {
                     viewModel.toggleCropMode(id)
                 }
-            } label: {
-                Label("クロップ", systemImage: "crop")
             }
-            .accessibilityIdentifier("pageEditor.cropButton")
 
             Menu {
                 Button {
@@ -701,23 +744,20 @@ struct PageEditorView: View {
                     Label("背面へ", systemImage: "square.2.stack.3d.bottom.filled")
                 }
             } label: {
-                Label("レイヤー", systemImage: "square.stack.3d.up")
+                toolItemLabel("レイヤー", systemImage: "square.stack.3d.up")
             }
             .accessibilityIdentifier("pageEditor.layerMenu")
 
-            Button(role: .destructive) {
+            toolButton("削除", systemImage: "trash", role: .destructive,
+                       identifier: "pageEditor.deletePhoto") {
                 Task { await viewModel.deleteSelectedPhoto() }
-            } label: {
-                Label("削除", systemImage: "trash")
             }
-            .accessibilityIdentifier("pageEditor.deletePhoto")
         }
-        .buttonStyle(.bordered)
     }
 
     /// 非選択時のページ全体メニュー（全プロジェクト共通。SNS別の分岐はしない）
     private var pageMenuControls: some View {
-        HStack(spacing: 12) {
+        toolbarStrip {
             Menu {
                 ForEach(Self.aspectChoices, id: \.label) { choice in
                     Button(choice.label) {
@@ -725,7 +765,7 @@ struct PageEditorView: View {
                     }
                 }
             } label: {
-                Label("比率", systemImage: "aspectratio")
+                toolItemLabel("比率", systemImage: "aspectratio")
             }
             .accessibilityIdentifier("pageEditor.aspectMenu")
 
@@ -733,38 +773,32 @@ struct PageEditorView: View {
                 templateMenu
             }
 
-            Button {
+            toolButton("全面", systemImage: "rectangle.arrowtriangle.2.inward",
+                       identifier: "pageEditor.fillButton") {
                 Task { await viewModel.placeFill() }
-            } label: {
-                Label("全面", systemImage: "rectangle.arrowtriangle.2.inward")
             }
-            .accessibilityIdentifier("pageEditor.fillButton")
 
-            Button {
+            toolButton("マット", systemImage: "rectangle.arrowtriangle.2.outward",
+                       identifier: "pageEditor.matButton") {
                 Task { await viewModel.placeMat() }
-            } label: {
-                Label("マット", systemImage: "rectangle.arrowtriangle.2.outward")
             }
-            .accessibilityIdentifier("pageEditor.matButton")
 
             framePresetMenu
 
             // ページの追加・削除・並べ替えは俯瞰モードで行う（キャンバスをピンチアウトでも入れる）
-            Button {
+            toolButton("ページ", systemImage: "rectangle.stack",
+                       identifier: "pageEditor.overview") {
                 viewModel.enterOverview()
-            } label: {
-                Label("ページ", systemImage: "rectangle.stack")
             }
-            .accessibilityIdentifier("pageEditor.overview")
 
             if viewModel.pageCount > 1 {
                 Text("\(viewModel.currentPageIndex + 1)/\(viewModel.pageCount)")
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(.secondary)
+                    .frame(minWidth: 44)
                     .accessibilityIdentifier("pageEditor.pageLabel")
             }
         }
-        .buttonStyle(.bordered)
     }
 
     /// テンプレート（スロット枠）ピッカー: 現在ページの写真枚数に応じた配置を適用する
@@ -776,7 +810,7 @@ struct PageEditorView: View {
                 }
             }
         } label: {
-            Label("テンプレート", systemImage: "rectangle.split.2x2")
+            toolItemLabel("テンプレート", systemImage: "rectangle.split.2x2")
         }
         .accessibilityIdentifier("pageEditor.templateMenu")
     }
@@ -789,7 +823,7 @@ struct PageEditorView: View {
                 }
             }
         } label: {
-            Label("枠", systemImage: "square.dashed")
+            toolItemLabel("枠", systemImage: "square.dashed")
         }
         .accessibilityIdentifier("pageEditor.presetMenu")
     }
