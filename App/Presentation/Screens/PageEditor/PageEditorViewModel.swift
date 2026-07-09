@@ -48,6 +48,8 @@ final class PageEditorViewModel {
     }
 
     var page: PageEntity? { project.page(at: currentPageIndex) }
+    /// 分割時のスライド形（現在ページのアスペクトを踏襲）
+    var currentSlideAspect: AspectRatio { page?.aspect ?? AspectRatio(width: 4, height: 5) }
     var pagePlacements: [PlacementEntity] { project.placements(onPage: currentPageIndex) }
     var pageCount: Int { project.pages.count }
     var hasPhoto: Bool { !project.placements.isEmpty }
@@ -164,16 +166,53 @@ final class PageEditorViewModel {
         await persist()
     }
 
-    /// 現在ページの写真枚数に応じた適用可能テンプレート
-    var templatesForCurrentPage: [LayoutTemplate] {
-        LayoutTemplateTable.templates(forPhotoCount: pagePlacements.count)
-    }
+    /// スロット先行UIで選べる型枠一覧（写真の有無に依存しない）
+    var availableTemplates: [LayoutTemplate] { LayoutTemplateTable.selectable }
 
-    /// テンプレートを現在ページへ適用（写真をスロットへ全面配置）
+    /// テンプレートを現在ページへ敷く（空スロットができ、後から写真を当てはめる）
     func applyTemplate(_ template: LayoutTemplate) async {
         record()
         project.applyTemplate(template, toPage: currentPageIndex)
         await persist(refreshImages: false)
+    }
+
+    /// 指定点（配置領域の正規化座標）にある空スロットのindex（無ければnil）
+    func emptySlot(atNormalizedX x: Double, y: Double, onPage pageIndex: Int) -> Int? {
+        guard let slots = project.page(at: pageIndex)?.slots else { return nil }
+        let empties = Set(project.emptySlotIndices(onPage: pageIndex))
+        for (i, slot) in slots.enumerated() where empties.contains(i) {
+            if slot.minX <= x, x <= slot.maxX, slot.minY <= y, y <= slot.maxY { return i }
+        }
+        return nil
+    }
+
+    /// 空スロットへ写真を1枚当てはめる（スロット先行UI）
+    func assignPhotoToSlot(pageIndex: Int, slotIndex: Int, data: Data) async {
+        record()
+        do {
+            project = try await addPhoto.executeAssignToSlot(
+                project: project, imageData: data, pageIndex: pageIndex, slot: slotIndex
+            )
+            await refreshImages()
+        } catch {
+            errorMessage = "写真を読み込めませんでした: \(error.localizedDescription)"
+        }
+    }
+
+    /// 1枚をカルーセルの全スライドへシームレスに分割する（SCRL型）
+    func splitPhotoData(_ data: Data, intoSlides count: Int, slideAspect: AspectRatio) async {
+        record()
+        do {
+            project = try await addPhoto.executeSplit(
+                project: project, imageData: data, intoSlides: count, slideAspect: slideAspect
+            )
+            currentPageIndex = 0
+            selectedPlacementID = nil
+            cropModePlacementID = nil
+            await refreshImages()
+        } catch {
+            errorMessage = "写真を読み込めませんでした: \(error.localizedDescription)"
+        }
     }
 
     // MARK: - 選択中の写真への操作（写真メニュー）

@@ -12,6 +12,9 @@ public struct PlacementEntity: Hashable, Codable, Sendable, Identifiable {
     /// 所属ページ（PageEntity.index）。X複数枚のような異アスペクトページ構成で必須。
     /// カルーセルのまたがり配置（フェーズ5）はアンカーページ＋destRectのはみ出しで表現する
     public var pageIndex: Int
+    /// テンプレートのどのスロットに入っているか（PageEntity.slots のindex）。
+    /// nil = スロット非拘束の自由配置。スロット拘束の配置は空スロット判定・当てはめの対象
+    public var slotIndex: Int?
     public var photo: PhotoRef
     /// 元画像に対する正規化(0..1)クロップ矩形（CLAUDE.md ルール3）
     public var cropRect: LayoutRect
@@ -25,6 +28,7 @@ public struct PlacementEntity: Hashable, Codable, Sendable, Identifiable {
         id: UUID = UUID(),
         sortIndex: Int,
         pageIndex: Int = 0,
+        slotIndex: Int? = nil,
         photo: PhotoRef,
         cropRect: LayoutRect = .unit,
         destRect: LayoutRect,
@@ -33,6 +37,7 @@ public struct PlacementEntity: Hashable, Codable, Sendable, Identifiable {
         self.id = id
         self.sortIndex = sortIndex
         self.pageIndex = pageIndex
+        self.slotIndex = slotIndex
         self.photo = photo
         self.cropRect = cropRect
         self.destRect = destRect

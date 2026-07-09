@@ -99,6 +99,12 @@ public enum LayoutTemplateTable {
         )
     }
 
+    /// スロット先行UIで選べる型枠一覧（写真の有無に依存しない）。
+    /// 空ページにも敷けるよう、1〜4スロットの代表レイアウトを並べる。
+    public static var selectable: [LayoutTemplate] {
+        [single] + twoUp() + threeUp() + fourUp()
+    }
+
     /// 枚数に対する代表テンプレート一覧（UIのピッカー用）
     public static func templates(forPhotoCount count: Int) -> [LayoutTemplate] {
         switch count {

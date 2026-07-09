@@ -12,6 +12,15 @@ struct PageEditorView: View {
     @State private var viewModel: PageEditorViewModel
     @State private var photoPickerPresented = false
     @State private var pickerItems: [PhotosPickerItem] = []
+    // スロット充填ピッカー（空スロットのタップで開く）
+    @State private var slotPickerPresented = false
+    @State private var slotFillItem: PhotosPickerItem?
+    @State private var pendingSlotFill: (page: Int, slot: Int)?
+    // カルーセル分割（1枚を全スライドへ）
+    @State private var splitPickerPresented = false
+    @State private var splitPickerItem: PhotosPickerItem?
+    @State private var pendingSplitData: Data?
+    @State private var splitCount = 3
     /// 角ハンドルドラッグ開始時の角と中心（拡縮中に選択枠が動いても基準がぶれないよう固定）
     @State private var handleDragBase: (corner: CGPoint, center: CGPoint)?
 
@@ -53,6 +62,20 @@ struct PageEditorView: View {
             spreadCanvas
                 .frame(maxHeight: .infinity)
                 .accessibilityIdentifier("pageEditor.canvas")
+                // 空スロット充填ピッカーはキャンバスに付ける（複数モーダルを1ノードに積まない）
+                .photosPicker(isPresented: $slotPickerPresented, selection: $slotFillItem, matching: .images)
+                .onChange(of: slotFillItem) { _, newItem in
+                    guard let newItem, let target = pendingSlotFill else { return }
+                    slotFillItem = nil
+                    Task {
+                        if let data = try? await newItem.loadTransferable(type: Data.self) {
+                            await viewModel.assignPhotoToSlot(
+                                pageIndex: target.page, slotIndex: target.slot, data: data
+                            )
+                        }
+                        pendingSlotFill = nil
+                    }
+                }
 
             if viewModel.cropModePlacementID != nil {
                 Text("クロップ調整中 — ドラッグ/ピンチで位置と拡大を変更、枠の外をタップで完了")
@@ -62,6 +85,23 @@ struct PageEditorView: View {
             }
 
             controls
+                // 分割ピッカー＋シートはコントロール側に付ける
+                .photosPicker(isPresented: $splitPickerPresented, selection: $splitPickerItem, matching: .images)
+                .onChange(of: splitPickerItem) { _, newItem in
+                    guard let newItem else { return }
+                    splitPickerItem = nil
+                    Task {
+                        if let data = try? await newItem.loadTransferable(type: Data.self) {
+                            pendingSplitData = data
+                        }
+                    }
+                }
+                .sheet(isPresented: Binding(
+                    get: { pendingSplitData != nil },
+                    set: { if !$0 { pendingSplitData = nil } }
+                )) {
+                    splitSheet
+                }
         }
         .padding(.vertical)
         .navigationTitle(viewModel.project.title ?? "レイアウト")
@@ -168,6 +208,7 @@ struct PageEditorView: View {
                             .allowsHitTesting(false)
                     }
                 }
+                emptySlotOverlay(stripHeight: stripHeight)
                 stripSelectionOverlay(stripHeight: stripHeight)
             }
             .frame(width: stripWidth, height: stripHeight, alignment: .topLeading)
@@ -214,12 +255,39 @@ struct PageEditorView: View {
         }
     }
 
-    /// 選択中の配置が属するページの配置領域（スプレッド空間のpt矩形）
-    private func selectedContentRectInStrip(stripHeight: CGFloat) -> LayoutRect? {
-        guard let selectedID = viewModel.selectedPlacementID,
-              let placement = viewModel.project.placements.first(where: { $0.id == selectedID }),
-              let page = viewModel.project.page(at: placement.pageIndex),
-              let originX = SpreadGeometry.pageOriginX(project: viewModel.project, pageIndex: placement.pageIndex)
+    /// 空スロット（写真未充填）の目印＋当てはめ導線。タップは通し、visualだけ描く。
+    @ViewBuilder
+    private func emptySlotOverlay(stripHeight: CGFloat) -> some View {
+        ForEach(viewModel.project.orderedPages, id: \.id) { page in
+            if let slots = page.slots,
+               let content = contentRectInStrip(pageIndex: page.index, stripHeight: stripHeight) {
+                ForEach(viewModel.project.emptySlotIndices(onPage: page.index), id: \.self) { i in
+                    let slot = slots[i]
+                    let w = slot.width * content.width
+                    let h = slot.height * content.height
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(Color.white.opacity(0.6),
+                                          style: StrokeStyle(lineWidth: 1.5, dash: [7, 5]))
+                        Image(systemName: "plus")
+                            .font(.system(size: min(w, h) * 0.28))
+                            .foregroundStyle(Color.white.opacity(0.8))
+                    }
+                    .frame(width: w, height: h)
+                    .position(
+                        x: content.x + (slot.x + slot.width / 2) * content.width,
+                        y: content.y + (slot.y + slot.height / 2) * content.height
+                    )
+                    .allowsHitTesting(false)
+                }
+            }
+        }
+    }
+
+    /// 指定ページの配置領域（スプレッド空間のpt矩形）
+    private func contentRectInStrip(pageIndex: Int, stripHeight: CGFloat) -> LayoutRect? {
+        guard let page = viewModel.project.page(at: pageIndex),
+              let originX = SpreadGeometry.pageOriginX(project: viewModel.project, pageIndex: pageIndex)
         else { return nil }
         let pageSize = LayoutSize(width: page.aspect.ratio * stripHeight, height: stripHeight)
         let content = PageGeometry.contentRect(page: page, pageSize: pageSize)
@@ -229,6 +297,14 @@ struct PageEditorView: View {
             width: content.width,
             height: content.height
         )
+    }
+
+    /// 選択中の配置が属するページの配置領域（スプレッド空間のpt矩形）
+    private func selectedContentRectInStrip(stripHeight: CGFloat) -> LayoutRect? {
+        guard let selectedID = viewModel.selectedPlacementID,
+              let placement = viewModel.project.placements.first(where: { $0.id == selectedID })
+        else { return nil }
+        return contentRectInStrip(pageIndex: placement.pageIndex, stripHeight: stripHeight)
     }
 
     // MARK: - キャンバス座標変換
@@ -300,8 +376,15 @@ struct PageEditorView: View {
                 if hit?.id != cropID {
                     viewModel.exitCropMode()
                 }
+            } else if let hit {
+                viewModel.select(hit.id)
+            } else if let slot = viewModel.emptySlot(atNormalizedX: loc.nx, y: loc.ny, onPage: loc.pageIndex) {
+                // 空スロットのタップ → そのスロットへ当てはめる写真を選ぶ
+                viewModel.select(nil)
+                pendingSlotFill = (loc.pageIndex, slot)
+                slotPickerPresented = true
             } else {
-                viewModel.select(hit?.id)
+                viewModel.select(nil)
             }
         }
     }
@@ -769,9 +852,12 @@ struct PageEditorView: View {
             }
             .accessibilityIdentifier("pageEditor.aspectMenu")
 
-            if viewModel.currentPageHasPhoto {
-                templateMenu
+            toolButton("分割", systemImage: "rectangle.split.3x1",
+                       identifier: "pageEditor.split") {
+                splitPickerPresented = true
             }
+
+            templateMenu
 
             toolButton("全面", systemImage: "rectangle.arrowtriangle.2.inward",
                        identifier: "pageEditor.fillButton") {
@@ -801,10 +887,11 @@ struct PageEditorView: View {
         }
     }
 
-    /// テンプレート（スロット枠）ピッカー: 現在ページの写真枚数に応じた配置を適用する
+    /// テンプレート（スロット型枠）ピッカー: 現在スライドに型枠を敷く。
+    /// 敷くと空スロット（＋）が出て、タップで写真を当てはめる（スロット先行）。
     private var templateMenu: some View {
         Menu {
-            ForEach(viewModel.templatesForCurrentPage) { template in
+            ForEach(viewModel.availableTemplates) { template in
                 Button(template.name) {
                     Task { await viewModel.applyTemplate(template) }
                 }
@@ -826,5 +913,48 @@ struct PageEditorView: View {
             toolItemLabel("枠", systemImage: "square.dashed")
         }
         .accessibilityIdentifier("pageEditor.presetMenu")
+    }
+
+    /// 分割シート: スライド数を決めて、選んだ1枚をカルーセルへ割り付ける
+    private var splitSheet: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                Image(systemName: "rectangle.split.3x1")
+                    .font(.system(size: 44))
+                    .foregroundStyle(.tint)
+                Text("1枚をカルーセルに分割")
+                    .font(.headline)
+                Text("選んだ写真を \(splitCount) 枚のスライドに切り、スワイプで繋がって見えるようにします。")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                Stepper("スライド数: \(splitCount)", value: $splitCount, in: 2...10)
+                    .fixedSize()
+                Spacer()
+            }
+            .padding(28)
+            .navigationTitle("分割")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") { pendingSplitData = nil }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("適用") {
+                        let data = pendingSplitData
+                        pendingSplitData = nil
+                        if let data {
+                            Task {
+                                await viewModel.splitPhotoData(
+                                    data, intoSlides: splitCount, slideAspect: viewModel.currentSlideAspect
+                                )
+                            }
+                        }
+                    }
+                    .accessibilityIdentifier("split.apply")
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 }

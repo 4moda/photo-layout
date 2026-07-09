@@ -55,24 +55,92 @@ extension ProjectEntity {
         placements[indexB].sortIndex = temp
     }
 
-    /// テンプレートを適用する: ページ上の配置を sortIndex 順にスロットへ全面配置する。
-    /// 写真がスロット数より少なければ余ったスロットは空のまま。多ければ余りは最後のスロットに重なる。
+    /// テンプレート（スロット型枠）をページに敷く。スロット先行モデル:
+    /// - ページに `slots` を保持させ、写真が無くても「空スロット」が存在できるようにする
+    /// - 既存の写真は sortIndex 順にスロット0,1,2… へ当てはめ、スロット数を超えた分は外す
+    /// - 写真が少なければ余ったスロットは空のまま（`assignPhoto` で後から充填する）
     /// - Parameter template: 適用するテンプレート（スロットはページ配置領域の正規化座標）
     public mutating func applyTemplate(_ template: LayoutTemplate, toPage pageIndex: Int) {
-        guard let page = page(at: pageIndex) else { return }
+        guard let pageArrayIndex = pages.firstIndex(where: { $0.index == pageIndex }) else { return }
+        pages[pageArrayIndex].slots = template.slots
+        let page = pages[pageArrayIndex]
         let ordered = placements(onPage: pageIndex)
         for (offset, placement) in ordered.enumerated() {
             guard let index = placements.firstIndex(where: { $0.id == placement.id }) else { continue }
-            let slot = template.slots[min(offset, template.slots.count - 1)]
-            placements[index].destRect = slot
-            // スロットの実ピクセルアスペクトに合わせて中央クロップ（画像は歪まない）
-            let slotPixelAspect = slot.aspectRatio * page.contentAspect
-            placements[index].cropRect = CropMath.subCrop(
-                .unit,
-                photo: placements[index].photo,
-                targetPixelAspect: slotPixelAspect
+            if offset < template.slots.count {
+                placements[index].slotIndex = offset
+                fitPlacementToSlot(placementArrayIndex: index, slot: template.slots[offset], page: page)
+            } else {
+                // スロットからあふれた写真は外す
+                placements.remove(at: index)
+            }
+        }
+    }
+
+    /// 空スロットに写真を1枚当てはめる（スロット比に中央クロップして全面配置）。
+    /// 既にそのスロットに写真があれば置き換える。
+    public mutating func assignPhoto(_ photo: PhotoRef, toPage pageIndex: Int, slot slotIndex: Int) {
+        guard let page = page(at: pageIndex),
+              let slots = page.slots, slots.indices.contains(slotIndex) else { return }
+        placements.removeAll { $0.pageIndex == pageIndex && $0.slotIndex == slotIndex }
+        let slot = slots[slotIndex]
+        let slotPixelAspect = slot.aspectRatio * page.contentAspect
+        placements.append(PlacementEntity(
+            sortIndex: placements.count,
+            pageIndex: pageIndex,
+            slotIndex: slotIndex,
+            photo: photo,
+            cropRect: CropMath.subCrop(.unit, photo: photo, targetPixelAspect: slotPixelAspect),
+            destRect: slot
+        ))
+    }
+
+    /// ページの空スロット（写真が入っていないスロット）のindex一覧。
+    public func emptySlotIndices(onPage pageIndex: Int) -> [Int] {
+        guard let slots = page(at: pageIndex)?.slots else { return [] }
+        let filled = Set(placements(onPage: pageIndex).compactMap { $0.slotIndex })
+        return slots.indices.filter { !filled.contains($0) }
+    }
+
+    /// 1枚の写真をカルーセルの全スライドへシームレスに分割する（SCRL型）。
+    /// ページを count 枚に作り直し、各スライドに元画像の i 番目の縦スライスを全面配置する。
+    /// 各スライドは1スロットの型枠として保持する（空にすれば別写真を当てはめ可）。
+    public mutating func splitPhoto(
+        _ photo: PhotoRef,
+        intoSlides count: Int,
+        slideAspect: AspectRatio,
+        background: CanvasBackgroundStyle = .plainWhite
+    ) {
+        let n = max(1, min(count, 20))
+        pages = (0..<n).map { PageEntity(index: $0, aspect: slideAspect, background: background, slots: [.unit]) }
+        // 余白込みの配置領域アスペクト × n が仮想キャンバスのアスペクト
+        let slideContentAspect = pages[0].contentAspect
+        let totalAspect = slideContentAspect * Double(n)
+        let fillCrop = CropMath.subCrop(.unit, photo: photo, targetPixelAspect: totalAspect)
+        let sliceWidth = fillCrop.width / Double(n)
+        placements = (0..<n).map { i in
+            let cropRect = LayoutRect(
+                x: fillCrop.x + Double(i) * sliceWidth,
+                y: fillCrop.y,
+                width: sliceWidth,
+                height: fillCrop.height
+            )
+            return PlacementEntity(
+                sortIndex: i, pageIndex: i, slotIndex: 0,
+                photo: photo, cropRect: cropRect, destRect: .unit
             )
         }
+    }
+
+    /// 配置をスロット矩形へ全面配置する（destRect=スロット、cropRectをスロット比へ中央クロップ）。
+    private mutating func fitPlacementToSlot(placementArrayIndex index: Int, slot: LayoutRect, page: PageEntity) {
+        placements[index].destRect = slot
+        let slotPixelAspect = slot.aspectRatio * page.contentAspect
+        placements[index].cropRect = CropMath.subCrop(
+            .unit,
+            photo: placements[index].photo,
+            targetPixelAspect: slotPixelAspect
+        )
     }
 
     /// 全面配置: クロップを配置領域のアスペクトに絞り込み、領域いっぱいに敷く。

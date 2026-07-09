@@ -49,6 +49,31 @@ final class ScreenshotSmokeTests: XCTestCase {
     }
 
     @MainActor
+    func testSlotTemplateFlow() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        // 正方形プロジェクトを新規作成 → エディタへ
+        let addButton = app.buttons["projectList.add"]
+        XCTAssertTrue(addButton.waitForExistence(timeout: 15))
+        addButton.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let squareButton = app.buttons["projectList.new_square"]
+        XCTAssertTrue(squareButton.waitForExistence(timeout: 5))
+        squareButton.tap()
+        XCTAssertTrue(app.buttons["pageEditor.export"].waitForExistence(timeout: 10))
+
+        // テンプレ（田の字）を敷くと空スロット（＋）が現れる＝スロット先行
+        let templateMenu = app.buttons["pageEditor.templateMenu"]
+        XCTAssertTrue(templateMenu.waitForExistence(timeout: 5))
+        templateMenu.tap()
+        let grid = app.buttons["田の字"]
+        XCTAssertTrue(grid.waitForExistence(timeout: 5))
+        grid.tap()
+        sleep(1)
+        attachScreenshot(named: "07-template-empty-slots")
+    }
+
+    @MainActor
     func testPageEditorWithDemoPhoto() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--seed-demo"]

@@ -7,17 +7,22 @@ public struct PageEntity: Hashable, Codable, Sendable, Identifiable {
     public var index: Int
     public var aspect: AspectRatio
     public var background: CanvasBackgroundStyle
+    /// このスライドに敷いたテンプレートのスロット矩形（配置領域の正規化0..1）。
+    /// nil = 型枠なしの自由キャンバス。非nilなら「空スロット」が存在でき、写真を当てはめる。
+    public var slots: [LayoutRect]?
 
     public init(
         id: UUID = UUID(),
         index: Int,
         aspect: AspectRatio,
-        background: CanvasBackgroundStyle = .plainWhite
+        background: CanvasBackgroundStyle = .plainWhite,
+        slots: [LayoutRect]? = nil
     ) {
         self.id = id
         self.index = index
         self.aspect = aspect
         self.background = background
+        self.slots = slots
     }
 
     /// 余白を差し引いた配置領域の実ピクセルアスペクト（サイズに依存しない）。

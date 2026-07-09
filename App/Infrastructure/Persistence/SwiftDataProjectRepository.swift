@@ -72,7 +72,8 @@ final class SwiftDataProjectRepository: ProjectRepository {
                         id: page.id,
                         index: page.index,
                         aspect: AspectRatio(width: page.aspectWidth, height: page.aspectHeight),
-                        background: try decoder.decode(CanvasBackgroundStyle.self, from: page.backgroundData)
+                        background: try decoder.decode(CanvasBackgroundStyle.self, from: page.backgroundData),
+                        slots: try page.slotsData.map { try decoder.decode([LayoutRect].self, from: $0) }
                     )
                 },
             placements: try model.placements
@@ -82,6 +83,7 @@ final class SwiftDataProjectRepository: ProjectRepository {
                         id: placement.id,
                         sortIndex: placement.sortIndex,
                         pageIndex: placement.pageIndex,
+                        slotIndex: placement.slotIndex,
                         photo: PhotoRef(
                             fileName: placement.photoFileName,
                             pixelWidth: placement.photoPixelWidth,
@@ -112,7 +114,8 @@ final class SwiftDataProjectRepository: ProjectRepository {
             index: page.index,
             aspectWidth: page.aspect.width,
             aspectHeight: page.aspect.height,
-            backgroundData: try encoder.encode(page.background)
+            backgroundData: try encoder.encode(page.background),
+            slotsData: try page.slots.map { try encoder.encode($0) }
         )
     }
 
@@ -121,6 +124,7 @@ final class SwiftDataProjectRepository: ProjectRepository {
             id: placement.id,
             sortIndex: placement.sortIndex,
             pageIndex: placement.pageIndex,
+            slotIndex: placement.slotIndex,
             photoFileName: placement.photo.fileName,
             photoPixelWidth: placement.photo.pixelWidth,
             photoPixelHeight: placement.photo.pixelHeight,

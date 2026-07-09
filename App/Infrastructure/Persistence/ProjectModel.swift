@@ -42,14 +42,17 @@ final class PageModel {
     var aspectWidth: Double
     var aspectHeight: Double
     var backgroundData: Data
+    // テンプレートのスロット矩形 [LayoutRect]? のJSON。既存ストアからの軽量マイグレーションのためnil既定
+    var slotsData: Data?
     var project: ProjectModel?
 
-    init(id: UUID, index: Int, aspectWidth: Double, aspectHeight: Double, backgroundData: Data) {
+    init(id: UUID, index: Int, aspectWidth: Double, aspectHeight: Double, backgroundData: Data, slotsData: Data? = nil) {
         self.id = id
         self.index = index
         self.aspectWidth = aspectWidth
         self.aspectHeight = aspectHeight
         self.backgroundData = backgroundData
+        self.slotsData = slotsData
     }
 }
 
@@ -59,6 +62,8 @@ final class PlacementModel {
     var sortIndex: Int
     // 既存ストアからの軽量マイグレーションのため既定値を持つ
     var pageIndex: Int = 0
+    // どのスロットに入っているか（PageEntity.slots のindex）。nil=スロット非拘束
+    var slotIndex: Int?
     var photoFileName: String
     var photoPixelWidth: Int
     var photoPixelHeight: Int
@@ -77,6 +82,7 @@ final class PlacementModel {
         id: UUID,
         sortIndex: Int,
         pageIndex: Int,
+        slotIndex: Int?,
         photoFileName: String,
         photoPixelWidth: Int,
         photoPixelHeight: Int,
@@ -87,6 +93,7 @@ final class PlacementModel {
         self.id = id
         self.sortIndex = sortIndex
         self.pageIndex = pageIndex
+        self.slotIndex = slotIndex
         self.photoFileName = photoFileName
         self.photoPixelWidth = photoPixelWidth
         self.photoPixelHeight = photoPixelHeight
