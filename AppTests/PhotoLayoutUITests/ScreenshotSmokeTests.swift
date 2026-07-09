@@ -99,11 +99,6 @@ final class ScreenshotSmokeTests: XCTestCase {
         sleep(2)
         attachScreenshot(named: "04-editor-black-background")
 
-        // マット配置（写真全体＋余白）へ切替
-        app.buttons["pageEditor.matButton"].tap()
-        sleep(2)
-        attachScreenshot(named: "05-editor-matted")
-
         // キャンバス中央をタップ→写真が選択され、写真メニュー（削除・クロップ等）に切り替わる
         let canvas = app.otherElements["pageEditor.canvas"].firstMatch
         if canvas.exists {

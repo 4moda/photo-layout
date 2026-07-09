@@ -126,15 +126,6 @@ struct PageEditorView: View {
                 .accessibilityIdentifier("pageEditor.redo")
             }
             ToolbarItem(placement: .primaryAction) {
-                // ページの追加・削除・並べ替えは俯瞰モードで（常時見える上部に置く）
-                Button {
-                    viewModel.enterOverview()
-                } label: {
-                    Image(systemName: "rectangle.stack")
-                }
-                .accessibilityIdentifier("pageEditor.overview")
-            }
-            ToolbarItem(placement: .primaryAction) {
                 Button {
                     photoPickerPresented = true
                 } label: {
@@ -275,12 +266,15 @@ struct PageEditorView: View {
                     let w = slot.width * content.width
                     let h = slot.height * content.height
                     ZStack {
+                        // 白ページ・黒ページどちらでも見えるよう、淡いグレー地＋アクセント色の破線
                         RoundedRectangle(cornerRadius: 6)
-                            .strokeBorder(Color.white.opacity(0.6),
+                            .fill(Color.gray.opacity(0.18))
+                        RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(Color.accentColor.opacity(0.9),
                                           style: StrokeStyle(lineWidth: 1.5, dash: [7, 5]))
                         Image(systemName: "plus")
                             .font(.system(size: min(w, h) * 0.28))
-                            .foregroundStyle(Color.white.opacity(0.8))
+                            .foregroundStyle(Color.accentColor)
                     }
                     .frame(width: w, height: h)
                     .position(
@@ -808,16 +802,6 @@ struct PageEditorView: View {
             }
             .accessibilityIdentifier("pageEditor.frameAspectMenu")
 
-            toolButton("全面", systemImage: "rectangle.arrowtriangle.2.inward",
-                       identifier: "pageEditor.fillSelected") {
-                Task { await viewModel.placeFillSelected() }
-            }
-
-            toolButton("マット", systemImage: "rectangle.arrowtriangle.2.outward",
-                       identifier: "pageEditor.matSelected") {
-                Task { await viewModel.placeMatSelected() }
-            }
-
             toolButton("クロップ", systemImage: "crop", identifier: "pageEditor.cropButton") {
                 if let id = viewModel.selectedPlacementID {
                     viewModel.toggleCropMode(id)
@@ -868,17 +852,13 @@ struct PageEditorView: View {
 
             templateMenu
 
-            toolButton("全面", systemImage: "rectangle.arrowtriangle.2.inward",
-                       identifier: "pageEditor.fillButton") {
-                Task { await viewModel.placeFill() }
-            }
-
-            toolButton("マット", systemImage: "rectangle.arrowtriangle.2.outward",
-                       identifier: "pageEditor.matButton") {
-                Task { await viewModel.placeMat() }
-            }
-
             framePresetMenu
+
+            // ページの追加・削除・並べ替え（俯瞰モード）。全面/マットは撤去（ドラッグで広げられる）
+            toolButton("ページ", systemImage: "rectangle.stack",
+                       identifier: "pageEditor.overview") {
+                viewModel.enterOverview()
+            }
 
             if viewModel.pageCount > 1 {
                 Text("\(viewModel.currentPageIndex + 1)/\(viewModel.pageCount)")

@@ -146,20 +146,6 @@ final class PageEditorViewModel {
         await persist()
     }
 
-    /// 全面配置（ワンタップ配置アクション。永続モードではない）
-    func placeFill() async {
-        record()
-        project.placeAllFillingPage()
-        await persist()
-    }
-
-    /// マット配置（写真全体を余白付きで見せる）
-    func placeMat() async {
-        record()
-        project.placeAllMatted()
-        await persist()
-    }
-
     func applyPreset(_ preset: FramePreset) async {
         record()
         project.applyFramePreset(preset)
@@ -224,20 +210,6 @@ final class PageEditorViewModel {
         selectedPlacementID = nil
         cropModePlacementID = nil
         await persist()
-    }
-
-    func placeFillSelected() async {
-        guard let id = selectedPlacementID else { return }
-        record()
-        project.placeFillingPage(placementID: id)
-        await persist(refreshImages: false)
-    }
-
-    func placeMatSelected() async {
-        guard let id = selectedPlacementID else { return }
-        record()
-        project.placeMatted(placementID: id)
-        await persist(refreshImages: false)
     }
 
     /// レイヤー順序: 選択中の写真を1段前面へ
