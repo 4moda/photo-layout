@@ -88,16 +88,7 @@ final class ScreenshotSmokeTests: XCTestCase {
         let exportButton = app.buttons["pageEditor.export"]
         XCTAssertTrue(exportButton.waitForExistence(timeout: 15))
         sleep(2) // プレビュー画像の非同期ロードを待つ
-        attachScreenshot(named: "03-editor-white-margin")
-
-        // 枠プリセットを黒背景＋白フチへ切替 → プレビューが変わることをスクショで示す
-        app.buttons["pageEditor.presetMenu"].tap()
-        let preset = app.buttons["黒背景＋白フチ"]
-        XCTAssertTrue(preset.waitForExistence(timeout: 5))
-        preset.tap()
-        // 反映を待つ（プレビュー画像の再生成）
-        sleep(2)
-        attachScreenshot(named: "04-editor-black-background")
+        attachScreenshot(named: "03-editor-photo")
 
         // キャンバス中央をタップ→写真が選択され、写真メニュー（削除・クロップ等）に切り替わる
         let canvas = app.otherElements["pageEditor.canvas"].firstMatch

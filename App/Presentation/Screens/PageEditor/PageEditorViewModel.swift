@@ -48,8 +48,6 @@ final class PageEditorViewModel {
     }
 
     var page: PageEntity? { project.page(at: currentPageIndex) }
-    /// 分割時のスライド形（現在ページのアスペクトを踏襲）
-    var currentSlideAspect: AspectRatio { page?.aspect ?? AspectRatio(width: 4, height: 5) }
     var pagePlacements: [PlacementEntity] { project.placements(onPage: currentPageIndex) }
     var pageCount: Int { project.pages.count }
     var hasPhoto: Bool { !project.placements.isEmpty }
@@ -146,12 +144,6 @@ final class PageEditorViewModel {
         await persist()
     }
 
-    func applyPreset(_ preset: FramePreset) async {
-        record()
-        project.applyFramePreset(preset)
-        await persist()
-    }
-
     /// スロット先行UIで選べる型枠一覧（写真の有無に依存しない）
     var availableTemplates: [LayoutTemplate] { LayoutTemplateTable.selectable }
 
@@ -179,22 +171,6 @@ final class PageEditorViewModel {
             project = try await addPhoto.executeAssignToSlot(
                 project: project, imageData: data, pageIndex: pageIndex, slot: slotIndex
             )
-            await refreshImages()
-        } catch {
-            errorMessage = "写真を読み込めませんでした: \(error.localizedDescription)"
-        }
-    }
-
-    /// 1枚をカルーセルの全スライドへシームレスに分割する（SCRL型）
-    func splitPhotoData(_ data: Data, intoSlides count: Int, slideAspect: AspectRatio) async {
-        record()
-        do {
-            project = try await addPhoto.executeSplit(
-                project: project, imageData: data, intoSlides: count, slideAspect: slideAspect
-            )
-            currentPageIndex = 0
-            selectedPlacementID = nil
-            cropModePlacementID = nil
             await refreshImages()
         } catch {
             errorMessage = "写真を読み込めませんでした: \(error.localizedDescription)"

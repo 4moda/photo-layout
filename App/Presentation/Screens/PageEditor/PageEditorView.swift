@@ -16,11 +16,8 @@ struct PageEditorView: View {
     @State private var slotPickerPresented = false
     @State private var slotFillItem: PhotosPickerItem?
     @State private var pendingSlotFill: (page: Int, slot: Int)?
-    // カルーセル分割（1枚を全スライドへ）
-    @State private var splitPickerPresented = false
-    @State private var splitPickerItem: PhotosPickerItem?
-    @State private var pendingSplitData: Data?
-    @State private var splitCount = 3
+    // テンプレート（型枠）ビジュアル選択シート
+    @State private var templatePickerPresented = false
     /// 角ハンドルドラッグ開始時の角と中心（拡縮中に選択枠が動いても基準がぶれないよう固定）
     @State private var handleDragBase: (corner: CGPoint, center: CGPoint)?
 
@@ -47,14 +44,6 @@ struct PageEditorView: View {
         ("1:1", AspectRatio(width: 1, height: 1)),
         ("1.91:1 横 (Instagram)", AspectRatio(width: 1.91, height: 1)),
         ("16:9 横", AspectRatio(width: 16, height: 9))
-    ]
-
-    private static let presetChoices: [(label: String, preset: FramePreset)] = [
-        ("余白なし", .none),
-        ("白余白", .whiteMargin),
-        ("黒フチ細", .thinBlackBorder),
-        ("白余白＋黒フチ", .whiteMarginBlackBorder),
-        ("黒背景＋白フチ", .blackBackgroundWhiteBorder)
     ]
 
     var body: some View {
@@ -85,22 +74,9 @@ struct PageEditorView: View {
             }
 
             controls
-                // 分割ピッカー＋シートはコントロール側に付ける
-                .photosPicker(isPresented: $splitPickerPresented, selection: $splitPickerItem, matching: .images)
-                .onChange(of: splitPickerItem) { _, newItem in
-                    guard let newItem else { return }
-                    splitPickerItem = nil
-                    Task {
-                        if let data = try? await newItem.loadTransferable(type: Data.self) {
-                            pendingSplitData = data
-                        }
-                    }
-                }
-                .sheet(isPresented: Binding(
-                    get: { pendingSplitData != nil },
-                    set: { if !$0 { pendingSplitData = nil } }
-                )) {
-                    splitSheet
+                // テンプレート（型枠）のビジュアル選択シートはコントロール側に付ける
+                .sheet(isPresented: $templatePickerPresented) {
+                    templatePickerSheet
                 }
         }
         .padding(.vertical)
@@ -224,14 +200,15 @@ struct PageEditorView: View {
             .onAppear {
                 if !didInitialScroll {
                     didInitialScroll = true
-                    panOffset = clampedPan(desired: initialPan(geo: geo), geo: geo)
+                    resetView(geo: geo)
                 }
             }
-            // ページ追加/削除後は現在ページへスクロールを合わせる
+            // ページ追加/削除・切替後は現在ページを中央にフィットし直す
             .onChange(of: viewModel.pageCount) { _, _ in
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    panOffset = clampedPan(desired: initialPan(geo: geo), geo: geo)
-                }
+                withAnimation(.easeInOut(duration: 0.2)) { resetView(geo: geo) }
+            }
+            .onChange(of: viewModel.currentPageIndex) { _, _ in
+                withAnimation(.easeInOut(duration: 0.2)) { resetView(geo: geo) }
             }
         }
     }
@@ -333,12 +310,31 @@ struct PageEditorView: View {
         )
     }
 
-    private func initialPan(geo: GeometryProxy) -> CGSize {
+    /// 現在ページが全体見えて左右の隣がのぞくズーム倍率。
+    /// ページ高さ≒ビューポート高の88%、ページ幅≒ビューポート幅の78%（左右に隣がのぞく）に収める。
+    private func fitZoom(geo: GeometryProxy) -> CGFloat {
+        guard let page = viewModel.page, geo.size.height > 0 else { return 1 }
+        let aspect = CGFloat(max(page.aspect.ratio, 0.01))
+        let byHeight = geo.size.height * 0.88
+        let byWidth = geo.size.width * 0.78 / aspect
+        let stripHeight = min(byHeight, byWidth)
+        return max(0.15, stripHeight / geo.size.height)
+    }
+
+    /// 現在ページを水平方向の中央へ置くパン量（垂直は中央固定）
+    private func centeredPan(geo: GeometryProxy) -> CGSize {
         let stripHeight = geo.size.height * viewZoom
-        let originX = SpreadGeometry.pageOriginX(
+        guard let frame = SpreadGeometry.pageFrame(
             project: viewModel.project, pageIndex: viewModel.currentPageIndex
-        ) ?? 0
-        return CGSize(width: -CGFloat(originX) * stripHeight, height: 0)
+        ) else { return .zero }
+        let centerX = CGFloat(frame.x + frame.width / 2) * stripHeight
+        return CGSize(width: geo.size.width / 2 - centerX, height: 0)
+    }
+
+    /// 現在ページを中央にフィット（ズーム＋パンを既定へ）
+    private func resetView(geo: GeometryProxy) {
+        viewZoom = fitZoom(geo: geo)
+        panOffset = clampedPan(desired: centeredPan(geo: geo), geo: geo)
     }
 
     /// パンの可動域: キャンバスがビューポートより小さい軸は中央固定、大きい軸は端まで
@@ -518,10 +514,9 @@ struct PageEditorView: View {
                     Task { await viewModel.endGesture() }
                 } else {
                     pinchBase = nil
-                    // 十分に引いた（縮小した）ら俯瞰モードへ。ズームは戻しておく
-                    if viewZoom <= 0.55, viewModel.pageCount > 1 {
-                        viewZoom = 1
-                        panOffset = clampedPan(desired: initialPan(geo: geo), geo: geo)
+                    // フィット倍率よりさらに十分引いたら俯瞰モードへ。ズームはフィットへ戻す
+                    if viewZoom <= fitZoom(geo: geo) * 0.6, viewModel.pageCount > 1 {
+                        resetView(geo: geo)
                         viewModel.enterOverview()
                     } else {
                         focusCenterPage(geo: geo)
@@ -845,16 +840,10 @@ struct PageEditorView: View {
             }
             .accessibilityIdentifier("pageEditor.aspectMenu")
 
-            toolButton("分割", systemImage: "rectangle.split.3x1",
-                       identifier: "pageEditor.split") {
-                splitPickerPresented = true
-            }
+            templateButton
 
-            templateMenu
-
-            framePresetMenu
-
-            // ページの追加・削除・並べ替え（俯瞰モード）。全面/マットは撤去（ドラッグで広げられる）
+            // ページの追加・削除・並べ替え（俯瞰モード）。
+            // 分割・枠・全面/マットは撤去（画像の拡大縮小・ドラッグで表現できる）
             toolButton("ページ", systemImage: "rectangle.stack",
                        identifier: "pageEditor.overview") {
                 viewModel.enterOverview()
@@ -870,74 +859,79 @@ struct PageEditorView: View {
         }
     }
 
-    /// テンプレート（スロット型枠）ピッカー: 現在スライドに型枠を敷く。
-    /// 敷くと空スロット（＋）が出て、タップで写真を当てはめる（スロット先行）。
-    private var templateMenu: some View {
-        Menu {
-            ForEach(viewModel.availableTemplates) { template in
-                Button(template.name) {
-                    Task { await viewModel.applyTemplate(template) }
-                }
-            }
+    /// テンプレート（型枠）ボタン: タップで型枠の形をビジュアル一覧したシートを開く。
+    private var templateButton: some View {
+        Button {
+            templatePickerPresented = true
         } label: {
             toolItemLabel("テンプレート", systemImage: "rectangle.split.2x2")
         }
+        .buttonStyle(.plain)
         .accessibilityIdentifier("pageEditor.templateMenu")
     }
 
-    private var framePresetMenu: some View {
-        Menu {
-            ForEach(Self.presetChoices, id: \.label) { choice in
-                Button(choice.label) {
-                    Task { await viewModel.applyPreset(choice.preset) }
-                }
-            }
-        } label: {
-            toolItemLabel("枠", systemImage: "square.dashed")
-        }
-        .accessibilityIdentifier("pageEditor.presetMenu")
-    }
-
-    /// 分割シート: スライド数を決めて、選んだ1枚をカルーセルへ割り付ける
-    private var splitSheet: some View {
+    /// 型枠の形をマス目でビジュアライズしたピッカー（4列グリッド）。
+    /// 選ぶと現在スライドに型枠を敷き、空スロットに写真を当てはめる（スロット先行）。
+    private var templatePickerSheet: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                Image(systemName: "rectangle.split.3x1")
-                    .font(.system(size: 44))
-                    .foregroundStyle(.tint)
-                Text("1枚をカルーセルに分割")
-                    .font(.headline)
-                Text("選んだ写真を \(splitCount) 枚のスライドに切り、スワイプで繋がって見えるようにします。")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                Stepper("スライド数: \(splitCount)", value: $splitCount, in: 2...10)
-                    .fixedSize()
-                Spacer()
-            }
-            .padding(28)
-            .navigationTitle("分割")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") { pendingSplitData = nil }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("適用") {
-                        let data = pendingSplitData
-                        pendingSplitData = nil
-                        if let data {
-                            Task {
-                                await viewModel.splitPhotoData(
-                                    data, intoSlides: splitCount, slideAspect: viewModel.currentSlideAspect
-                                )
+            ScrollView {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 4), spacing: 16) {
+                    ForEach(viewModel.availableTemplates) { template in
+                        Button {
+                            templatePickerPresented = false
+                            Task { await viewModel.applyTemplate(template) }
+                        } label: {
+                            VStack(spacing: 6) {
+                                TemplateThumbnail(template: template)
+                                Text(template.name)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.7)
                             }
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier(template.name)
                     }
-                    .accessibilityIdentifier("split.apply")
+                }
+                .padding(20)
+            }
+            .navigationTitle("テンプレート")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("閉じる") { templatePickerPresented = false }
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
+    }
+}
+
+/// 型枠のスロット配置をマス目で表す小さなプレビュー（正方形）。
+private struct TemplateThumbnail: View {
+    let template: LayoutTemplate
+
+    var body: some View {
+        GeometryReader { g in
+            ZStack(alignment: .topLeading) {
+                ForEach(Array(template.slots.enumerated()), id: \.offset) { _, slot in
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color.accentColor.opacity(0.22))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 3)
+                                .strokeBorder(Color.accentColor, lineWidth: 1)
+                        )
+                        .frame(width: CGFloat(slot.width) * g.size.width,
+                               height: CGFloat(slot.height) * g.size.height)
+                        .offset(x: CGFloat(slot.x) * g.size.width,
+                                y: CGFloat(slot.y) * g.size.height)
+                }
+            }
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .background(
+            RoundedRectangle(cornerRadius: 6).fill(Color.gray.opacity(0.12))
+        )
     }
 }
