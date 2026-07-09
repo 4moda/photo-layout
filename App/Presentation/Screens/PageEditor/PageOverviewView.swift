@@ -14,16 +14,18 @@ struct PageOverviewView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView(.horizontal, showsIndicators: true) {
-                HStack(alignment: .top, spacing: 16) {
-                    ForEach(viewModel.project.orderedPages, id: \.id) { page in
-                        card(for: page)
+            ZStack {
+                Color(white: 0.11).ignoresSafeArea()
+                ScrollView(.horizontal, showsIndicators: true) {
+                    HStack(alignment: .top, spacing: 16) {
+                        ForEach(viewModel.project.orderedPages, id: \.id) { page in
+                            card(for: page)
+                        }
+                        appendCard
                     }
-                    appendCard
+                    .padding(20)
                 }
-                .padding(20)
             }
-            .background(Color(white: 0.11))
             .navigationTitle("ページの編集")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
