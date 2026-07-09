@@ -23,21 +23,17 @@ struct ProjectListView: View {
                     )
                     .accessibilityIdentifier("projectList.empty")
                 } else {
-                    List {
-                        ForEach(viewModel.projects) { project in
-                            NavigationLink(value: project) {
-                                ProjectRow(
+                    ScrollView {
+                        LazyVGrid(columns: Self.gridColumns, spacing: 12) {
+                            ForEach(viewModel.projects) { project in
+                                ProjectCell(
                                     project: project,
-                                    thumbnailImages: viewModel.thumbnailImages(for: project)
+                                    thumbnailImages: viewModel.thumbnailImages(for: project),
+                                    onDelete: { Task { await viewModel.delete(id: project.id) } }
                                 )
                             }
                         }
-                        .onDelete { offsets in
-                            let ids = offsets.map { viewModel.projects[$0].id }
-                            Task {
-                                for id in ids { await viewModel.delete(id: id) }
-                            }
-                        }
+                        .padding(12)
                     }
                     .accessibilityIdentifier("projectList.list")
                 }
@@ -91,15 +87,46 @@ struct ProjectListView: View {
             }
         }
     }
+
+    /// SCRL風のサムネイルグリッド（1行3枚前後）。名前は表示しない。
+    private static let gridColumns = [GridItem(.adaptive(minimum: 108), spacing: 12)]
 }
 
-private struct ProjectRow: View {
+/// 一覧のサムネイルセル。名前は出さず、1ページ目のプレビューを正方形カードで見せる。
+/// タップで編集へ、右上「⋯」メニューで削除。
+private struct ProjectCell: View {
     let project: ProjectEntity
     /// 1ページ目の配置ID→サムネイル画像（ViewModelのキャッシュから供給）
     let thumbnailImages: [UUID: UIImage]
+    let onDelete: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        ZStack(alignment: .topTrailing) {
+            NavigationLink(value: project) {
+                thumbnail
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier(project.title ?? "無題のレイアウト")
+
+            Menu {
+                Button(role: .destructive, action: onDelete) {
+                    Label("削除", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle.fill")
+                    .font(.title3)
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, .black.opacity(0.35))
+                    .padding(6)
+            }
+            .accessibilityIdentifier("projectList.menu")
+        }
+        .accessibilityIdentifier("projectList.row")
+    }
+
+    private var thumbnail: some View {
+        ZStack {
+            Color(.secondarySystemBackground)
             if let page = project.orderedPages.first {
                 CanvasRenderView(
                     page: page,
@@ -107,22 +134,35 @@ private struct ProjectRow: View {
                     defaultFrame: project.defaultPhotoFrame,
                     images: thumbnailImages
                 )
-                .frame(height: 64)
-                .clipShape(RoundedRectangle(cornerRadius: 4))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(Color(.systemGray4), lineWidth: 0.5)
-                )
-                .accessibilityIdentifier("projectList.thumbnail")
+                .padding(6)
             }
-            VStack(alignment: .leading, spacing: 4) {
-                Text(project.title ?? "無題のレイアウト")
-                    .font(.headline)
-                Text("\(project.pages.count)ページ・\(project.placements.count)枚 — \(project.updatedAt.formatted(date: .abbreviated, time: .shortened))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            // 複数ページはページ数バッジで示す
+            if project.pages.count > 1 {
+                pageBadge
             }
         }
-        .accessibilityIdentifier("projectList.row")
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color(.systemGray5), lineWidth: 0.5)
+        )
+        .accessibilityIdentifier("projectList.thumbnail")
+    }
+
+    private var pageBadge: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                Text("\(project.pages.count)ページ")
+                    .font(.caption2)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(.black.opacity(0.5)))
+                    .padding(6)
+            }
+        }
     }
 }

@@ -42,9 +42,9 @@ final class ScreenshotSmokeTests: XCTestCase {
         sleep(1)
         attachScreenshot(named: "02d-seamless-two-pages")
 
-        // 一覧へ戻ると下書きが増えている
+        // 一覧へ戻ると下書きが増えている（グリッドのセルは名前をidentifierに持つ）
         app.navigationBars.buttons.firstMatch.tap()
-        let row = app.staticTexts["無題のレイアウト"]
+        let row = app.buttons["無題のレイアウト"]
         XCTAssertTrue(row.waitForExistence(timeout: 10))
     }
 
@@ -55,7 +55,7 @@ final class ScreenshotSmokeTests: XCTestCase {
         app.launch()
 
         // デモプロジェクト（生成写真1枚・白余白プリセット入り）を開く
-        let demoRow = app.staticTexts["デモ"]
+        let demoRow = app.buttons["デモ"]
         XCTAssertTrue(demoRow.waitForExistence(timeout: 15))
         demoRow.tap()
 
@@ -97,7 +97,7 @@ final class ScreenshotSmokeTests: XCTestCase {
         app.launch()
 
         // X 3枚デモ（左大＋右2段のタイムライン合成ビュー）を開く
-        let xRow = app.staticTexts["X投稿（3枚）"]
+        let xRow = app.buttons["X投稿（3枚）"]
         XCTAssertTrue(xRow.waitForExistence(timeout: 15))
         xRow.tap()
 
