@@ -126,6 +126,15 @@ struct PageEditorView: View {
                 .accessibilityIdentifier("pageEditor.redo")
             }
             ToolbarItem(placement: .primaryAction) {
+                // ページの追加・削除・並べ替えは俯瞰モードで（常時見える上部に置く）
+                Button {
+                    viewModel.enterOverview()
+                } label: {
+                    Image(systemName: "rectangle.stack")
+                }
+                .accessibilityIdentifier("pageEditor.overview")
+            }
+            ToolbarItem(placement: .primaryAction) {
                 Button {
                     photoPickerPresented = true
                 } label: {
@@ -870,12 +879,6 @@ struct PageEditorView: View {
             }
 
             framePresetMenu
-
-            // ページの追加・削除・並べ替えは俯瞰モードで行う（キャンバスをピンチアウトでも入れる）
-            toolButton("ページ", systemImage: "rectangle.stack",
-                       identifier: "pageEditor.overview") {
-                viewModel.enterOverview()
-            }
 
             if viewModel.pageCount > 1 {
                 Text("\(viewModel.currentPageIndex + 1)/\(viewModel.pageCount)")
