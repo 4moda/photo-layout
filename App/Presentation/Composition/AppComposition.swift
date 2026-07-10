@@ -6,9 +6,16 @@ import PhotoLayoutCore
 /// 結線するのはこのファイルだけ（Clean Architectureの"main"に相当）。
 @MainActor
 enum AppComposition {
-    static let container = try! ModelContainer(
-        for: ProjectModel.self, PageModel.self, PlacementModel.self
-    )
+    /// UIテスト/スクショ撮影用に `--reset-store` でインメモリ・ストアへ切替える。
+    /// 起動ごとに空から始まるため、空状態やデモ投入の結果を決定論的に撮影できる。
+    static let container: ModelContainer = {
+        let inMemory = CommandLine.arguments.contains("--reset-store")
+        let config = ModelConfiguration(isStoredInMemoryOnly: inMemory)
+        return try! ModelContainer(
+            for: ProjectModel.self, PageModel.self, PlacementModel.self,
+            configurations: config
+        )
+    }()
 
     private static var repository: SwiftDataProjectRepository {
         SwiftDataProjectRepository(modelContext: container.mainContext)

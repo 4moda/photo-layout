@@ -62,6 +62,11 @@ jobs:
           FASTLANE_HIDE_CHANGELOG: "1"
         run: fastlane snapshot
 
+      # 画面ID/機能ID/言語/端末で絞り込める一覧 index.html を生成（fastlane出力の見せ方を補強）。
+      - name: Build filterable screenshot index
+        if: always()
+        run: python3 tools/build_screenshot_index.py fastlane/screenshots
+
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4

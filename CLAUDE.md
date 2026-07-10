@@ -35,6 +35,7 @@ xcodegen generate
 
 - [docs/design.md](docs/design.md) — 統一「汎用プロジェクト」モデル、アーキテクチャ、エンティティ、座標系、Coreサービス早見表、書き出し3系統、編集モデル、永続化
 - [docs/decisions.md](docs/decisions.md) — 主要な設計判断の理由と**廃止した設計（復活させないこと）**
+- [docs/screens.md](docs/screens.md) — 全画面の**画面ID・機能ID**、状態と操作の網羅カタログ。スクショ命名規約（`画面ID-機能ID｜説明`）とフィルタ用 index.html の対応
 
 ## アーキテクチャ（要点。詳細は docs/design.md）
 
