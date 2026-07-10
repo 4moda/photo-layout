@@ -16,8 +16,6 @@ final class PageEditorViewModel {
 
     var currentPageIndex = 0
     var selectedPlacementID: UUID?
-    /// non-nil = スライド（ページ）を選択中。写真選択とは排他。ページ操作メニューを出す
-    var selectedPageIndex: Int?
     /// non-nil = クロップモード（ダブルタップで枠を固定し中身を動かす）
     var cropModePlacementID: UUID?
     /// スナップ発生中に表示するガイド線（配置領域の正規化座標）
@@ -62,21 +60,15 @@ final class PageEditorViewModel {
     }
 
     func onAppear() async {
-        // 既定はカレントスライドを選択状態に（ページメニューをすぐ使える）
-        if selectedPlacementID == nil, selectedPageIndex == nil {
-            selectedPageIndex = currentPageIndex
-        }
         await refreshImages()
     }
 
     // MARK: - ページ切替
 
-    /// 選択状態を保ったまま「現在ページ」だけ移す（シームレスキャンバスのパン/タップ用）。
-    /// ページ選択中はパンに追従して選択スライドも移す。
+    /// 選択状態を保ったまま「現在ページ」だけ移す（シームレスキャンバスのパン/タップ用）
     func focusPage(_ index: Int) {
         guard project.page(at: index) != nil else { return }
         currentPageIndex = index
-        if selectedPageIndex != nil { selectedPageIndex = index }
     }
 
     // MARK: - ページ俯瞰モード（挿入・削除・並べ替え。確定までは保存しない）
@@ -90,7 +82,6 @@ final class PageEditorViewModel {
         overviewBase = project
         isOverviewMode = true
         selectedPlacementID = nil
-        selectedPageIndex = nil
         cropModePlacementID = nil
         activeGuides = []
     }
@@ -117,6 +108,11 @@ final class PageEditorViewModel {
 
     func overviewInsertPage(at index: Int) {
         project.insertPage(at: index)
+    }
+
+    /// スライドを複製して直後に挿入（俯瞰の長押しメニュー用）
+    func overviewDuplicatePage(at index: Int) {
+        project.duplicatePage(at: index)
     }
 
     func overviewDeletePage(at index: Int) {
@@ -217,45 +213,19 @@ final class PageEditorViewModel {
 
     func select(_ placementID: UUID?) {
         selectedPlacementID = placementID
-        selectedPageIndex = nil
         if cropModePlacementID != placementID {
             cropModePlacementID = nil
         }
     }
 
-    /// スライド（ページ）を選択する（写真選択とは排他）。ページ操作メニューを出す
-    func selectPage(_ index: Int) {
-        guard project.page(at: index) != nil else { return }
-        selectedPlacementID = nil
-        cropModePlacementID = nil
-        selectedPageIndex = index
-        currentPageIndex = index
-    }
-
-    /// すべての選択を解除（カルーセル視点＝何も選択なし）
+    /// 選択解除（写真の選択を外す＝スライド編集コンテキストへ戻る）
     func deselectAll() {
         selectedPlacementID = nil
-        selectedPageIndex = nil
         cropModePlacementID = nil
         activeGuides = []
     }
 
-    // MARK: - ページ操作（ページ選択メニュー）
-
-    func duplicateCurrentPage() async {
-        record()
-        project.duplicatePage(at: currentPageIndex)
-        await persist(refreshImages: false)
-    }
-
-    func deleteCurrentPage() async {
-        guard pageCount > 1 else { return }
-        record()
-        project.removePage(at: currentPageIndex)
-        currentPageIndex = min(currentPageIndex, pageCount - 1)
-        selectedPageIndex = nil
-        await persist()
-    }
+    // MARK: - スライドのスタイル・レイヤー（スライド編集コンテキスト）
 
     func setCurrentPageStyle(_ preset: FramePreset) async {
         record()
@@ -394,7 +364,6 @@ final class PageEditorViewModel {
         guard let previous = history.undo(current: project) else { return }
         project = previous
         selectedPlacementID = nil
-        selectedPageIndex = nil
         cropModePlacementID = nil
         activeGuides = []
         currentPageIndex = min(currentPageIndex, max(pageCount - 1, 0))
@@ -405,7 +374,6 @@ final class PageEditorViewModel {
         guard let next = history.redo(current: project) else { return }
         project = next
         selectedPlacementID = nil
-        selectedPageIndex = nil
         cropModePlacementID = nil
         activeGuides = []
         currentPageIndex = min(currentPageIndex, max(pageCount - 1, 0))

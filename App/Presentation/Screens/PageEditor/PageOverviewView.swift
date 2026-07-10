@@ -53,74 +53,62 @@ struct PageOverviewView: View {
 
     // MARK: - ページカード
 
+    /// スライド1枚のカード。長押しで SCRL 風メニュー（左に追加/右に追加/複製/移動/削除）。
     private func card(for page: PageEntity) -> some View {
         let isCurrent = page.index == viewModel.currentPageIndex
-        let count = viewModel.project.placements(onPage: page.index).count
         return VStack(spacing: 8) {
-            ZStack(alignment: .topLeading) {
-                CanvasRenderView(
-                    page: page,
-                    placements: SpreadGeometry.visiblePlacements(onPage: page.index, project: viewModel.project),
-                    defaultFrame: viewModel.project.defaultPhotoFrame,
-                    images: thumbnailImages
-                )
-                .frame(width: page.aspect.ratio * thumbnailHeight, height: thumbnailHeight)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(isCurrent ? Color.accentColor : Color.white.opacity(0.25),
-                                lineWidth: isCurrent ? 2.5 : 0.5)
-                )
+            CanvasRenderView(
+                page: page,
+                placements: SpreadGeometry.visiblePlacements(onPage: page.index, project: viewModel.project),
+                defaultFrame: viewModel.project.defaultPhotoFrame,
+                images: thumbnailImages
+            )
+            .frame(width: page.aspect.ratio * thumbnailHeight, height: thumbnailHeight)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(isCurrent ? Color.accentColor : Color.white.opacity(0.25),
+                            lineWidth: isCurrent ? 2.5 : 0.5)
+            )
 
-                // 削除（最後の1ページは残す）
-                Button {
-                    viewModel.overviewDeletePage(at: page.index)
-                } label: {
-                    Image(systemName: "minus.circle.fill")
-                        .font(.title3)
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(.white, .red)
-                }
-                .padding(6)
-                .disabled(viewModel.pageCount <= 1)
-                .opacity(viewModel.pageCount <= 1 ? 0.3 : 1)
-                .accessibilityIdentifier("overview.delete\(page.index)")
-            }
-
-            Text("ページ \(page.index + 1) ・ \(count)枚")
-                .font(.caption)
+            Text("\(page.index + 1)")
+                .font(.caption.monospacedDigit())
                 .foregroundStyle(.white)
-
-            // 並べ替え（左右）と挿入
-            HStack(spacing: 14) {
-                Button {
-                    viewModel.overviewMovePage(from: page.index, to: page.index - 1)
-                } label: {
-                    Image(systemName: "chevron.left.circle")
-                }
-                .disabled(page.index == 0)
-                .accessibilityIdentifier("overview.moveLeft\(page.index)")
-
-                Button {
-                    viewModel.overviewInsertPage(at: page.index + 1)
-                } label: {
-                    Image(systemName: "plus.circle")
-                }
-                .accessibilityIdentifier("overview.insertAfter\(page.index)")
-
-                Button {
-                    viewModel.overviewMovePage(from: page.index, to: page.index + 1)
-                } label: {
-                    Image(systemName: "chevron.right.circle")
-                }
-                .disabled(page.index >= viewModel.pageCount - 1)
-                .accessibilityIdentifier("overview.moveRight\(page.index)")
-            }
-            .font(.title3)
-            .buttonStyle(.plain)
-            .foregroundStyle(.white)
+            // 長押しでメニューが出る操作可能さを示すハンドル（文字なし）
+            Image(systemName: "line.3.horizontal")
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.4))
         }
+        .contentShape(Rectangle())
+        .contextMenu { pageCardMenu(for: page) }
         .accessibilityIdentifier("overview.row")
+    }
+
+    @ViewBuilder
+    private func pageCardMenu(for page: PageEntity) -> some View {
+        Button {
+            viewModel.overviewInsertPage(at: page.index)
+        } label: { Label("左に追加", systemImage: "arrow.left.to.line") }
+        Button {
+            viewModel.overviewInsertPage(at: page.index + 1)
+        } label: { Label("右に追加", systemImage: "arrow.right.to.line") }
+        Button {
+            viewModel.overviewDuplicatePage(at: page.index)
+        } label: { Label("複製", systemImage: "plus.square.on.square") }
+        Divider()
+        Button {
+            viewModel.overviewMovePage(from: page.index, to: page.index - 1)
+        } label: { Label("左へ移動", systemImage: "arrow.left") }
+            .disabled(page.index == 0)
+        Button {
+            viewModel.overviewMovePage(from: page.index, to: page.index + 1)
+        } label: { Label("右へ移動", systemImage: "arrow.right") }
+            .disabled(page.index >= viewModel.pageCount - 1)
+        Divider()
+        Button(role: .destructive) {
+            viewModel.overviewDeletePage(at: page.index)
+        } label: { Label("削除", systemImage: "trash") }
+            .disabled(viewModel.pageCount <= 1)
     }
 
     /// 末尾の「ページを追加」カード
