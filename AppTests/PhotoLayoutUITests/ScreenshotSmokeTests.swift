@@ -64,7 +64,7 @@ final class ScreenshotSmokeTests: XCTestCase {
         }
     }
 
-    // MARK: - S01 プロジェクト一覧: 複数プロジェクト（サムネイル・ページ数バッジ）
+    // MARK: - S01 プロジェクト一覧: 複数プロジェクト（サムネイル・バッジ）・⋯削除メニュー
 
     @MainActor
     func testProjectListPopulated() throws {
@@ -74,6 +74,44 @@ final class ScreenshotSmokeTests: XCTestCase {
         XCTAssertTrue(app.buttons["デモ"].waitForExistence(timeout: 15))
         sleep(1)
         snapshot("S01-F01｜一覧（複数プロジェクト・サムネイル＋ページ数バッジ）")
+
+        // S01-F10: セル右上の⋯メニュー（削除）。開くだけで削除はしない。
+        let cellMenu = app.buttons["projectList.menu"].firstMatch
+        if cellMenu.waitForExistence(timeout: 3) {
+            cellMenu.tap()
+            if app.buttons["削除"].waitForExistence(timeout: 3) {
+                snapshot("S01-F10｜セルの⋯メニュー（削除）")
+            }
+        }
+    }
+
+    // MARK: - S01 用紙サイズ別の新規作成（S01-F04〜F08）→ 各アスペクトの空キャンバス
+
+    @MainActor
+    func testCanvasAspectsFromCreate() throws {
+        let app = makeApp(seed: false)
+        app.launch()
+        XCTAssertTrue(app.navigationBars["PhotoLayout"].waitForExistence(timeout: 15))
+
+        let sizes: [(id: String, name: String)] = [
+            ("projectList.new_square", "S01-F04｜新規作成: 正方形 1:1（空キャンバス）"),
+            ("projectList.new_portrait45", "S01-F05｜新規作成: 縦 4:5（空キャンバス）"),
+            ("projectList.new_portrait34", "S01-F06｜新規作成: 縦 3:4（空キャンバス）"),
+            ("projectList.new_landscape169", "S01-F07｜新規作成: 横 16:9（空キャンバス）"),
+            ("projectList.new_landscape191", "S01-F08｜新規作成: 横長 1.91:1（空キャンバス）")
+        ]
+        for size in sizes {
+            let add = app.buttons["projectList.add"]
+            XCTAssertTrue(add.waitForExistence(timeout: 5))
+            add.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            let choice = app.buttons[size.id]
+            XCTAssertTrue(choice.waitForExistence(timeout: 5), "\(size.id) が無い")
+            choice.tap()
+            XCTAssertTrue(app.buttons["pageEditor.export"].waitForExistence(timeout: 10))
+            sleep(1)
+            snapshot(size.name)
+            back(app)
+        }
     }
 
     // MARK: - S02 デモ写真: 選択・枠比率・クロップ・枠・レイヤー / S04 書き出しプレビュー
@@ -164,6 +202,7 @@ final class ScreenshotSmokeTests: XCTestCase {
             if app.buttons["overview.done"].waitForExistence(timeout: 5) {
                 sleep(1)
                 snapshot("S03｜スライド一覧（3スライド）")
+                captureOverviewMenus(app)
                 app.buttons["overview.done"].tap()
             }
         }
@@ -192,6 +231,40 @@ final class ScreenshotSmokeTests: XCTestCase {
         row.tap()
         XCTAssertTrue(app.buttons["pageEditor.export"].waitForExistence(timeout: 15))
         sleep(2)
+    }
+
+    /// S03 俯瞰のメニュー系（比率・背景・長押しカードメニュー）を撮る。
+    /// メニューは popover。撮ったらナビバーをタップして閉じ、次を開く。
+    @MainActor
+    private func captureOverviewMenus(_ app: XCUIApplication) {
+        let nav = app.navigationBars["スライド"]
+
+        if app.buttons["overview.ratio"].waitForExistence(timeout: 3) {
+            app.buttons["overview.ratio"].tap()
+            if app.buttons["1:1"].waitForExistence(timeout: 3) {
+                snapshot("S03-F11｜比率メニュー（カルーセル全体の比率）")
+            }
+            if nav.exists { nav.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        }
+
+        if app.buttons["overview.background"].waitForExistence(timeout: 3) {
+            app.buttons["overview.background"].tap()
+            if app.buttons["黒"].waitForExistence(timeout: 3) {
+                snapshot("S03-F12｜背景メニュー（プロジェクト共通の背景色）")
+            }
+            if nav.exists { nav.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        }
+
+        // 長押しでSCRL風カードメニュー（左に追加/右に追加/複製/移動/削除 = S03-F04〜F09）
+        // カードの要素型は環境で揺れるため型を問わず探す
+        let card = app.descendants(matching: .any)["overview.row"].firstMatch
+        if card.waitForExistence(timeout: 3) {
+            card.press(forDuration: 1.1)
+            if app.buttons["複製"].waitForExistence(timeout: 3) {
+                snapshot("S03-F04〜F09｜カード長押しメニュー（追加/複製/移動/削除）")
+            }
+            if nav.exists { nav.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        }
     }
 
     @MainActor
