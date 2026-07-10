@@ -192,10 +192,17 @@ extension ProjectEntity {
         }
     }
 
-    /// 指定スライドの「背景色」だけを設定する（余白は維持）。スライド編集コンテキスト用。
+    /// 指定スライドの「背景色」だけを設定する（余白は維持）。
     public mutating func setPageBackgroundColor(_ color: LayoutColor, pageIndex: Int) {
         guard let idx = pages.firstIndex(where: { $0.index == pageIndex }) else { return }
         pages[idx].background = CanvasBackgroundStyle(color: color, margins: pages[idx].background.margins)
+    }
+
+    /// プロジェクト全スライドの背景色を設定する（背景はプロジェクト共通）。
+    public mutating func setAllPagesBackgroundColor(_ color: LayoutColor) {
+        for i in pages.indices {
+            pages[i].background = CanvasBackgroundStyle(color: color, margins: pages[i].background.margins)
+        }
     }
 
     /// 選択中の写真1枚の「枠（縁）」を設定する。nilでプロジェクト既定に戻す。写真選択コンテキスト用。

@@ -16,11 +16,13 @@ struct PageEditorView: View {
     @State private var slotPickerPresented = false
     @State private var slotFillItem: PhotosPickerItem?
     @State private var pendingSlotFill: (page: Int, slot: Int)?
-    // フッターから開くビジュアル選択シート（テンプレ/背景/比率/レイヤー）は1枚に集約
+    // フッターから開くビジュアル選択シート（テンプレ/レイヤー/枠）は1枚に集約
     @State private var activeSheet: EditorSheet?
+    // 書き出しプレビュー画面
+    @State private var previewPresented = false
 
     enum EditorSheet: Int, Identifiable {
-        case template, background, layers, frame
+        case template, layers, frame
         var id: Int { rawValue }
     }
     /// 角ハンドルドラッグ開始時の角と中心（拡縮中に選択枠が動いても基準がぶれないよう固定）
@@ -75,10 +77,13 @@ struct PageEditorView: View {
                 .sheet(item: $activeSheet) { sheet in
                     switch sheet {
                     case .template: templatePickerSheet
-                    case .background: backgroundPickerSheet
                     case .layers: layerSheet
                     case .frame: framePickerSheet
                     }
+                }
+                // 書き出しプレビュー（俯瞰カバーと別ノードに付けて多重モーダル競合を避ける）
+                .fullScreenCover(isPresented: $previewPresented) {
+                    PreviewView(viewModel: viewModel)
                 }
         }
         .padding(.vertical)
@@ -110,24 +115,13 @@ struct PageEditorView: View {
                     .foregroundStyle(.secondary)
                     .accessibilityIdentifier("pageEditor.pageLabel")
             }
-            ToolbarItem(placement: .primaryAction) {
-                // スライドの追加・複製・並べ替え・削除は俯瞰（スライド一覧）で。常時上部に置く
-                Button {
-                    viewModel.enterOverview()
-                } label: {
-                    Image(systemName: "rectangle.stack")
-                }
-                .accessibilityIdentifier("pageEditor.overview")
-            }
-            ToolbarItem(placement: .primaryAction) {
-                exportMenu
-            }
         }
+        // 俯瞰・書き出しはフッターへ集約（上部バーは戻る/undo/redo/番号のみ）
         .fullScreenCover(isPresented: Binding(
             get: { viewModel.isOverviewMode },
             set: { if !$0 { viewModel.cancelOverview() } }
         )) {
-            PageOverviewView(viewModel: viewModel, thumbnailImages: viewModel.previewImages)
+            PageOverviewView(viewModel: viewModel)
         }
         .photosPicker(isPresented: $photoPickerPresented, selection: $pickerItems, matching: .images)
         .onChange(of: pickerItems) { _, newItems in
@@ -145,14 +139,6 @@ struct PageEditorView: View {
             }
         }
         .task { await viewModel.onAppear() }
-        .alert("書き出し", isPresented: .init(
-            get: { viewModel.exportMessage != nil },
-            set: { if !$0 { viewModel.exportMessage = nil } }
-        )) {
-            Button("OK") { viewModel.exportMessage = nil }
-        } message: {
-            Text(viewModel.exportMessage ?? "")
-        }
     }
 
     // MARK: - シームレスキャンバス（スプレッド表示）
@@ -253,15 +239,15 @@ struct PageEditorView: View {
                     let w = slot.width * content.width
                     let h = slot.height * content.height
                     ZStack {
-                        // 白ページ・黒ページどちらでも見えるよう、淡いグレー地＋アクセント色の破線
+                        // スロット範囲がはっきり分かるよう、しっかりグレーで塗りつぶす＋アクセント破線
                         RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.gray.opacity(0.18))
+                            .fill(Color(white: 0.72))
                         RoundedRectangle(cornerRadius: 6)
                             .strokeBorder(Color.accentColor.opacity(0.9),
                                           style: StrokeStyle(lineWidth: 1.5, dash: [7, 5]))
                         Image(systemName: "plus")
                             .font(.system(size: min(w, h) * 0.28))
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(Color.white)
                     }
                     .frame(width: w, height: h)
                     .position(
@@ -748,41 +734,6 @@ struct PageEditorView: View {
         }
     }
 
-    /// 書き出し: ページを1枚で / 各写真を個別に（汎用。SNS別モードは持たない）
-    @ViewBuilder
-    private var exportMenu: some View {
-        if viewModel.isExporting {
-            ProgressView()
-        } else if viewModel.currentPagePhotoCount >= 2 {
-            Menu {
-                Button {
-                    Task { await viewModel.exportPages() }
-                } label: {
-                    Label(viewModel.pageCount > 1 ? "各ページを1枚ずつ書き出す" : "ページを1枚で書き出す",
-                          systemImage: "doc")
-                }
-                Button {
-                    Task { await viewModel.exportIndividualPhotos() }
-                } label: {
-                    Label("各写真を個別に書き出す（\(viewModel.currentPagePhotoCount)枚）",
-                          systemImage: "square.grid.2x2")
-                }
-            } label: {
-                Image(systemName: "square.and.arrow.down")
-            }
-            .disabled(!viewModel.hasPhoto)
-            .accessibilityIdentifier("pageEditor.export")
-        } else {
-            Button {
-                Task { await viewModel.exportPages() }
-            } label: {
-                Image(systemName: "square.and.arrow.down")
-            }
-            .disabled(!viewModel.hasPhoto)
-            .accessibilityIdentifier("pageEditor.export")
-        }
-    }
-
     /// 枠アスペクトのプリセット（写真は歪まずクロップ窓が変わる）
     private static let frameAspectChoices: [(label: String, pixelAspect: Double)] = [
         ("1:1", 1.0),
@@ -826,15 +777,6 @@ struct PageEditorView: View {
         }
     }
 
-    /// ページ全体の背景色（スライド編集コンテキスト）
-    private static let pageBackgroundColors: [(label: String, color: LayoutColor)] = [
-        ("白", .white),
-        ("薄グレー", LayoutColor(red: 0.92, green: 0.92, blue: 0.92)),
-        ("グレー", LayoutColor(red: 0.5, green: 0.5, blue: 0.5)),
-        ("濃グレー", LayoutColor(red: 0.17, green: 0.17, blue: 0.17)),
-        ("黒", .black)
-    ]
-
     /// 写真1枚の枠（縁）プリセット（写真選択コンテキスト）
     private static let photoFrameChoices: [(label: String, frame: PhotoFrameStyle?)] = [
         ("なし", nil),
@@ -844,68 +786,61 @@ struct PageEditorView: View {
         ("角丸", PhotoFrameStyle(borderColor: .clear, borderWidthRatio: 0, cornerRadiusRatio: 0.05))
     ]
 
-    /// スライド編集メニュー（=既定/何も選択なし）。中央に大きな写真追加⊕。
-    /// テンプレート / 背景 / ⊕ / レイヤー（比率は俯瞰へ移動）。
+    /// スライド編集メニュー（=既定/何も選択なし）。
+    /// テンプレート / ⊕写真追加 / ↓ダウンロード(中央・主役) / レイヤー / 俯瞰(右端)。
+    /// 背景はプロジェクト共通なので俯瞰・新規作成で設定（ここには置かない）。
     private var slideControls: some View {
         HStack(alignment: .top, spacing: 0) {
             templateButton.frame(maxWidth: .infinity)
-            toolButton("背景", systemImage: "square.dashed", identifier: "pageEditor.backgroundMenu") {
-                activeSheet = .background
-            }
-            .frame(maxWidth: .infinity)
-            addPhotoHero.frame(maxWidth: .infinity)
+            addPhotoButton.frame(maxWidth: .infinity)
+            downloadHero.frame(maxWidth: .infinity)
             toolButton("レイヤー", systemImage: "square.stack.3d.up", identifier: "pageEditor.layerButton") {
                 activeSheet = .layers
             }
             .frame(maxWidth: .infinity)
+            toolButton("スライド", systemImage: "rectangle.stack", identifier: "pageEditor.overview") {
+                viewModel.enterOverview()
+            }
+            .frame(maxWidth: .infinity)
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 4)
     }
 
-    /// フッター中央の主役: 大きめの写真追加⊕（文字なし＝直感的に分かる）
-    private var addPhotoHero: some View {
+    /// 写真追加（アイコンのみ・文字なし）
+    private var addPhotoButton: some View {
         Button {
             photoPickerPresented = true
         } label: {
-            Image(systemName: "plus.circle.fill")
-                .font(.system(size: 40))
+            Image(systemName: "photo.badge.plus")
+                .font(.system(size: 24))
                 .foregroundStyle(Color.accentColor)
-                .padding(.vertical, 4)
+                .frame(height: 34)
+                .padding(.vertical, 6)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("pageEditor.addPhoto")
     }
 
-    /// ページ全体の背景色を色スウォッチで選ぶシート（スライド編集）
-    private var backgroundPickerSheet: some View {
-        NavigationStack {
-            ScrollView {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 3), spacing: 16) {
-                    ForEach(Self.pageBackgroundColors, id: \.label) { choice in
-                        Button {
-                            activeSheet = nil
-                            Task { await viewModel.setCurrentPageBackgroundColor(choice.color) }
-                        } label: {
-                            VStack(spacing: 6) {
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(swiftUIColor(choice.color))
-                                    .aspectRatio(1, contentMode: .fit)
-                                    .overlay(RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color(.systemGray4), lineWidth: 0.5))
-                                Text(choice.label).font(.caption2).foregroundStyle(.secondary)
-                                    .lineLimit(1).minimumScaleFactor(0.7)
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(20)
+    /// フッター中央の主役: ダウンロード（↓）。押すとプレビュー画面へ。
+    @ViewBuilder
+    private var downloadHero: some View {
+        if viewModel.isExporting {
+            ProgressView().frame(height: 44).padding(.vertical, 4)
+        } else {
+            Button {
+                previewPresented = true
+            } label: {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 42))
+                    .foregroundStyle(viewModel.hasPhoto ? Color.accentColor : Color.gray)
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
             }
-            .navigationTitle("背景色").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("閉じる") { activeSheet = nil } } }
+            .buttonStyle(.plain)
+            .disabled(!viewModel.hasPhoto)
+            .accessibilityIdentifier("pageEditor.export")
         }
-        .presentationDetents([.medium])
     }
 
     /// 選択中の写真の枠（縁）をプレビューで選ぶシート（写真選択）
@@ -933,10 +868,6 @@ struct PageEditorView: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("閉じる") { activeSheet = nil } } }
         }
         .presentationDetents([.medium])
-    }
-
-    private func swiftUIColor(_ c: LayoutColor) -> Color {
-        Color(red: c.red, green: c.green, blue: c.blue, opacity: c.alpha)
     }
 
     /// レイヤー順（重なり）の並べ替えシート: 現在スライドの写真を前面順で並べ、上下で入替。

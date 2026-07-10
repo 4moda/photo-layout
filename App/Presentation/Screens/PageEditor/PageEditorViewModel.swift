@@ -110,9 +110,16 @@ final class PageEditorViewModel {
         project.insertPage(at: index)
     }
 
-    /// スライドを複製して直後に挿入（俯瞰の長押しメニュー用）
-    func overviewDuplicatePage(at index: Int) {
+    /// スライドを複製して直後に挿入（俯瞰の長押しメニュー用）。
+    /// 複製された配置は新IDなのでプレビュー画像を再生成する（複製先にも画像が出るように）。
+    func overviewDuplicatePage(at index: Int) async {
         project.duplicatePage(at: index)
+        await refreshImages()
+    }
+
+    /// 俯瞰でのプロジェクト全体の背景色変更（暫定・確定は完了時）
+    func overviewSetBackgroundColor(_ color: LayoutColor) {
+        project.setAllPagesBackgroundColor(color)
     }
 
     func overviewDeletePage(at index: Int) {
@@ -235,13 +242,6 @@ final class PageEditorViewModel {
     }
 
     // MARK: - スライドのスタイル・レイヤー（スライド編集コンテキスト）
-
-    /// スライドの背景色を設定（スライド編集コンテキスト）
-    func setCurrentPageBackgroundColor(_ color: LayoutColor) async {
-        record()
-        project.setPageBackgroundColor(color, pageIndex: currentPageIndex)
-        await persist(refreshImages: false)
-    }
 
     /// 選択中の写真の枠（縁）を設定（写真選択コンテキスト）
     func setSelectedPhotoFrame(_ frame: PhotoFrameStyle?) async {

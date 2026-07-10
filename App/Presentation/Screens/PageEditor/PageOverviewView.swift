@@ -6,8 +6,6 @@ import PhotoLayoutCore
 /// 左上=キャンセル（開始時点へ復帰）、右上=完了（確定して保存）。
 struct PageOverviewView: View {
     @Bindable var viewModel: PageEditorViewModel
-    /// 1ページ目以外も含む、全配置のサムネイル画像（配置ID→画像）
-    let thumbnailImages: [UUID: UIImage]
 
     /// サムネイルの高さ。ページのアスペクトに応じて幅が決まる（2〜3ページ分が見える目安）
     private let thumbnailHeight: CGFloat = 200
@@ -18,6 +16,15 @@ struct PageOverviewView: View {
         ("1:1", AspectRatio(width: 1, height: 1)),
         ("1.91:1 横 (Instagram)", AspectRatio(width: 1.91, height: 1)),
         ("16:9 横", AspectRatio(width: 16, height: 9))
+    ]
+
+    /// プロジェクト共通の背景色（俯瞰・新規作成で設定）
+    private static let backgroundColors: [(label: String, color: LayoutColor)] = [
+        ("白", .white),
+        ("薄グレー", LayoutColor(red: 0.92, green: 0.92, blue: 0.92)),
+        ("グレー", LayoutColor(red: 0.5, green: 0.5, blue: 0.5)),
+        ("濃グレー", LayoutColor(red: 0.17, green: 0.17, blue: 0.17)),
+        ("黒", .black)
     ]
 
     var body: some View {
@@ -61,6 +68,20 @@ struct PageOverviewView: View {
                     }
                     .accessibilityIdentifier("overview.ratio")
                 }
+                ToolbarItem(placement: .bottomBar) { Spacer() }
+                ToolbarItem(placement: .bottomBar) {
+                    // プロジェクト共通の背景色（全スライドに適用。確定は完了時）
+                    Menu {
+                        ForEach(Self.backgroundColors, id: \.label) { choice in
+                            Button(choice.label) {
+                                viewModel.overviewSetBackgroundColor(choice.color)
+                            }
+                        }
+                    } label: {
+                        Label("背景", systemImage: "square.dashed")
+                    }
+                    .accessibilityIdentifier("overview.background")
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完了") {
                         Task { await viewModel.confirmOverview() }
@@ -89,7 +110,7 @@ struct PageOverviewView: View {
                 page: page,
                 placements: SpreadGeometry.visiblePlacements(onPage: page.index, project: viewModel.project),
                 defaultFrame: viewModel.project.defaultPhotoFrame,
-                images: thumbnailImages
+                images: viewModel.previewImages
             )
             .frame(width: page.aspect.ratio * thumbnailHeight, height: thumbnailHeight)
             .clipShape(RoundedRectangle(cornerRadius: 6))
@@ -121,7 +142,7 @@ struct PageOverviewView: View {
             viewModel.overviewInsertPage(at: page.index + 1)
         } label: { Label("右に追加", systemImage: "arrow.right.to.line") }
         Button {
-            viewModel.overviewDuplicatePage(at: page.index)
+            Task { await viewModel.overviewDuplicatePage(at: page.index) }
         } label: { Label("複製", systemImage: "plus.square.on.square") }
         Divider()
         Button {
