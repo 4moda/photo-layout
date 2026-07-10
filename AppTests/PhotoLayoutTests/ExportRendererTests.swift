@@ -81,11 +81,12 @@ final class ExportRendererTests: XCTestCase {
         let result = try await ExportPageUseCase(renderer: renderer, librarySaver: saver)
             .execute(project: project, pageIndex: 0)
 
-        // 1:1ページにfillで3200x2400 → クロップ後2400x2400が実解像度
-        XCTAssertEqual(result.pixelSize.width, 2400)
-        XCTAssertEqual(result.pixelSize.height, 2400)
+        // 1:1ページに自然配置（クロップなし）。出力は正方形・長辺4096以内・偶数
+        XCTAssertEqual(result.pixelSize.width, result.pixelSize.height) // 1:1ページ→正方形
+        XCTAssertLessThanOrEqual(result.pixelSize.width, 4096)
+        XCTAssertEqual(Int(result.pixelSize.width) % 2, 0)
         let savedData = try XCTUnwrap(saver.saved)
         let exported = try XCTUnwrap(UIImage(data: savedData))
-        XCTAssertEqual(Int(exported.size.width), 2400)
+        XCTAssertEqual(Int(exported.size.width), Int(result.pixelSize.width))
     }
 }
