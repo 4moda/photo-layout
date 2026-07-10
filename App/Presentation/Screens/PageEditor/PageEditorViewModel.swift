@@ -126,6 +126,11 @@ final class PageEditorViewModel {
         project.movePage(from: from, to: to)
     }
 
+    /// 俯瞰でのカルーセル全体の比率変更（暫定・確定は完了時。即保存しない）
+    func overviewSetAspect(_ aspect: AspectRatio) {
+        project.setPageAspect(aspect)
+    }
+
     // MARK: - 写真・スタイル
 
     func addPhotoData(_ data: Data) async {
@@ -227,9 +232,18 @@ final class PageEditorViewModel {
 
     // MARK: - スライドのスタイル・レイヤー（スライド編集コンテキスト）
 
-    func setCurrentPageStyle(_ preset: FramePreset) async {
+    /// スライドの背景色を設定（スライド編集コンテキスト）
+    func setCurrentPageBackgroundColor(_ color: LayoutColor) async {
         record()
-        project.setPageStyle(preset, pageIndex: currentPageIndex)
+        project.setPageBackgroundColor(color, pageIndex: currentPageIndex)
+        await persist(refreshImages: false)
+    }
+
+    /// 選択中の写真の枠（縁）を設定（写真選択コンテキスト）
+    func setSelectedPhotoFrame(_ frame: PhotoFrameStyle?) async {
+        guard let id = selectedPlacementID else { return }
+        record()
+        project.setPlacementFrame(frame, placementID: id)
         await persist(refreshImages: false)
     }
 

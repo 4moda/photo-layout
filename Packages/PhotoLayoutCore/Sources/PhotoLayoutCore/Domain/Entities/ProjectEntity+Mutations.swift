@@ -192,6 +192,18 @@ extension ProjectEntity {
         }
     }
 
+    /// 指定スライドの「背景色」だけを設定する（余白は維持）。スライド編集コンテキスト用。
+    public mutating func setPageBackgroundColor(_ color: LayoutColor, pageIndex: Int) {
+        guard let idx = pages.firstIndex(where: { $0.index == pageIndex }) else { return }
+        pages[idx].background = CanvasBackgroundStyle(color: color, margins: pages[idx].background.margins)
+    }
+
+    /// 選択中の写真1枚の「枠（縁）」を設定する。nilでプロジェクト既定に戻す。写真選択コンテキスト用。
+    public mutating func setPlacementFrame(_ frame: PhotoFrameStyle?, placementID: UUID) {
+        guard let idx = placements.firstIndex(where: { $0.id == placementID }) else { return }
+        placements[idx].frameOverride = frame
+    }
+
     /// 1枚を全スライドにまたがせて敷く（プロジェクト配置モデル: 手動シームレスカルーセル用）。
     /// 等幅スライド前提で、アンカーページ正規化での全幅＝ページ数。画像は歪まない（中央クロップ）。
     public mutating func placeSpanningAllSlides(placementID: UUID) {

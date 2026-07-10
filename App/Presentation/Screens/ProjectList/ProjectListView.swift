@@ -17,7 +17,7 @@ struct ProjectListView: View {
             Group {
                 if viewModel.projects.isEmpty {
                     ContentUnavailableView(
-                        "下書きがありません",
+                        "レイアウトがありません",
                         systemImage: "rectangle.3.group",
                         description: Text("＋で新しいレイアウトを作成")
                     )
