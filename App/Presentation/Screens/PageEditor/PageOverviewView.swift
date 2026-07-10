@@ -60,7 +60,7 @@ struct PageOverviewView: View {
             ZStack(alignment: .topLeading) {
                 CanvasRenderView(
                     page: page,
-                    placements: viewModel.project.placements(onPage: page.index),
+                    placements: SpreadGeometry.visiblePlacements(onPage: page.index, project: viewModel.project),
                     defaultFrame: viewModel.project.defaultPhotoFrame,
                     images: thumbnailImages
                 )

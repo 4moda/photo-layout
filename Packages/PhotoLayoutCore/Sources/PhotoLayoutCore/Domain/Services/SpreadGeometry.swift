@@ -45,6 +45,29 @@ public enum SpreadGeometry {
         )
     }
 
+    /// 指定ページ上に「見える」配置一覧（隣ページからはみ出して重なるものも含む）。
+    /// 各配置の destRect は対象ページのローカル正規化座標へ写像して返す（RenderPlanBuilder が
+    /// 配置領域でクリップして見える部分だけ描く）。z順は sortIndex 準拠のまま。
+    ///
+    /// これにより「写真は1ページに所属」ではなく「プロジェクト（連結キャンバス）に配置」される概念になり、
+    /// スライドをまたいだ写真が両スライドに写る（=拡大配置で手動シームレスカルーセルが作れる）。
+    /// 余白ありページ間の写像は近似（余白ゼロのスライドで厳密）。所属ページ上では写像は恒等。
+    public static func visiblePlacements(onPage pageIndex: Int, project: ProjectEntity) -> [PlacementEntity] {
+        guard project.page(at: pageIndex) != nil else { return [] }
+        var result: [PlacementEntity] = []
+        for placement in project.orderedPlacements {
+            guard let spread = toSpread(
+                    pageRect: placement.destRect, pageIndex: placement.pageIndex, project: project),
+                  let local = toPage(spreadRect: spread, pageIndex: pageIndex, project: project) else { continue }
+            let inter = local.intersection(.unit)
+            guard inter.width > 0, inter.height > 0 else { continue }
+            var moved = placement
+            moved.destRect = local
+            result.append(moved)
+        }
+        return result
+    }
+
     /// スプレッドX座標が属するページのindex（境界はその位置から始まるページ側）。範囲外はnil
     public static func pageIndex(atSpreadX x: Double, project: ProjectEntity) -> Int? {
         guard x >= 0 else { return nil }

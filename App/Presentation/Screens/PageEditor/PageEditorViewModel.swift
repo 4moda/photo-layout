@@ -206,9 +206,11 @@ final class PageEditorViewModel {
 
     // MARK: - ジェスチャ（PlacementGesture/SnapEngineの純粋計算をproject状態へ適用する）
 
-    /// 指定点（配置領域の正規化座標）にある最前面の配置を返す
+    /// 指定点（配置領域の正規化座標）にある最前面の配置を返す。
+    /// 隣からはみ出して重なる写真も対象にする（プロジェクト配置モデル。座標は対象ページローカル）。
     func placement(atNormalizedX x: Double, y: Double, onPage pageIndex: Int? = nil) -> PlacementEntity? {
-        project.placements(onPage: pageIndex ?? currentPageIndex).last { placement in
+        let page = pageIndex ?? currentPageIndex
+        return SpreadGeometry.visiblePlacements(onPage: page, project: project).last { placement in
             placement.destRect.minX <= x && x <= placement.destRect.maxX
                 && placement.destRect.minY <= y && y <= placement.destRect.maxY
         }

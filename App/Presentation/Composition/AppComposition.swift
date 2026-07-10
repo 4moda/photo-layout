@@ -23,7 +23,8 @@ enum AppComposition {
                 createProject: CreateProjectUseCase(repository: repo),
                 addPhoto: AddPhotoUseCase(photoStore: FilePhotoStore(), repository: repo),
                 createXPost: CreateXPostUseCase(photoStore: FilePhotoStore(), repository: repo),
-                listProjects: ListProjectsUseCase(repository: repo)
+                listProjects: ListProjectsUseCase(repository: repo),
+                saveProject: SaveProjectUseCase(repository: repo)
             )
             : nil
         let viewModel = ProjectListViewModel(

@@ -102,6 +102,21 @@ final class ScreenshotSmokeTests: XCTestCase {
     }
 
     @MainActor
+    func testSpanningPhotoAcrossSlides() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--seed-demo"]
+        app.launch()
+
+        // 1枚が3スライドにまたがるデモ（プロジェクト配置モデル）を開く
+        let row = app.buttons["パノラマ（3連）"]
+        XCTAssertTrue(row.waitForExistence(timeout: 15))
+        row.tap()
+        XCTAssertTrue(app.buttons["pageEditor.export"].waitForExistence(timeout: 15))
+        sleep(2) // プレビュー画像の非同期ロードを待つ
+        attachScreenshot(named: "08-spanning-carousel")
+    }
+
+    @MainActor
     func testXPostTimelineComposite() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--seed-demo"]

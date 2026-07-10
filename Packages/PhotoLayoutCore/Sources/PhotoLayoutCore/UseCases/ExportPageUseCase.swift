@@ -29,9 +29,10 @@ public struct ExportPageUseCase: Sendable {
         guard let page = project.page(at: pageIndex) else {
             throw ExportError.pageNotFound
         }
+        // 隣スライドからはみ出して重なる写真も含めて描く（プロジェクト配置モデル）
         return try await render(
             page: page,
-            placements: project.placements(onPage: pageIndex),
+            placements: SpreadGeometry.visiblePlacements(onPage: pageIndex, project: project),
             defaultFrame: project.defaultPhotoFrame,
             format: format
         )

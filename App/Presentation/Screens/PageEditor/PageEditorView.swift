@@ -160,7 +160,8 @@ struct PageEditorView: View {
                     if let frame = SpreadGeometry.pageFrame(project: project, pageIndex: page.index) {
                         CanvasRenderView(
                             page: page,
-                            placements: project.placements(onPage: page.index),
+                            // 隣スライドからはみ出して重なる写真も描く（プロジェクト配置モデル）
+                            placements: SpreadGeometry.visiblePlacements(onPage: page.index, project: project),
                             defaultFrame: project.defaultPhotoFrame,
                             images: viewModel.previewImages
                         )

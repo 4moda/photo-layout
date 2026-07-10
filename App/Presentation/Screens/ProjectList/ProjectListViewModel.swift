@@ -57,10 +57,10 @@ final class ProjectListViewModel {
             if let cached = thumbnailCache[project.id], cached.updatedAt == project.updatedAt {
                 continue
             }
-            // 1ページ目の配置だけデコードする
+            // 1ページ目に見える配置（隣からのはみ出し含む）をデコードする
             var firstPageOnly = project
             let firstIndex = project.orderedPages.first?.index ?? 0
-            firstPageOnly.placements = project.placements(onPage: firstIndex)
+            firstPageOnly.placements = SpreadGeometry.visiblePlacements(onPage: firstIndex, project: project)
             let images = await thumbnailProvider.previewImages(project: firstPageOnly)
             thumbnailCache[project.id] = (project.updatedAt, images)
         }

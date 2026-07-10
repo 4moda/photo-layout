@@ -8,6 +8,7 @@ struct DemoProjectSeeder {
     let addPhoto: AddPhotoUseCase
     let createXPost: CreateXPostUseCase
     let listProjects: ListProjectsUseCase
+    let saveProject: SaveProjectUseCase
 
     func seedIfNeeded() async {
         do {
@@ -27,6 +28,22 @@ struct DemoProjectSeeder {
                     imageDataList: (0..<3).map { Self.demoImageData(variant: $0) },
                     framePreset: .whiteMargin
                 )
+            }
+            // パノラマデモ: 1枚が3スライドにまたがる（プロジェクト配置モデルの確認用）
+            if !existing.contains(where: { $0.title == "パノラマ（3連）" }) {
+                var project = ProjectEntity(
+                    title: "パノラマ（3連）",
+                    pages: (0..<3).map {
+                        PageEntity(index: $0, aspect: AspectRatio(width: 1, height: 1),
+                                   background: FramePreset.none.background)
+                    },
+                    defaultPhotoFrame: FramePreset.none.photoFrame
+                )
+                project = try await addPhoto.execute(project: project, imageData: Self.demoImageData(variant: 1))
+                if let id = project.placements.first?.id {
+                    project.placeSpanningAllSlides(placementID: id)
+                    _ = try await saveProject.execute(project)
+                }
             }
         } catch {
             // デモシードの失敗はアプリ動作に影響させない

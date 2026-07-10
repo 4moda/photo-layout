@@ -143,6 +143,20 @@ extension ProjectEntity {
         )
     }
 
+    /// 1枚を全スライドにまたがせて敷く（プロジェクト配置モデル: 手動シームレスカルーセル用）。
+    /// 等幅スライド前提で、アンカーページ正規化での全幅＝ページ数。画像は歪まない（中央クロップ）。
+    public mutating func placeSpanningAllSlides(placementID: UUID) {
+        guard let index = placements.firstIndex(where: { $0.id == placementID }),
+              let anchor = page(at: placements[index].pageIndex) else { return }
+        let dest = LayoutRect(x: 0, y: 0, width: Double(pages.count), height: 1)
+        placements[index].slotIndex = nil
+        placements[index].destRect = dest
+        let targetPixelAspect = dest.aspectRatio * anchor.contentAspect
+        placements[index].cropRect = CropMath.subCrop(
+            .unit, photo: placements[index].photo, targetPixelAspect: targetPixelAspect
+        )
+    }
+
     /// 全面配置: クロップを配置領域のアスペクトに絞り込み、領域いっぱいに敷く。
     public mutating func placeFillingPage(placementID: UUID) {
         guard let index = placements.firstIndex(where: { $0.id == placementID }),

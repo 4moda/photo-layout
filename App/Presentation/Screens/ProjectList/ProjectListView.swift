@@ -131,7 +131,7 @@ private struct ProjectCell: View {
             if let page = project.orderedPages.first {
                 CanvasRenderView(
                     page: page,
-                    placements: project.placements(onPage: page.index),
+                    placements: SpreadGeometry.visiblePlacements(onPage: page.index, project: project),
                     defaultFrame: project.defaultPhotoFrame,
                     images: thumbnailImages
                 )
