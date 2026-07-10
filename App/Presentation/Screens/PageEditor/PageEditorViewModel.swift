@@ -16,6 +16,8 @@ final class PageEditorViewModel {
 
     var currentPageIndex = 0
     var selectedPlacementID: UUID?
+    /// non-nil = スライド（ページ）を選択中。写真選択とは排他。ページ操作メニューを出す
+    var selectedPageIndex: Int?
     /// non-nil = クロップモード（ダブルタップで枠を固定し中身を動かす）
     var cropModePlacementID: UUID?
     /// スナップ発生中に表示するガイド線（配置領域の正規化座標）
@@ -52,17 +54,29 @@ final class PageEditorViewModel {
     var pageCount: Int { project.pages.count }
     var hasPhoto: Bool { !project.placements.isEmpty }
     var currentPageHasPhoto: Bool { !pagePlacements.isEmpty }
+    /// 写真もテンプレート（スロット）も無い"まっさら"なページか（中央の＋を出す判定）
+    var currentPageIsBlank: Bool { pagePlacements.isEmpty && (page?.slots == nil) }
+    /// 現在ページの写真（前面が先＝重なり順の上から）
+    var currentPagePlacementsFrontFirst: [PlacementEntity] {
+        Array(project.placements(onPage: currentPageIndex).reversed())
+    }
 
     func onAppear() async {
+        // 既定はカレントスライドを選択状態に（ページメニューをすぐ使える）
+        if selectedPlacementID == nil, selectedPageIndex == nil {
+            selectedPageIndex = currentPageIndex
+        }
         await refreshImages()
     }
 
     // MARK: - ページ切替
 
-    /// 選択状態を保ったまま「現在ページ」だけ移す（シームレスキャンバスのパン/タップ用）
+    /// 選択状態を保ったまま「現在ページ」だけ移す（シームレスキャンバスのパン/タップ用）。
+    /// ページ選択中はパンに追従して選択スライドも移す。
     func focusPage(_ index: Int) {
         guard project.page(at: index) != nil else { return }
         currentPageIndex = index
+        if selectedPageIndex != nil { selectedPageIndex = index }
     }
 
     // MARK: - ページ俯瞰モード（挿入・削除・並べ替え。確定までは保存しない）
@@ -76,6 +90,7 @@ final class PageEditorViewModel {
         overviewBase = project
         isOverviewMode = true
         selectedPlacementID = nil
+        selectedPageIndex = nil
         cropModePlacementID = nil
         activeGuides = []
     }
@@ -188,22 +203,6 @@ final class PageEditorViewModel {
         await persist()
     }
 
-    /// レイヤー順序: 選択中の写真を1段前面へ
-    func bringSelectedForward() async {
-        guard let id = selectedPlacementID else { return }
-        record()
-        project.bringForward(placementID: id)
-        await persist(refreshImages: false)
-    }
-
-    /// レイヤー順序: 選択中の写真を1段背面へ
-    func sendSelectedBackward() async {
-        guard let id = selectedPlacementID else { return }
-        record()
-        project.sendBackward(placementID: id)
-        await persist(refreshImages: false)
-    }
-
     // MARK: - ジェスチャ（PlacementGesture/SnapEngineの純粋計算をproject状態へ適用する）
 
     /// 指定点（配置領域の正規化座標）にある最前面の配置を返す。
@@ -218,9 +217,63 @@ final class PageEditorViewModel {
 
     func select(_ placementID: UUID?) {
         selectedPlacementID = placementID
+        selectedPageIndex = nil
         if cropModePlacementID != placementID {
             cropModePlacementID = nil
         }
+    }
+
+    /// スライド（ページ）を選択する（写真選択とは排他）。ページ操作メニューを出す
+    func selectPage(_ index: Int) {
+        guard project.page(at: index) != nil else { return }
+        selectedPlacementID = nil
+        cropModePlacementID = nil
+        selectedPageIndex = index
+        currentPageIndex = index
+    }
+
+    /// すべての選択を解除（カルーセル視点＝何も選択なし）
+    func deselectAll() {
+        selectedPlacementID = nil
+        selectedPageIndex = nil
+        cropModePlacementID = nil
+        activeGuides = []
+    }
+
+    // MARK: - ページ操作（ページ選択メニュー）
+
+    func duplicateCurrentPage() async {
+        record()
+        project.duplicatePage(at: currentPageIndex)
+        await persist(refreshImages: false)
+    }
+
+    func deleteCurrentPage() async {
+        guard pageCount > 1 else { return }
+        record()
+        project.removePage(at: currentPageIndex)
+        currentPageIndex = min(currentPageIndex, pageCount - 1)
+        selectedPageIndex = nil
+        await persist()
+    }
+
+    func setCurrentPageStyle(_ preset: FramePreset) async {
+        record()
+        project.setPageStyle(preset, pageIndex: currentPageIndex)
+        await persist(refreshImages: false)
+    }
+
+    /// レイヤー順序: 指定写真を1段前面/背面へ（ページ選択のレイヤーリスト用）
+    func bringForward(placementID: UUID) async {
+        record()
+        project.bringForward(placementID: placementID)
+        await persist(refreshImages: false)
+    }
+
+    func sendBackward(placementID: UUID) async {
+        record()
+        project.sendBackward(placementID: placementID)
+        await persist(refreshImages: false)
     }
 
     /// ダブルタップ: クロップモードの入/切
@@ -341,6 +394,7 @@ final class PageEditorViewModel {
         guard let previous = history.undo(current: project) else { return }
         project = previous
         selectedPlacementID = nil
+        selectedPageIndex = nil
         cropModePlacementID = nil
         activeGuides = []
         currentPageIndex = min(currentPageIndex, max(pageCount - 1, 0))
@@ -351,6 +405,7 @@ final class PageEditorViewModel {
         guard let next = history.redo(current: project) else { return }
         project = next
         selectedPlacementID = nil
+        selectedPageIndex = nil
         cropModePlacementID = nil
         activeGuides = []
         currentPageIndex = min(currentPageIndex, max(pageCount - 1, 0))

@@ -123,3 +123,43 @@ struct SplitPhotoTests {
         #expect(project.pages.count == 1)
     }
 }
+
+@Suite("ページ操作（複製・スタイル）")
+struct PageOpsTests {
+    private let photo = PhotoRef(fileName: "a.jpg", pixelWidth: 4000, pixelHeight: 3000)
+
+    @Test("スライド複製: 直後に挿入され、写真もコピーされ、後続indexがずれる")
+    func duplicatePageInsertsCopy() {
+        var project = ProjectEntity(pages: [
+            PageEntity(index: 0, aspect: AspectRatio(width: 1, height: 1)),
+            PageEntity(index: 1, aspect: AspectRatio(width: 1, height: 1))
+        ])
+        project.placements = [
+            PlacementEntity(sortIndex: 0, pageIndex: 0, photo: photo, destRect: .unit),
+            PlacementEntity(sortIndex: 1, pageIndex: 1, photo: photo, destRect: .unit)
+        ]
+        project.duplicatePage(at: 0)
+        #expect(project.pages.count == 3)
+        // 元ページ0の写真1枚 → 複製で新ページ1にも1枚
+        #expect(project.placements(onPage: 0).count == 1)
+        #expect(project.placements(onPage: 1).count == 1)
+        // 元の2ページ目は index 2 へ押し出される
+        #expect(project.placements(onPage: 2).count == 1)
+        // 複製された配置は別idを持つ
+        let ids = project.placements.map(\.id)
+        #expect(Set(ids).count == ids.count)
+    }
+
+    @Test("ページ別スタイル: そのページの背景と枠だけ変わる")
+    func setPageStyleAffectsOnlyThatPage() {
+        var project = ProjectEntity(pages: [
+            PageEntity(index: 0, aspect: AspectRatio(width: 1, height: 1)),
+            PageEntity(index: 1, aspect: AspectRatio(width: 1, height: 1))
+        ])
+        project.placements = [PlacementEntity(sortIndex: 0, pageIndex: 0, photo: photo, destRect: .unit)]
+        project.setPageStyle(.blackBackgroundWhiteBorder, pageIndex: 0)
+        #expect(project.page(at: 0)?.background == FramePreset.blackBackgroundWhiteBorder.background)
+        #expect(project.page(at: 1)?.background != FramePreset.blackBackgroundWhiteBorder.background)
+        #expect(project.placements(onPage: 0)[0].frameOverride == FramePreset.blackBackgroundWhiteBorder.photoFrame)
+    }
+}

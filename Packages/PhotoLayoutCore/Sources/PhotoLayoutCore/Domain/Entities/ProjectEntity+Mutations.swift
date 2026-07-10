@@ -143,6 +143,36 @@ extension ProjectEntity {
         )
     }
 
+    /// スライドを複製し、直後に挿入する（写真・スタイルごとコピー）。「ページ選択」メニュー用。
+    public mutating func duplicatePage(at pageIndex: Int) {
+        guard let source = page(at: pageIndex) else { return }
+        let newIndex = pageIndex + 1
+        for i in pages.indices where pages[i].index >= newIndex { pages[i].index += 1 }
+        for i in placements.indices where placements[i].pageIndex >= newIndex { placements[i].pageIndex += 1 }
+        var newPage = source
+        newPage.id = UUID()
+        newPage.index = newIndex
+        pages.append(newPage)
+        var nextSort = (placements.map(\.sortIndex).max() ?? -1) + 1
+        for original in placements(onPage: pageIndex) {
+            var copy = original
+            copy.id = UUID()
+            copy.pageIndex = newIndex
+            copy.sortIndex = nextSort
+            nextSort += 1
+            placements.append(copy)
+        }
+    }
+
+    /// 指定スライドの背景/余白と枠プリセットを設定する（「ページ選択」メニュー用・そのページだけ）。
+    public mutating func setPageStyle(_ preset: FramePreset, pageIndex: Int) {
+        guard let idx = pages.firstIndex(where: { $0.index == pageIndex }) else { return }
+        pages[idx].background = preset.background
+        for i in placements.indices where placements[i].pageIndex == pageIndex {
+            placements[i].frameOverride = preset.photoFrame
+        }
+    }
+
     /// 1枚を全スライドにまたがせて敷く（プロジェクト配置モデル: 手動シームレスカルーセル用）。
     /// 等幅スライド前提で、アンカーページ正規化での全幅＝ページ数。画像は歪まない（中央クロップ）。
     public mutating func placeSpanningAllSlides(placementID: UUID) {

@@ -18,6 +18,8 @@ struct PageEditorView: View {
     @State private var pendingSlotFill: (page: Int, slot: Int)?
     // テンプレート（型枠）ビジュアル選択シート
     @State private var templatePickerPresented = false
+    // レイヤー順（重なり）並べ替えシート
+    @State private var layerSheetPresented = false
     /// 角ハンドルドラッグ開始時の角と中心（拡縮中に選択枠が動いても基準がぶれないよう固定）
     @State private var handleDragBase: (corner: CGPoint, center: CGPoint)?
 
@@ -50,6 +52,12 @@ struct PageEditorView: View {
         VStack(spacing: 16) {
             spreadCanvas
                 .frame(maxHeight: .infinity)
+                // まっさらなページには中央に大きな「＋」で写真追加（何も選択なしの主導線）
+                .overlay {
+                    if viewModel.currentPageIsBlank && viewModel.cropModePlacementID == nil {
+                        centralAddButton
+                    }
+                }
                 .accessibilityIdentifier("pageEditor.canvas")
                 // 空スロット充填ピッカーはキャンバスに付ける（複数モーダルを1ノードに積まない）
                 .photosPicker(isPresented: $slotPickerPresented, selection: $slotFillItem, matching: .images)
@@ -74,9 +82,12 @@ struct PageEditorView: View {
             }
 
             controls
-                // テンプレート（型枠）のビジュアル選択シートはコントロール側に付ける
+                // テンプレート（型枠）のビジュアル選択シート・レイヤー並べ替えシート
                 .sheet(isPresented: $templatePickerPresented) {
                     templatePickerSheet
+                }
+                .sheet(isPresented: $layerSheetPresented) {
+                    layerSheet
                 }
         }
         .padding(.vertical)
@@ -100,6 +111,15 @@ struct PageEditorView: View {
                 }
                 .disabled(!viewModel.canRedo)
                 .accessibilityIdentifier("pageEditor.redo")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                // スライドの追加・削除・並べ替え（俯瞰）。カルーセル全体の操作なので常時上部に置く
+                Button {
+                    viewModel.enterOverview()
+                } label: {
+                    Image(systemName: "rectangle.stack")
+                }
+                .accessibilityIdentifier("pageEditor.overview")
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -166,9 +186,10 @@ struct PageEditorView: View {
                             images: viewModel.previewImages
                         )
                         .frame(width: frame.width * stripHeight, height: stripHeight)
-                        // 暗いキャンバス地に対してページの外周を薄く縁取り、
-                        // 黒背景プリセットのページでも境界が分かるようにする
-                        .overlay(Rectangle().stroke(Color.white.opacity(0.18), lineWidth: 0.5))
+                        // ページ選択中はアクセント枠、通常は暗い地に対して薄い縁取り
+                        .overlay(Rectangle().stroke(
+                            page.index == viewModel.selectedPageIndex ? Color.accentColor : Color.white.opacity(0.18),
+                            lineWidth: page.index == viewModel.selectedPageIndex ? 2.5 : 0.5))
                         .position(
                             x: (frame.x + frame.width / 2) * stripHeight,
                             y: stripHeight / 2
@@ -363,10 +384,11 @@ struct PageEditorView: View {
     private func stripSingleTap(geo: GeometryProxy) -> some Gesture {
         SpatialTapGesture().onEnded { value in
             guard let loc = locate(value.location, geo: geo) else {
+                // スライドの外（暗い地）をタップ → 何も選択なし（カルーセル視点）
                 if viewModel.cropModePlacementID != nil {
                     viewModel.exitCropMode()
                 } else {
-                    viewModel.select(nil)
+                    viewModel.deselectAll()
                 }
                 return
             }
@@ -380,11 +402,11 @@ struct PageEditorView: View {
                 viewModel.select(hit.id)
             } else if let slot = viewModel.emptySlot(atNormalizedX: loc.nx, y: loc.ny, onPage: loc.pageIndex) {
                 // 空スロットのタップ → そのスロットへ当てはめる写真を選ぶ
-                viewModel.select(nil)
                 pendingSlotFill = (loc.pageIndex, slot)
                 slotPickerPresented = true
             } else {
-                viewModel.select(nil)
+                // スライドの地をタップ → ページ選択
+                viewModel.selectPage(loc.pageIndex)
             }
         }
     }
@@ -675,16 +697,18 @@ struct PageEditorView: View {
 
     // MARK: - コントロール（コンテキスト依存メニュー）
 
-    /// 選択状態に応じて出すメニューを切り替える:
-    /// クロップ中=完了のみ / 写真選択中=写真メニュー / 非選択=ページ全体メニュー
+    /// 選択状態に応じて出すメニューを切り替える（3状態）:
+    /// クロップ中=完了のみ / 写真選択=写真メニュー / ページ選択=スライドメニュー / 何も選択なし=最小
     @ViewBuilder
     private var controls: some View {
         if viewModel.cropModePlacementID != nil {
             cropControls
         } else if viewModel.selectedPlacementID != nil {
             photoControls
+        } else if viewModel.selectedPageIndex != nil {
+            pageControls
         } else {
-            pageMenuControls
+            nothingControls
         }
     }
 
@@ -781,7 +805,8 @@ struct PageEditorView: View {
         ("16:9 横", 16.0 / 9.0)
     ]
 
-    /// 写真選択中のメニュー
+    /// 写真選択中のメニュー（枠比率 / クロップ / 削除）。
+    /// 前面/背面はページ選択の「レイヤー」に集約、差し替えは廃止。移動/拡縮はドラッグ。
     private var photoControls: some View {
         toolbarStrip {
             Menu {
@@ -804,22 +829,6 @@ struct PageEditorView: View {
                 }
             }
 
-            Menu {
-                Button {
-                    Task { await viewModel.bringSelectedForward() }
-                } label: {
-                    Label("前面へ", systemImage: "square.2.stack.3d.top.filled")
-                }
-                Button {
-                    Task { await viewModel.sendSelectedBackward() }
-                } label: {
-                    Label("背面へ", systemImage: "square.2.stack.3d.bottom.filled")
-                }
-            } label: {
-                toolItemLabel("レイヤー", systemImage: "square.stack.3d.up")
-            }
-            .accessibilityIdentifier("pageEditor.layerMenu")
-
             toolButton("削除", systemImage: "trash", role: .destructive,
                        identifier: "pageEditor.deletePhoto") {
                 Task { await viewModel.deleteSelectedPhoto() }
@@ -827,8 +836,55 @@ struct PageEditorView: View {
         }
     }
 
-    /// 非選択時のページ全体メニュー（全プロジェクト共通。SNS別の分岐はしない）
-    private var pageMenuControls: some View {
+    private static let backgroundChoices: [(label: String, preset: FramePreset)] = [
+        ("余白なし", .none),
+        ("白余白", .whiteMargin),
+        ("黒フチ細", .thinBlackBorder),
+        ("白余白＋黒フチ", .whiteMarginBlackBorder),
+        ("黒背景＋白フチ", .blackBackgroundWhiteBorder)
+    ]
+
+    /// ページ（スライド）選択中のメニュー: 写真追加 / テンプレート / 背景 / レイヤー / 複製 / 削除
+    private var pageControls: some View {
+        toolbarStrip {
+            toolButton("写真追加", systemImage: "photo.badge.plus", identifier: "pageEditor.pageAddPhoto") {
+                photoPickerPresented = true
+            }
+
+            templateButton
+
+            Menu {
+                ForEach(Self.backgroundChoices, id: \.label) { choice in
+                    Button(choice.label) {
+                        Task { await viewModel.setCurrentPageStyle(choice.preset) }
+                    }
+                }
+            } label: {
+                toolItemLabel("背景", systemImage: "square.dashed")
+            }
+            .accessibilityIdentifier("pageEditor.backgroundMenu")
+
+            toolButton("レイヤー", systemImage: "square.stack.3d.up", identifier: "pageEditor.layerButton") {
+                layerSheetPresented = true
+            }
+
+            toolButton("複製", systemImage: "plus.square.on.square", identifier: "pageEditor.duplicatePage") {
+                Task { await viewModel.duplicateCurrentPage() }
+            }
+
+            if viewModel.pageCount > 1 {
+                toolButton("削除", systemImage: "trash", role: .destructive,
+                           identifier: "pageEditor.deletePage") {
+                    Task { await viewModel.deleteCurrentPage() }
+                }
+            }
+
+            pageLabel
+        }
+    }
+
+    /// 何も選択なし（カルーセル視点）: 全スライド共通の比率のみ。写真追加は中央の＋。
+    private var nothingControls: some View {
         toolbarStrip {
             Menu {
                 ForEach(Self.aspectChoices, id: \.label) { choice in
@@ -841,23 +897,76 @@ struct PageEditorView: View {
             }
             .accessibilityIdentifier("pageEditor.aspectMenu")
 
-            templateButton
+            pageLabel
+        }
+    }
 
-            // ページの追加・削除・並べ替え（俯瞰モード）。
-            // 分割・枠・全面/マットは撤去（画像の拡大縮小・ドラッグで表現できる）
-            toolButton("ページ", systemImage: "rectangle.stack",
-                       identifier: "pageEditor.overview") {
-                viewModel.enterOverview()
+    @ViewBuilder
+    private var pageLabel: some View {
+        if viewModel.pageCount > 1 {
+            Text("\(viewModel.currentPageIndex + 1)/\(viewModel.pageCount)")
+                .font(.subheadline.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(minWidth: 44)
+                .accessibilityIdentifier("pageEditor.pageLabel")
+        }
+    }
+
+    /// まっさらなページの中央に出す大きな写真追加ボタン
+    private var centralAddButton: some View {
+        Button {
+            photoPickerPresented = true
+        } label: {
+            VStack(spacing: 10) {
+                Image(systemName: "plus.circle.fill").font(.system(size: 60))
+                Text("写真を追加").font(.subheadline).fontWeight(.medium)
             }
+            .foregroundStyle(Color.accentColor)
+        }
+        .accessibilityIdentifier("pageEditor.centralAdd")
+    }
 
-            if viewModel.pageCount > 1 {
-                Text("\(viewModel.currentPageIndex + 1)/\(viewModel.pageCount)")
-                    .font(.subheadline.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .frame(minWidth: 44)
-                    .accessibilityIdentifier("pageEditor.pageLabel")
+    /// レイヤー順（重なり）の並べ替えシート: 現在スライドの写真を前面順で並べ、上下で入替。
+    private var layerSheet: some View {
+        NavigationStack {
+            List {
+                ForEach(viewModel.currentPagePlacementsFrontFirst) { placement in
+                    HStack(spacing: 12) {
+                        if let img = viewModel.previewImages[placement.id] {
+                            Image(uiImage: img).resizable().scaledToFill()
+                                .frame(width: 44, height: 44)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                        } else {
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color.gray.opacity(0.2)).frame(width: 44, height: 44)
+                        }
+                        Text("写真").foregroundStyle(.secondary)
+                        Spacer()
+                        Button { Task { await viewModel.bringForward(placementID: placement.id) } } label: {
+                            Image(systemName: "chevron.up")
+                        }
+                        .buttonStyle(.borderless)
+                        Button { Task { await viewModel.sendBackward(placementID: placement.id) } } label: {
+                            Image(systemName: "chevron.down")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+            }
+            .overlay {
+                if viewModel.currentPagePlacementsFrontFirst.isEmpty {
+                    Text("このスライドに写真はありません").foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("レイヤー順")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("閉じる") { layerSheetPresented = false }
+                }
             }
         }
+        .presentationDetents([.medium])
     }
 
     /// テンプレート（型枠）ボタン: タップで型枠の形をビジュアル一覧したシートを開く。
