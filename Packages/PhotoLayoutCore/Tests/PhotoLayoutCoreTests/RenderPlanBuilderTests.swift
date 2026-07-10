@@ -15,7 +15,8 @@ struct RenderPlanBuilderTests {
                 background: CanvasBackgroundStyle(color: .white, margins: EdgeInsetsRatio(uniform: margins))
             )]
         )
-        project.addPhoto(photo) // 既定で全面配置
+        project.addPhoto(photo)
+        project.placeAllFillingPage() // このテスト群は全面配置での描画を検証する
         return project
     }
 

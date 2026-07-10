@@ -16,10 +16,13 @@ struct PageEditorView: View {
     @State private var slotPickerPresented = false
     @State private var slotFillItem: PhotosPickerItem?
     @State private var pendingSlotFill: (page: Int, slot: Int)?
-    // テンプレート（型枠）ビジュアル選択シート
-    @State private var templatePickerPresented = false
-    // レイヤー順（重なり）並べ替えシート
-    @State private var layerSheetPresented = false
+    // フッターから開くビジュアル選択シート（テンプレ/背景/比率/レイヤー）は1枚に集約
+    @State private var activeSheet: EditorSheet?
+
+    enum EditorSheet: Int, Identifiable {
+        case template, background, ratio, layers
+        var id: Int { rawValue }
+    }
     /// 角ハンドルドラッグ開始時の角と中心（拡縮中に選択枠が動いても基準がぶれないよう固定）
     @State private var handleDragBase: (corner: CGPoint, center: CGPoint)?
 
@@ -76,12 +79,14 @@ struct PageEditorView: View {
             }
 
             controls
-                // テンプレート（型枠）のビジュアル選択シート・レイヤー並べ替えシート
-                .sheet(isPresented: $templatePickerPresented) {
-                    templatePickerSheet
-                }
-                .sheet(isPresented: $layerSheetPresented) {
-                    layerSheet
+                // フッターのビジュアル選択シート（1枚に集約）
+                .sheet(item: $activeSheet) { sheet in
+                    switch sheet {
+                    case .template: templatePickerSheet
+                    case .background: backgroundPickerSheet
+                    case .ratio: ratioPickerSheet
+                    case .layers: layerSheet
+                    }
                 }
         }
         .padding(.vertical)
@@ -837,12 +842,18 @@ struct PageEditorView: View {
     /// 比率 / テンプレート / ⊕写真追加 / 背景 / レイヤー を均等配置（アイコン＋小ラベル）。
     private var slideControls: some View {
         HStack(alignment: .top, spacing: 0) {
-            slideRatioMenu.frame(maxWidth: .infinity)
+            toolButton("比率", systemImage: "aspectratio", identifier: "pageEditor.aspectMenu") {
+                activeSheet = .ratio
+            }
+            .frame(maxWidth: .infinity)
             templateButton.frame(maxWidth: .infinity)
             addPhotoHero.frame(maxWidth: .infinity)
-            slideBackgroundMenu.frame(maxWidth: .infinity)
+            toolButton("背景", systemImage: "square.dashed", identifier: "pageEditor.backgroundMenu") {
+                activeSheet = .background
+            }
+            .frame(maxWidth: .infinity)
             toolButton("レイヤー", systemImage: "square.stack.3d.up", identifier: "pageEditor.layerButton") {
-                layerSheetPresented = true
+                activeSheet = .layers
             }
             .frame(maxWidth: .infinity)
         }
@@ -868,30 +879,62 @@ struct PageEditorView: View {
         .accessibilityIdentifier("pageEditor.addPhoto")
     }
 
-    private var slideRatioMenu: some View {
-        Menu {
-            ForEach(Self.aspectChoices, id: \.label) { choice in
-                Button(choice.label) {
-                    Task { await viewModel.setAspect(choice.aspect) }
+    /// 比率をビジュアル（枠の形サムネイル）で選ぶシート
+    private var ratioPickerSheet: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 3), spacing: 16) {
+                    ForEach(Self.aspectChoices, id: \.label) { choice in
+                        Button {
+                            activeSheet = nil
+                            Task { await viewModel.setAspect(choice.aspect) }
+                        } label: {
+                            VStack(spacing: 6) {
+                                RoundedRectangle(cornerRadius: 4)
+                                    .strokeBorder(Color.accentColor, lineWidth: 1.5)
+                                    .aspectRatio(choice.aspect.ratio, contentMode: .fit)
+                                    .frame(height: 64)
+                                Text(choice.label).font(.caption2).foregroundStyle(.secondary)
+                                    .lineLimit(1).minimumScaleFactor(0.7)
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
+                .padding(20)
             }
-        } label: {
-            toolItemLabel("比率", systemImage: "aspectratio")
+            .navigationTitle("比率").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("閉じる") { activeSheet = nil } } }
         }
-        .accessibilityIdentifier("pageEditor.aspectMenu")
+        .presentationDetents([.medium])
     }
 
-    private var slideBackgroundMenu: some View {
-        Menu {
-            ForEach(Self.backgroundChoices, id: \.label) { choice in
-                Button(choice.label) {
-                    Task { await viewModel.setCurrentPageStyle(choice.preset) }
+    /// 背景/余白をビジュアル（スウォッチ）で選ぶシート
+    private var backgroundPickerSheet: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 3), spacing: 16) {
+                    ForEach(Self.backgroundChoices, id: \.label) { choice in
+                        Button {
+                            activeSheet = nil
+                            Task { await viewModel.setCurrentPageStyle(choice.preset) }
+                        } label: {
+                            VStack(spacing: 6) {
+                                BackgroundSwatch(preset: choice.preset)
+                                Text(choice.label).font(.caption2).foregroundStyle(.secondary)
+                                    .lineLimit(1).minimumScaleFactor(0.7)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
+                .padding(20)
             }
-        } label: {
-            toolItemLabel("背景", systemImage: "square.dashed")
+            .navigationTitle("背景").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("閉じる") { activeSheet = nil } } }
         }
-        .accessibilityIdentifier("pageEditor.backgroundMenu")
+        .presentationDetents([.medium])
     }
 
     /// レイヤー順（重なり）の並べ替えシート: 現在スライドの写真を前面順で並べ、上下で入替。
@@ -930,7 +973,7 @@ struct PageEditorView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("閉じる") { layerSheetPresented = false }
+                    Button("閉じる") { activeSheet = nil }
                 }
             }
         }
@@ -940,7 +983,7 @@ struct PageEditorView: View {
     /// テンプレート（型枠）ボタン: タップで型枠の形をビジュアル一覧したシートを開く。
     private var templateButton: some View {
         Button {
-            templatePickerPresented = true
+            activeSheet = .template
         } label: {
             toolItemLabel("テンプレート", systemImage: "rectangle.split.2x2")
         }
@@ -956,7 +999,7 @@ struct PageEditorView: View {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 4), spacing: 16) {
                     ForEach(viewModel.availableTemplates) { template in
                         Button {
-                            templatePickerPresented = false
+                            activeSheet = nil
                             Task { await viewModel.applyTemplate(template) }
                         } label: {
                             VStack(spacing: 6) {
@@ -978,7 +1021,7 @@ struct PageEditorView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("閉じる") { templatePickerPresented = false }
+                    Button("閉じる") { activeSheet = nil }
                 }
             }
         }
@@ -1011,5 +1054,38 @@ private struct TemplateThumbnail: View {
         .background(
             RoundedRectangle(cornerRadius: 6).fill(Color.gray.opacity(0.12))
         )
+    }
+}
+
+/// 背景/余白プリセットの見た目プレビュー（正方形）。地色＋余白の内側に写真領域＋枠線。
+private struct BackgroundSwatch: View {
+    let preset: FramePreset
+
+    var body: some View {
+        let bg = preset.background
+        let m = bg.margins
+        let frame = preset.photoFrame
+        return GeometryReader { g in
+            let ref = min(g.size.width, g.size.height)
+            ZStack {
+                Rectangle().fill(color(bg.color))
+                Rectangle().fill(Color.gray.opacity(0.45))
+                    .overlay(
+                        Rectangle().strokeBorder(
+                            color(frame.borderColor),
+                            lineWidth: frame.borderWidthRatio > 0 ? 2 : 0)
+                    )
+                    .padding(EdgeInsets(
+                        top: CGFloat(m.top) * ref, leading: CGFloat(m.leading) * ref,
+                        bottom: CGFloat(m.bottom) * ref, trailing: CGFloat(m.trailing) * ref))
+            }
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(.systemGray4), lineWidth: 0.5))
+    }
+
+    private func color(_ c: LayoutColor) -> Color {
+        Color(red: c.red, green: c.green, blue: c.blue, opacity: c.alpha)
     }
 }

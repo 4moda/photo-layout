@@ -20,13 +20,20 @@ struct PageOverviewView: View {
                     HStack(alignment: .top, spacing: 16) {
                         ForEach(viewModel.project.orderedPages, id: \.id) { page in
                             card(for: page)
+                                // ドラッグで並べ替え（このカードへドロップ＝その位置へ移動）
+                                .draggable("\(page.index)")
+                                .dropDestination(for: String.self) { items, _ in
+                                    guard let from = items.first.flatMap(Int.init) else { return false }
+                                    viewModel.overviewMovePage(from: from, to: page.index)
+                                    return true
+                                }
                         }
                         appendCard
                     }
                     .padding(20)
                 }
             }
-            .navigationTitle("ページの編集")
+            .navigationTitle("スライド")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -119,7 +126,7 @@ struct PageOverviewView: View {
             VStack(spacing: 10) {
                 Image(systemName: "plus")
                     .font(.system(size: 32))
-                Text("ページを追加")
+                Text("スライドを追加")
                     .font(.caption)
             }
             .foregroundStyle(.white.opacity(0.8))

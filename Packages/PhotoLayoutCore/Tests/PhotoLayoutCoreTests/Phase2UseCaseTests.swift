@@ -30,7 +30,7 @@ actor FakeLibrarySaver: PhotoLibrarySaving {
 
 @Suite("Phase 2 UseCases")
 struct Phase2UseCaseTests {
-    @Test("AddPhoto: 保存された参照で全面配置のplacementが追加され永続化される")
+    @Test("AddPhoto: 保存された参照で自然配置のplacementが追加され永続化される")
     func addPhoto() async throws {
         let repo = InMemoryProjectRepository()
         let project = try await CreateProjectUseCase(repository: repo).execute()
@@ -39,9 +39,9 @@ struct Phase2UseCaseTests {
 
         #expect(updated.placements.count == 1)
         #expect(updated.placements[0].photo.fileName == "stored-42.jpg")
-        #expect(updated.placements[0].destRect.isApproximatelyEqual(to: .unit))
-        // 既定4:5ページ（余白なし、contentAspect=0.8）に6000x4000 → クロップ幅=(4000*0.8)/6000
-        #expect(abs(updated.placements[0].cropRect.width - (4000.0 * 0.8) / 6000.0) < 1e-9)
+        // 既定は自然配置: 元画像全体（クロップなし）を歪めず配置
+        #expect(updated.placements[0].cropRect.isApproximatelyEqual(to: .unit))
+        #expect(updated.placements[0].destRect.width <= 1.0)
         let persisted = try await repo.fetch(id: project.id)
         #expect(persisted?.placements.count == 1)
     }
@@ -79,9 +79,12 @@ struct Phase2UseCaseTests {
         var project = ProjectEntity(pages: [PageEntity(index: 0, aspect: AspectRatio(width: 1, height: 1))])
         project.addPhoto(PhotoRef(fileName: "p.jpg", pixelWidth: 3000, pixelHeight: 2000))
 
-        // 既定は全面配置: 1:1領域に3:2写真 → クロップ幅=(2000*1)/3000
-        #expect(project.placements[0].destRect.isApproximatelyEqual(to: .unit))
-        #expect(abs(project.placements[0].cropRect.width - 2000.0 / 3000.0) < 1e-9)
+        // 既定は自然配置: 元画像全体（クロップなし）を歪めず配置。cropは.unit、
+        // destRectのpxアスペクト＝元画像アスペクト(1.5)
+        #expect(project.placements[0].cropRect.isApproximatelyEqual(to: .unit))
+        let dest = project.placements[0].destRect
+        #expect(abs(dest.aspectRatio - 1.5) < 1e-9) // 1:1領域なので正規化=px
+        #expect(dest.width <= 1.0 && dest.height <= 1.0) // 領域内に収まる
 
         project.placeAllMatted(coverage: 0.8)
         #expect(project.placements[0].cropRect.isApproximatelyEqual(to: .unit))
@@ -93,5 +96,23 @@ struct Phase2UseCaseTests {
         #expect(project.defaultPhotoFrame.borderColor == .white)
         // 再配置後もマットのまま・写真全体が見えている
         #expect(project.placements[0].cropRect.isApproximatelyEqual(to: .unit))
+    }
+
+    @Test("複数追加は完全に重ならないよう少しずつずれる（カスケード）")
+    func multipleAddCascades() {
+        var project = ProjectEntity(pages: [PageEntity(index: 0, aspect: AspectRatio(width: 1, height: 1))])
+        let photo = PhotoRef(fileName: "p.jpg", pixelWidth: 3000, pixelHeight: 3000)
+        project.addPhoto(photo)
+        project.addPhoto(photo)
+        project.addPhoto(photo)
+        let d0 = project.orderedPlacements[0].destRect
+        let d1 = project.orderedPlacements[1].destRect
+        let d2 = project.orderedPlacements[2].destRect
+        // 位置がずれている（完全一致しない）
+        #expect(!d0.isApproximatelyEqual(to: d1))
+        #expect(!d1.isApproximatelyEqual(to: d2))
+        // サイズは同じ（元アスペクト・同スケール）
+        #expect(abs(d0.width - d1.width) < 1e-9)
+        #expect(abs(d1.x - d0.x - 0.05) < 1e-9) // 一定量ずつ右下へ
     }
 }

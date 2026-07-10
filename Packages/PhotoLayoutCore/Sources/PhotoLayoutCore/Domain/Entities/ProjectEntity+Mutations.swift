@@ -5,8 +5,10 @@ import Foundation
 /// 配置の不変条件「destRectのピクセルアスペクト == cropRectのピクセルアスペクト」は
 /// ここで維持する。fill/fitのような永続モードは存在せず、すべてジオメトリで表現する。
 extension ProjectEntity {
-    /// 写真を追加する。既定は全面配置（ページの配置領域いっぱいに敷く）。
+    /// 写真を追加する。既定は「元のアスペクト比のまま中央付近に配置」（クロップしない）。
+    /// 同じページに複数追加すると完全には重ならないよう少しずつずらす（カスケード）。
     public mutating func addPhoto(_ photo: PhotoRef, toPage pageIndex: Int = 0) {
+        let cascade = placements(onPage: pageIndex).count
         let placement = PlacementEntity(
             sortIndex: placements.count,
             pageIndex: pageIndex,
@@ -14,7 +16,24 @@ extension ProjectEntity {
             destRect: .unit
         )
         placements.append(placement)
-        placeFillingPage(placementID: placement.id)
+        placePhotoNatural(placementID: placement.id, cascadeIndex: cascade)
+    }
+
+    /// 元画像全体を歪めず、配置領域にフィットさせて中央付近へ置く（既定の追加配置）。
+    /// - Parameter cascadeIndex: 同ページ内の何枚目か。1枚ごとに少しずらして重なりを避ける。
+    public mutating func placePhotoNatural(placementID: UUID, cascadeIndex: Int = 0) {
+        guard let index = placements.firstIndex(where: { $0.id == placementID }),
+              let page = page(at: placements[index].pageIndex) else { return }
+        let photo = placements[index].photo
+        placements[index].cropRect = .unit // 元画像全体（クロップしない）
+        let normalizedAspect = photo.aspectRatio.ratio / page.contentAspect
+        let base = LayoutRect.unit
+            .fitting(AspectRatio(width: normalizedAspect, height: 1))
+            .scaled(by: 0.85)
+        let shift = Double(cascadeIndex % 5) * 0.05
+        placements[index].destRect = LayoutRect(
+            x: base.x + shift, y: base.y + shift, width: base.width, height: base.height
+        )
     }
 
     /// 配置（写真）を削除し、sortIndexを0からの連番に詰め直す。
