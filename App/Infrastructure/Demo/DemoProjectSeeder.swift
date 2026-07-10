@@ -45,6 +45,30 @@ struct DemoProjectSeeder {
                     _ = try await saveProject.execute(project)
                 }
             }
+            // コラージュデモ: 田の字テンプレに4枚（スロット合成の確認用）
+            if !existing.contains(where: { $0.title == "コラージュ（4枚）" }) {
+                var project = try await createProject.execute(
+                    title: "コラージュ（4枚）", aspect: AspectRatio(width: 1, height: 1))
+                for i in 0..<4 {
+                    project = try await addPhoto.execute(project: project, imageData: Self.demoImageData(variant: i))
+                }
+                project.applyTemplate(LayoutTemplateTable.fourUp()[0], toPage: 0)
+                _ = try await saveProject.execute(project)
+            }
+            // 枠付きデモ: 黒背景＋白フチ＋マット配置（背景/枠の確認用）
+            if !existing.contains(where: { $0.title == "枠付き（黒背景）" }) {
+                var project = try await createProject.execute(
+                    title: "枠付き（黒背景）", aspect: AspectRatio(width: 1, height: 1))
+                project = try await addPhoto.execute(project: project, imageData: Self.demoImageData(variant: 2))
+                project.placeAllMatted(coverage: 0.82)
+                project.setAllPagesBackgroundColor(.black)
+                if let id = project.placements.first?.id {
+                    project.setPlacementFrame(
+                        PhotoFrameStyle(borderColor: .white, borderWidthRatio: 0.012, cornerRadiusRatio: 0),
+                        placementID: id)
+                }
+                _ = try await saveProject.execute(project)
+            }
         } catch {
             // デモシードの失敗はアプリ動作に影響させない
         }

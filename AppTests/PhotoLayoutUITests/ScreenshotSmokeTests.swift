@@ -117,6 +117,90 @@ final class ScreenshotSmokeTests: XCTestCase {
     }
 
     @MainActor
+    func testCollageAndFramedDemos() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--seed-demo"]
+        app.launch()
+
+        // コラージュ（田の字4枚）: スロット合成の見た目
+        let collage = app.buttons["コラージュ（4枚）"]
+        XCTAssertTrue(collage.waitForExistence(timeout: 15))
+        collage.tap()
+        XCTAssertTrue(app.buttons["pageEditor.export"].waitForExistence(timeout: 15))
+        sleep(2)
+        attachScreenshot(named: "09-collage-template")
+
+        app.navigationBars.buttons.firstMatch.tap() // 一覧へ戻る
+
+        // 枠付き（黒背景＋白フチ・マット）
+        let framed = app.buttons["枠付き（黒背景）"]
+        XCTAssertTrue(framed.waitForExistence(timeout: 15))
+        framed.tap()
+        XCTAssertTrue(app.buttons["pageEditor.export"].waitForExistence(timeout: 15))
+        sleep(2)
+        attachScreenshot(named: "10-framed-black")
+    }
+
+    @MainActor
+    func testEditorSheetsAndPreview() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--seed-demo"]
+        app.launch()
+
+        let demoRow = app.buttons["デモ"]
+        XCTAssertTrue(demoRow.waitForExistence(timeout: 15))
+        demoRow.tap()
+        XCTAssertTrue(app.buttons["pageEditor.export"].waitForExistence(timeout: 15))
+        sleep(2)
+
+        // テンプレート選択シート（型枠をビジュアル表示）
+        app.buttons["pageEditor.templateMenu"].tap()
+        if app.buttons["田の字"].waitForExistence(timeout: 5) {
+            attachScreenshot(named: "11-template-sheet")
+        }
+        tapClose(app)
+
+        // レイヤー順シート
+        if app.buttons["pageEditor.layerButton"].waitForExistence(timeout: 3) {
+            app.buttons["pageEditor.layerButton"].tap()
+            sleep(1)
+            attachScreenshot(named: "12-layer-sheet")
+            tapClose(app)
+        }
+
+        // 書き出しプレビュー画面
+        let export = app.buttons["pageEditor.export"]
+        if export.isEnabled {
+            export.tap()
+            if app.buttons["preview.save"].waitForExistence(timeout: 5) {
+                attachScreenshot(named: "13-preview")
+            }
+            tapClose(app)
+        }
+
+        // 写真を選択 → 枠（縁）シート
+        let canvas = app.otherElements["pageEditor.canvas"].firstMatch
+        if canvas.exists {
+            canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            if app.buttons["pageEditor.frameButton"].waitForExistence(timeout: 5) {
+                app.buttons["pageEditor.frameButton"].tap()
+                if app.buttons["白フチ"].waitForExistence(timeout: 5) {
+                    attachScreenshot(named: "14-frame-sheet")
+                }
+                tapClose(app)
+            }
+        }
+    }
+
+    /// シート/プレビューの「閉じる」を押す（存在すれば）
+    @MainActor
+    private func tapClose(_ app: XCUIApplication) {
+        let close = app.buttons["閉じる"]
+        if close.waitForExistence(timeout: 3) { close.tap() }
+        sleep(1)
+    }
+
+    @MainActor
     func testXPostTimelineComposite() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--seed-demo"]
