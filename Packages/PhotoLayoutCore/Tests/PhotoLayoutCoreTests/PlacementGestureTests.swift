@@ -53,6 +53,25 @@ struct PlacementGestureTests {
         #expect(abs(fullBleedZoom.width - 1.5) < 1e-12)
     }
 
+    @Test("拡縮スナップ: 動く角がページ端に近いと端へ吸着しガイドを返す")
+    func scaleAnchoredSnapsToEdge() {
+        // topLeftアンカー（左上固定）。factor=1.48で右下角≒(0.99,0.99)→端(1.0)へ吸着
+        let base = LayoutRect(x: 0.25, y: 0.25, width: 0.5, height: 0.5)
+        let result = PlacementGesture.scaleAnchoredSnapped(destRect: base, factor: 1.48, anchor: .topLeft)
+        // 右下角のxが1.0へ吸着 → width=0.75, x固定0.25
+        #expect(abs(result.rect.maxX - 1.0) < 1e-9)
+        #expect(abs(result.rect.minX - 0.25) < 1e-12) // アンカー（左）は不動
+        #expect(result.guides.contains { $0.axis == .vertical && abs($0.position - 1.0) < 1e-9 })
+    }
+
+    @Test("拡縮スナップ: 端から遠いと吸着せずガイドなし")
+    func scaleAnchoredNoSnapWhenFar() {
+        let base = LayoutRect(x: 0.25, y: 0.25, width: 0.5, height: 0.5)
+        let result = PlacementGesture.scaleAnchoredSnapped(destRect: base, factor: 1.1, anchor: .topLeft)
+        #expect(result.guides.isEmpty)
+        #expect(abs(result.rect.width - 0.55) < 1e-9) // 素の拡縮のまま
+    }
+
     @Test("クロップパン: 画像とは逆方向へcropRectが動き、0..1でクランプ")
     func panCropMovesOppositeAndClamps() {
         let crop = LayoutRect(x: 0.2, y: 0, width: 0.5, height: 1)

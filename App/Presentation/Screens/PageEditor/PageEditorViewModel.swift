@@ -218,6 +218,10 @@ final class PageEditorViewModel {
 
     func select(_ placementID: UUID?) {
         selectedPlacementID = placementID
+        // 選択した写真の所属スライドを現在ページにする（選択枠・四隅ハンドルが必ず画面内に出るように）
+        if let id = placementID, let p = project.placements.first(where: { $0.id == id }) {
+            currentPageIndex = p.pageIndex
+        }
         if cropModePlacementID != placementID {
             cropModePlacementID = nil
         }
@@ -293,13 +297,15 @@ final class PageEditorViewModel {
         setDestRect(PlacementGesture.scale(destRect: base.destRect, factor: factor), for: placementID)
     }
 
-    /// 角ハンドル拡縮: 触っていない対角（anchor）を固定してアスペクト固定拡縮
+    /// 角ハンドル拡縮: 触っていない対角（anchor）を固定してアスペクト固定拡縮。
+    /// 移動時と同様にページ端・中心へスナップし、ガイド線を表示する。
     func updateScaleAnchored(placementID: UUID, factor: Double, anchor: PlacementGesture.Corner) {
         guard let base = basePlacement(placementID) else { return }
-        setDestRect(
-            PlacementGesture.scaleAnchored(destRect: base.destRect, factor: factor, anchor: anchor),
-            for: placementID
+        let result = PlacementGesture.scaleAnchoredSnapped(
+            destRect: base.destRect, factor: factor, anchor: anchor
         )
+        setDestRect(result.rect, for: placementID)
+        activeGuides = result.guides
     }
 
     /// 辺ハンドル: 枠のアスペクトを変える（画像は歪まずクロップ窓が変わる）

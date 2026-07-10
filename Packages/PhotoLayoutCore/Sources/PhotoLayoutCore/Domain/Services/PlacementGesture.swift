@@ -86,6 +86,57 @@ public enum PlacementGesture {
         return clampVisible(rect)
     }
 
+    /// アスペクト固定拡縮に、ページ端（0/1）・中心（0.5）への吸着を加える。
+    /// 動く角（アンカーの対角）が近ければ倍率を調整して端にピッタリ合わせ、ガイド線を返す。
+    /// 移動時と同様の「スナップ」を拡大縮小にも提供する。
+    public static func scaleAnchoredSnapped(
+        destRect: LayoutRect,
+        factor: Double,
+        anchor: Corner,
+        threshold: Double = 0.02
+    ) -> (rect: LayoutRect, guides: [SnapEngine.Guide]) {
+        let scaled = scaleAnchored(destRect: destRect, factor: factor, anchor: anchor)
+        guard destRect.width > 0, destRect.height > 0 else { return (scaled, []) }
+        // 固定される角（destRect基準）
+        let anchorX: Double, anchorY: Double
+        switch anchor {
+        case .topLeft:     anchorX = destRect.minX; anchorY = destRect.minY
+        case .topRight:    anchorX = destRect.maxX; anchorY = destRect.minY
+        case .bottomLeft:  anchorX = destRect.minX; anchorY = destRect.maxY
+        case .bottomRight: anchorX = destRect.maxX; anchorY = destRect.maxY
+        }
+        // 動く角（scaled基準）: アンカーが左端なら右端が動く、右端なら左端が動く
+        let dragX = anchorX <= scaled.minX + 1e-9 ? scaled.maxX : scaled.minX
+        let dragY = anchorY <= scaled.minY + 1e-9 ? scaled.maxY : scaled.minY
+        let snapX = nearestCandidate(dragX, threshold: threshold)
+        let snapY = nearestCandidate(dragY, threshold: threshold)
+        // アスペクト固定なので片軸のみ吸着（距離が小さい方）
+        if let sx = snapX, snapY == nil || sx.distance <= snapY!.distance {
+            let f = abs(sx.candidate - anchorX) / destRect.width
+            return (scaleAnchored(destRect: destRect, factor: f, anchor: anchor),
+                    [SnapEngine.Guide(axis: .vertical, position: sx.candidate)])
+        } else if let sy = snapY {
+            let f = abs(sy.candidate - anchorY) / destRect.height
+            return (scaleAnchored(destRect: destRect, factor: f, anchor: anchor),
+                    [SnapEngine.Guide(axis: .horizontal, position: sy.candidate)])
+        }
+        return (scaled, [])
+    }
+
+    /// 値を {0, 0.5, 1} のうち最も近いものへ（しきい値以内なら）。
+    private static func nearestCandidate(
+        _ value: Double, threshold: Double
+    ) -> (candidate: Double, distance: Double)? {
+        var best: (candidate: Double, distance: Double)?
+        for candidate in [0.0, 0.5, 1.0] {
+            let distance = abs(candidate - value)
+            if distance <= threshold, best == nil || distance < best!.distance {
+                best = (candidate, distance)
+            }
+        }
+        return best
+    }
+
     /// 辺ドラッグで枠を伸縮する（反対の辺は固定）。**枠のアスペクトが変わる**操作なので、
     /// 呼び出し側は ProjectEntity.resizeFrame(...) を通じてcropRectの再計算とセットで使うこと
     /// （画像は歪まず、枠の中で見せる範囲が変わるだけ）。
