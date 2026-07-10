@@ -17,5 +17,3 @@ xcuserdata/
 # OS
 .DS_Store
 
-# 操作ギャラリー生成物（tools/gallery.sh）
-/gallery/

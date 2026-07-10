@@ -41,7 +41,7 @@ jobs:
             -derivedDataPath DerivedData \
             | tee build.log
 
-      - name: Run tests (unit + UI screenshots)
+      - name: Run unit tests
         run: |
           set -o pipefail
           xcodebuild test-without-building \
@@ -49,27 +49,25 @@ jobs:
             -scheme PhotoLayout \
             -destination "$SIMULATOR_DESTINATION" \
             -derivedDataPath DerivedData \
+            -only-testing:PhotoLayoutTests \
             -resultBundlePath TestResults.xcresult \
             | tee test.log
 
-      # XCUITestが添付したスクリーンショットを取り出す。
-      # Macを持たない開発者が実際の画面を確認する唯一の手段。
-      - name: Export screenshots from xcresult
+      # 各操作を自動撮影し screenshots.html を生成（標準ツール fastlane snapshot）。
+      # Macを持たない開発者が実際の画面を確認する手段。設定は fastlane/Snapfile。
+      - name: Capture screenshots (fastlane snapshot)
         if: always()
-        run: |
-          if [ -e TestResults.xcresult ]; then
-            xcrun xcresulttool export attachments \
-              --path TestResults.xcresult \
-              --output-path screenshots || true
-            ls -R screenshots || true
-          fi
+        env:
+          FASTLANE_SKIP_UPDATE_CHECK: "1"
+          FASTLANE_HIDE_CHANGELOG: "1"
+        run: fastlane snapshot
 
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: screenshots
-          path: screenshots
+          path: fastlane/screenshots
           if-no-files-found: ignore
 
       - name: Upload test results and logs
