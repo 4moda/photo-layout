@@ -48,7 +48,13 @@ targets:
   PhotoLayoutUITests:
     type: bundle.ui-testing
     platform: iOS
-    sources: [AppTests/PhotoLayoutUITests]
+    # スクショ運用ツール（fastlane/tools）はこのUITestに属するが、テストバンドルの
+    # ソース/リソースには含めない（XcodeGenのソース走査から除外）。
+    sources:
+      - path: AppTests/PhotoLayoutUITests
+        excludes:
+          - "fastlane/**"
+          - "tools/**"
     dependencies:
       - target: PhotoLayout
     settings:

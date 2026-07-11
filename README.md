@@ -26,3 +26,31 @@ X / Instagram への写真投稿を準備するための iOS アプリ（開発�
 |---|---|
 | ドメインロジック（`Packages/PhotoLayoutCore`） | ローカル `swift test`（Linux可） |
 | iOSビルド・テスト・スクリーンショット・.ipa | GitHub Actions（macos-15） |
+
+## プロジェクト構成
+
+**ロジックは SwiftPM パッケージへ、Apple framework 依存は薄い Xcode シェルへ**、という
+ハイブリッド構成（意図的）。iOS の**アプリ本体**と **XCUITest** は SwiftPM プロダクトに
+なれない（SwiftPM に iOS アプリ製品型が無い）ため、「全部を `Packages/` に統一」はしない。
+
+```
+Packages/
+  PhotoLayoutCore/   SwiftPM パッケージ。Domain / UseCases など framework 非依存の
+                     ロジック。Linux の `swift test` で検証できる唯一の層。
+App/                 Xcode アプリターゲット。Presentation / Infrastructure。
+                     SwiftUI・SwiftData・CoreGraphics 等に依存し CI でのみコンパイル。
+AppTests/
+  PhotoLayoutTests/       Xcode ユニットテスト（App の Infrastructure など）
+  PhotoLayoutUITests/     Xcode UIテスト（XCUITest）＋スクショ運用ツール一式
+    ScreenshotSmokeTests.swift  画面・状態・操作を巡回して撮影
+    SnapshotHelper.swift        fastlane snapshot 公式ヘルパ
+    fastlane/Snapfile           snapshot 設定（撮影対象のUITestと同じ場所に置く）
+    tools/build_screenshot_index.py  画面ID/機能ID/言語/端末で絞り込める index.html 生成
+project.yml          XcodeGen 定義（.xcodeproj は生成物・非コミット）
+docs/                design.md / decisions.md / screens.md（画面カタログ）
+```
+
+- 依存方向は `Presentation → UseCases → Domain ← Infrastructure`（詳細は [docs/design.md](docs/design.md)）。
+- 全画面の**画面ID・機能ID**と状態/操作の網羅、スクショ命名規約は [docs/screens.md](docs/screens.md)。
+- スクショ運用ツール（fastlane/tools）は撮影対象の UITest ターゲット配下に同居させる。
+  CI はそのディレクトリを CWD にして `fastlane snapshot` を実行する。

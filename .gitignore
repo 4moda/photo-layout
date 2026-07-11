@@ -10,6 +10,11 @@ DerivedData/
 *.ipa
 Payload/
 
+# fastlane snapshot 出力（CI artifact。コミットしない）
+AppTests/PhotoLayoutUITests/fastlane/screenshots/
+AppTests/PhotoLayoutUITests/fastlane/test_output/
+AppTests/PhotoLayoutUITests/fastlane/report.xml
+
 # User state
 xcuserdata/
 .swiftpm/

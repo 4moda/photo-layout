@@ -12,9 +12,10 @@ fastlane 標準の screenshots.html は言語・端末でしか分類できな�
 ファイル名は fastlane の規約で `<端末>-<スナップ名>.png`。ディレクトリ名が言語。
 画面ID・機能IDの一覧は docs/screens.md と対応する。
 
-使い方:
-    python3 tools/build_screenshot_index.py [screenshots_dir]
-      screenshots_dir 既定: fastlane/screenshots
+使い方（リポジトリ直下から）:
+    python3 AppTests/PhotoLayoutUITests/tools/build_screenshot_index.py \
+        AppTests/PhotoLayoutUITests/fastlane/screenshots
+      引数省略時の既定は CWD 基準の fastlane/screenshots
 出力:
     <screenshots_dir>/index.html
 """

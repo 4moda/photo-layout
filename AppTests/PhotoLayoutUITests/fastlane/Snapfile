@@ -1,0 +1,25 @@
+# fastlane snapshot 設定（各操作を自動撮影し screenshots.html を生成）
+# CI(macOS)で、このディレクトリ（AppTests/PhotoLayoutUITests）をCWDにして
+# `fastlane snapshot` を実行する。ビルドは build-for-testing を再利用。
+# パスはCWD（＝UITestディレクトリ）基準。xcodeproj/DerivedData はリポジトリ直下(../../)。
+
+# XcodeGen生成のプロジェクトはリポジトリ直下。CWDからの相対で指定する。
+project("../../PhotoLayout.xcodeproj")
+
+devices(["iPhone 16"])
+languages(["ja-JP"])
+
+scheme("PhotoLayout")
+
+# build-for-testing の成果物（リポジトリ直下の DerivedData）を再利用（再ビルドしない）
+derived_data_path("../../DerivedData")
+test_without_building(true)
+
+# UIテストのみ撮影対象（ユニットテストは別ステップで実行）
+only_testing(["PhotoLayoutUITests"])
+
+# 出力はこのツール群と同じ場所（AppTests/PhotoLayoutUITests/fastlane/screenshots）
+output_directory("./fastlane/screenshots")
+clear_previous_screenshots(true)
+skip_open_summary(true)
+concurrent_simulators(false)

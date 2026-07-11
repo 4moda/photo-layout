@@ -93,12 +93,14 @@ final class ScreenshotSmokeTests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.navigationBars["PhotoLayout"].waitForExistence(timeout: 15))
 
+        // 注: スクショ名はそのままファイル名になる。成果物アップロードが拒否する
+        // ASCII の `:` `/` は使わず、全角「：」等で表す。
         let sizes: [(id: String, name: String)] = [
-            ("projectList.new_square", "S01-F04｜新規作成: 正方形 1:1（空キャンバス）"),
-            ("projectList.new_portrait45", "S01-F05｜新規作成: 縦 4:5（空キャンバス）"),
-            ("projectList.new_portrait34", "S01-F06｜新規作成: 縦 3:4（空キャンバス）"),
-            ("projectList.new_landscape169", "S01-F07｜新規作成: 横 16:9（空キャンバス）"),
-            ("projectList.new_landscape191", "S01-F08｜新規作成: 横長 1.91:1（空キャンバス）")
+            ("projectList.new_square", "S01-F04｜新規作成 正方形 1：1（空キャンバス）"),
+            ("projectList.new_portrait45", "S01-F05｜新規作成 縦 4：5（空キャンバス）"),
+            ("projectList.new_portrait34", "S01-F06｜新規作成 縦 3：4（空キャンバス）"),
+            ("projectList.new_landscape169", "S01-F07｜新規作成 横 16：9（空キャンバス）"),
+            ("projectList.new_landscape191", "S01-F08｜新規作成 横長 1.91：1（空キャンバス）")
         ]
         for size in sizes {
             let add = app.buttons["projectList.add"]
@@ -154,7 +156,7 @@ final class ScreenshotSmokeTests: XCTestCase {
         if app.buttons["pageEditor.frameAspectMenu"].waitForExistence(timeout: 3) {
             app.buttons["pageEditor.frameAspectMenu"].tap()
             if app.buttons["4:5 縦"].waitForExistence(timeout: 3) {
-                snapshot("S02-F09｜枠比率メニュー（元画像/1:1/4:5/3:4/16:9）")
+                snapshot("S02-F09｜枠比率メニュー（元画像・1：1・4：5・3：4・16：9）")
                 app.buttons["4:5 縦"].tap()
                 sleep(1)
             }
@@ -261,7 +263,7 @@ final class ScreenshotSmokeTests: XCTestCase {
         if card.waitForExistence(timeout: 3) {
             card.press(forDuration: 1.1)
             if app.buttons["複製"].waitForExistence(timeout: 3) {
-                snapshot("S03-F04〜F09｜カード長押しメニュー（追加/複製/移動/削除）")
+                snapshot("S03-F04〜F09｜カード長押しメニュー（追加・複製・移動・削除）")
             }
             if nav.exists { nav.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
         }
