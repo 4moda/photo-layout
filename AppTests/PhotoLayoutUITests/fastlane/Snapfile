@@ -6,7 +6,9 @@
 # XcodeGen生成のプロジェクトはリポジトリ直下。CWDからの相対で指定する。
 project("../../PhotoLayout.xcodeproj")
 
-devices(["iPhone 16"])
+# iPhone 16（標準）＋ iPhone SE 第3世代（最小4.7"幅＝コンパイル/レイアウト崩れの検知用）。
+# 端末を増やすと撮影は逐次に増える。index.html は端末フィルタ対応済み。
+devices(["iPhone 16", "iPhone SE (3rd generation)"])
 languages(["ja-JP"])
 
 scheme("PhotoLayout")
