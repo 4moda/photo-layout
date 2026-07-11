@@ -225,8 +225,8 @@ final class ScreenshotSmokeTests: XCTestCase {
         sleep(2)
     }
 
-    /// S03 俯瞰のメニュー系（比率・背景・長押しカードメニュー）を撮る。
-    /// メニューは popover。撮ったらナビバーをタップして閉じ、次を開く。
+    /// S03 俯瞰のメニュー系（比率・背景・ページ選択メニュー）を撮る。
+    /// 比率/背景は popover。撮ったらナビバーをタップして閉じ、次を開く。
     @MainActor
     private func captureOverviewMenus(_ app: XCUIApplication) {
         let nav = app.navigationBars["スライド"]
@@ -247,15 +247,13 @@ final class ScreenshotSmokeTests: XCTestCase {
             if nav.exists { nav.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
         }
 
-        // 長押しでSCRL風カードメニュー（左に追加/右に追加/複製/移動/削除 = S03-F04〜F09）
-        // カードの要素型は環境で揺れるため型を問わず探す
+        // ページ選択時のフローティングメニュー（複製/削除 = S03-F06〜F09）
         let card = app.descendants(matching: .any)["overview.row"].firstMatch
         if card.waitForExistence(timeout: 3) {
-            card.press(forDuration: 1.1)
+            card.tap()
             if app.buttons["複製"].waitForExistence(timeout: 3) {
-                snapshot("S03-F04-F09-card-context-menu")
+                snapshot("S03-F06-F09-page-selected-menu")
             }
-            if nav.exists { nav.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
         }
     }
 

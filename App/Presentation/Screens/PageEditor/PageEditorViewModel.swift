@@ -110,7 +110,7 @@ final class PageEditorViewModel {
         project.insertPage(at: index)
     }
 
-    /// スライドを複製して直後に挿入（俯瞰の長押しメニュー用）。
+    /// スライドを複製して直後に挿入（俯瞰のページ選択メニュー用）。
     /// 複製された配置は新IDなのでプレビュー画像を再生成する（複製先にも画像が出るように）。
     func overviewDuplicatePage(at index: Int) async {
         project.duplicatePage(at: index)

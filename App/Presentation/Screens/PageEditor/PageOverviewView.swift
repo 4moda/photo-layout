@@ -2,10 +2,11 @@ import SwiftUI
 import PhotoLayoutCore
 
 /// ページ俯瞰モード: 全ページのサムネイルを「横並び」で一覧し、挿入・削除・並べ替えを行う。
-/// ページは横スクロールで2〜3ページ分が見える。並べ替えは各カードの左右ボタンで行う。
+/// ページは横スクロールで2〜3ページ分が見える。並べ替えはドラッグ&ドロップで行う。
 /// 左上=キャンセル（開始時点へ復帰）、右上=完了（確定して保存）。
 struct PageOverviewView: View {
     @Bindable var viewModel: PageEditorViewModel
+    @State private var selectedPageIndex: Int?
 
     /// サムネイルの高さ。ページのアスペクトに応じて幅が決まる（2〜3ページ分が見える目安）
     private let thumbnailHeight: CGFloat = 200
@@ -29,28 +30,29 @@ struct PageOverviewView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
+            ZStack(alignment: .bottom) {
                 Color(white: 0.11).ignoresSafeArea()
                 ScrollView(.horizontal, showsIndicators: true) {
-                    HStack(alignment: .top, spacing: 16) {
+                    HStack(alignment: .top, spacing: 10) {
                         let pages = viewModel.project.orderedPages
                         ForEach(Array(pages.enumerated()), id: \.element.id) { offset, page in
-                            card(for: page)
+                            card(for: page, showsInsertAfter: offset < pages.count - 1)
                                 // ドラッグで並べ替え（このカードへドロップ＝その位置へ移動）
                                 .draggable("\(page.index)")
                                 .dropDestination(for: String.self) { items, _ in
                                     guard let from = items.first.flatMap(Int.init) else { return false }
+                                    selectedPageIndex = nil
                                     viewModel.overviewMovePage(from: from, to: page.index)
                                     return true
                                 }
-                            if offset < pages.count - 1 {
-                                insertCard(at: page.index + 1)
-                            }
                         }
                         appendCard
                     }
-                    .padding(20)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+                    .padding(.bottom, 120)
                 }
+                overviewControls
             }
             .navigationTitle("スライド")
             .navigationBarTitleDisplayMode(.inline)
@@ -59,46 +61,11 @@ struct PageOverviewView: View {
                     Button("キャンセル") { viewModel.cancelOverview() }
                         .accessibilityIdentifier("overview.cancel")
                 }
-                ToolbarItem(placement: .bottomBar) {
-                    // カルーセル全体の比率（スライド管理画面に置く。確定は完了時）
-                    Menu {
-                        ForEach(Self.aspectChoices, id: \.label) { choice in
-                            Button(choice.label) {
-                                viewModel.overviewSetAspect(choice.aspect)
-                            }
-                        }
-                    } label: {
-                        Label("比率", systemImage: "aspectratio")
-                    }
-                    .accessibilityIdentifier("overview.ratio")
-                }
-                ToolbarItem(placement: .bottomBar) { Spacer() }
-                ToolbarItem(placement: .bottomBar) {
-                    // プロジェクト共通の背景色（全スライドに適用。確定は完了時）
-                    Menu {
-                        ForEach(Self.backgroundColors, id: \.label) { choice in
-                            Button(choice.label) {
-                                viewModel.overviewSetBackgroundColor(choice.color)
-                            }
-                        }
-                    } label: {
-                        Label("背景", systemImage: "square.dashed")
-                    }
-                    .accessibilityIdentifier("overview.background")
-                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完了") {
                         Task { await viewModel.confirmOverview() }
                     }
                     .accessibilityIdentifier("overview.done")
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        viewModel.overviewInsertPage(at: viewModel.pageCount)
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .accessibilityIdentifier("overview.append")
                 }
             }
         }
@@ -106,9 +73,10 @@ struct PageOverviewView: View {
 
     // MARK: - ページカード
 
-    /// スライド1枚のカード。長押しで SCRL 風メニュー（左に追加/右に追加/複製/移動/削除）。
-    private func card(for page: PageEntity) -> some View {
+    /// スライド1枚のカード。タップで選択し、並べ替えはドラッグ&ドロップで行う。
+    private func card(for page: PageEntity, showsInsertAfter: Bool) -> some View {
         let isCurrent = page.index == viewModel.currentPageIndex
+        let isSelected = page.index == selectedPageIndex
         return VStack(spacing: 8) {
             CanvasRenderView(
                 page: page,
@@ -120,53 +88,39 @@ struct PageOverviewView: View {
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
-                    .stroke(isCurrent ? Color.accentColor : Color.white.opacity(0.25),
-                            lineWidth: isCurrent ? 2.5 : 0.5)
+                    .stroke(
+                        isSelected ? Color.accentColor
+                                   : (isCurrent ? Color.white.opacity(0.82) : Color.white.opacity(0.25)),
+                        lineWidth: isSelected ? 3 : (isCurrent ? 1.5 : 0.5)
+                    )
             )
 
-            Text("\(page.index + 1)")
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.white)
-            // 長押しでメニューが出る操作可能さを示すハンドル（文字なし）
-            Image(systemName: "line.3.horizontal")
-                .font(.footnote)
-                .foregroundStyle(.white.opacity(0.4))
+            ZStack {
+                Text("\(page.index + 1)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.white)
+
+                if showsInsertAfter {
+                    HStack {
+                        Spacer()
+                        insertButton(after: page.index)
+                    }
+                }
+            }
+            .frame(width: page.aspect.ratio * thumbnailHeight)
         }
         .contentShape(Rectangle())
-        .contextMenu { pageCardMenu(for: page) }
+        .onTapGesture {
+            viewModel.focusPage(page.index)
+            selectedPageIndex = (selectedPageIndex == page.index) ? nil : page.index
+        }
         .accessibilityIdentifier("overview.row")
-    }
-
-    @ViewBuilder
-    private func pageCardMenu(for page: PageEntity) -> some View {
-        Button {
-            viewModel.overviewInsertPage(at: page.index)
-        } label: { Label("左に追加", systemImage: "arrow.left.to.line") }
-        Button {
-            viewModel.overviewInsertPage(at: page.index + 1)
-        } label: { Label("右に追加", systemImage: "arrow.right.to.line") }
-        Button {
-            Task { await viewModel.overviewDuplicatePage(at: page.index) }
-        } label: { Label("複製", systemImage: "plus.square.on.square") }
-        Divider()
-        Button {
-            viewModel.overviewMovePage(from: page.index, to: page.index - 1)
-        } label: { Label("左へ移動", systemImage: "arrow.left") }
-            .disabled(page.index == 0)
-        Button {
-            viewModel.overviewMovePage(from: page.index, to: page.index + 1)
-        } label: { Label("右へ移動", systemImage: "arrow.right") }
-            .disabled(page.index >= viewModel.pageCount - 1)
-        Divider()
-        Button(role: .destructive) {
-            viewModel.overviewDeletePage(at: page.index)
-        } label: { Label("削除", systemImage: "trash") }
-            .disabled(viewModel.pageCount <= 1)
     }
 
     /// 末尾の「ページを追加」カード
     private var appendCard: some View {
         Button {
+            selectedPageIndex = nil
             viewModel.overviewInsertPage(at: viewModel.pageCount)
         } label: {
             VStack(spacing: 10) {
@@ -187,32 +141,105 @@ struct PageOverviewView: View {
             )
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("overview.appendCard")
+        .accessibilityIdentifier("overview.append")
     }
 
-    /// ページ間へ直接差し込むための挿入ボタン
-    private func insertCard(at index: Int) -> some View {
+    /// ページの連続性を崩さないよう、カードの下側に出す挿入ボタン
+    private func insertButton(after pageIndex: Int) -> some View {
         Button {
-            viewModel.overviewInsertPage(at: index)
+            selectedPageIndex = nil
+            viewModel.overviewInsertPage(at: pageIndex + 1)
         } label: {
-            VStack(spacing: 10) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 28))
-                Text("追加")
-                    .font(.caption2)
-            }
-            .foregroundStyle(.white.opacity(0.88))
-            .frame(width: 52, height: thumbnailHeight)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(Color.white.opacity(0.06))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(Color.white.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
-            )
+            Image(systemName: "plus.circle.fill")
+                .font(.system(size: 24))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(Color.white.opacity(0.08)))
+                .overlay(Circle().strokeBorder(Color.white.opacity(0.12), lineWidth: 0.8))
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("overview.insertBetween\(index)")
+        .accessibilityIdentifier("overview.insertBetween\(pageIndex + 1)")
+    }
+
+    @ViewBuilder
+    private var overviewControls: some View {
+        if let selectedPageIndex {
+            HStack(spacing: 12) {
+                Button {
+                    Task { await viewModel.overviewDuplicatePage(at: selectedPageIndex) }
+                    self.selectedPageIndex = nil
+                } label: {
+                    controlLabel("複製", systemImage: "plus.square.on.square")
+                }
+
+                Button(role: .destructive) {
+                    viewModel.overviewDeletePage(at: selectedPageIndex)
+                    self.selectedPageIndex = nil
+                } label: {
+                    controlLabel("削除", systemImage: "trash", tint: .red)
+                }
+                .disabled(viewModel.pageCount <= 1)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(.ultraThinMaterial)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8)
+            )
+            .shadow(color: .black.opacity(0.14), radius: 16, y: 8)
+            .padding(.bottom, 20)
+        } else {
+            HStack(spacing: 12) {
+                Menu {
+                    ForEach(Self.aspectChoices, id: \.label) { choice in
+                        Button(choice.label) {
+                            viewModel.overviewSetAspect(choice.aspect)
+                        }
+                    }
+                } label: {
+                    controlLabel("比率", systemImage: "aspectratio")
+                }
+                .accessibilityIdentifier("overview.ratio")
+
+                Menu {
+                    ForEach(Self.backgroundColors, id: \.label) { choice in
+                        Button(choice.label) {
+                            viewModel.overviewSetBackgroundColor(choice.color)
+                        }
+                    }
+                } label: {
+                    controlLabel("背景", systemImage: "square.dashed")
+                }
+                .accessibilityIdentifier("overview.background")
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(.ultraThinMaterial)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8)
+            )
+            .shadow(color: .black.opacity(0.14), radius: 16, y: 8)
+            .padding(.bottom, 20)
+        }
+    }
+
+    private func controlLabel(_ title: String, systemImage: String, tint: Color = .accentColor) -> some View {
+        VStack(spacing: 3) {
+            Image(systemName: systemImage)
+                .font(.system(size: 18))
+            Text(title)
+                .font(.caption2)
+        }
+        .foregroundStyle(tint)
+        .frame(width: 62)
+        .padding(.vertical, 6)
     }
 }

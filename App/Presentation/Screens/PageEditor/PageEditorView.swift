@@ -16,13 +16,13 @@ struct PageEditorView: View {
     @State private var slotPickerPresented = false
     @State private var slotFillItem: PhotosPickerItem?
     @State private var pendingSlotFill: (page: Int, slot: Int)?
-    // フッターから開くビジュアル選択シート（テンプレ/レイヤー/枠）は1枚に集約
+    // フッターから開くビジュアル選択シート（テンプレ/枠比率/レイヤー/枠）は1枚に集約
     @State private var activeSheet: EditorSheet?
     // 書き出しプレビュー画面
     @State private var previewPresented = false
 
     enum EditorSheet: Int, Identifiable {
-        case template, layers, frame
+        case template, frameAspect, layers, frame
         var id: Int { rawValue }
     }
     /// 角ハンドルドラッグ開始時の角と中心（拡縮中に選択枠が動いても基準がぶれないよう固定）
@@ -34,6 +34,8 @@ struct PageEditorView: View {
     @State private var pinchBase: (zoom: CGFloat, pan: CGSize)?
     @State private var dragMode: SpreadDragMode?
     @State private var didInitialScroll = false
+    private let controlsOverlayBaseHeight: CGFloat = 110
+    private let cropHintHeight: CGFloat = 34
 
     private enum SpreadDragMode {
         case photo(id: UUID, isCrop: Bool, denom: CGSize)
@@ -46,7 +48,7 @@ struct PageEditorView: View {
     }
 
     var body: some View {
-        VStack(spacing: 16) {
+        ZStack(alignment: .bottom) {
             spreadCanvas
                 .frame(maxHeight: .infinity)
                 .accessibilityIdentifier("pageEditor.canvas")
@@ -65,26 +67,34 @@ struct PageEditorView: View {
                     }
                 }
 
-            if viewModel.cropModePlacementID != nil {
-                Text("クロップ調整中 — ドラッグ/ピンチで位置と拡大を変更、枠の外をタップで完了")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-                    .accessibilityIdentifier("pageEditor.cropModeHint")
-            }
+            VStack(spacing: 10) {
+                if viewModel.cropModePlacementID != nil {
+                    Text("クロップ調整中 — ドラッグ/ピンチで位置と拡大を変更、枠の外をタップで完了")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(Capsule().strokeBorder(Color.orange.opacity(0.25), lineWidth: 0.8))
+                        .accessibilityIdentifier("pageEditor.cropModeHint")
+                }
 
-            controls
-                // フッターのビジュアル選択シート（1枚に集約）
-                .sheet(item: $activeSheet) { sheet in
-                    switch sheet {
-                    case .template: templatePickerSheet
-                    case .layers: layerSheet
-                    case .frame: framePickerSheet
-                    }
+                controls
+            }
+            .padding(.bottom, 8)
+            // フッターのビジュアル選択シート（1枚に集約）
+            .sheet(item: $activeSheet) { sheet in
+                switch sheet {
+                case .template: templatePickerSheet
+                case .frameAspect: frameAspectPickerSheet
+                case .layers: layerSheet
+                case .frame: framePickerSheet
                 }
-                // 書き出しプレビュー（俯瞰カバーと別ノードに付けて多重モーダル競合を避ける）
-                .fullScreenCover(isPresented: $previewPresented) {
-                    PreviewView(viewModel: viewModel)
-                }
+            }
+            // 書き出しプレビュー（俯瞰カバーと別ノードに付けて多重モーダル競合を避ける）
+            .fullScreenCover(isPresented: $previewPresented) {
+                PreviewView(viewModel: viewModel)
+            }
         }
         .padding(.vertical)
         .navigationTitle(viewModel.project.title ?? "レイアウト")
@@ -312,17 +322,18 @@ struct PageEditorView: View {
     /// 現在ページが全体見えて左右の隣がのぞくズーム倍率。
     /// ページ高さ≒ビューポート高の88%、ページ幅≒ビューポート幅の78%（左右に隣がのぞく）に収める。
     private func fitZoom(geo: GeometryProxy) -> CGFloat {
-        guard let page = viewModel.page, geo.size.height > 0 else { return 1 }
+        let layoutHeight = editorLayoutHeight(geo: geo)
+        guard let page = viewModel.page, geo.size.height > 0, layoutHeight > 0 else { return 1 }
         let aspect = CGFloat(max(page.aspect.ratio, 0.01))
-        let byHeight = geo.size.height * 0.88
+        let byHeight = layoutHeight * 0.88
         let byWidth = geo.size.width * 0.78 / aspect
         let stripHeight = min(byHeight, byWidth)
         return max(0.15, stripHeight / geo.size.height)
     }
 
     /// 現在ページを水平方向の中央へ置くパン量（垂直は中央固定）
-    private func centeredPan(geo: GeometryProxy) -> CGSize {
-        let stripHeight = geo.size.height * viewZoom
+    private func centeredPan(geo: GeometryProxy, zoom: CGFloat) -> CGSize {
+        let stripHeight = geo.size.height * zoom
         guard let frame = SpreadGeometry.pageFrame(
             project: viewModel.project, pageIndex: viewModel.currentPageIndex
         ) else { return .zero }
@@ -332,8 +343,17 @@ struct PageEditorView: View {
 
     /// 現在ページを中央にフィット（ズーム＋パンを既定へ）
     private func resetView(geo: GeometryProxy) {
-        viewZoom = fitZoom(geo: geo)
-        panOffset = clampedPan(desired: centeredPan(geo: geo), geo: geo)
+        let zoom = fitZoom(geo: geo)
+        viewZoom = zoom
+        panOffset = clampedPan(desired: centeredPan(geo: geo, zoom: zoom), geo: geo, zoom: zoom)
+    }
+
+    private func editorLayoutHeight(geo: GeometryProxy) -> CGFloat {
+        max(geo.size.height - controlsOverlayBaseHeight - cropHintInset, 1)
+    }
+
+    private var cropHintInset: CGFloat {
+        viewModel.cropModePlacementID == nil ? 0 : cropHintHeight
     }
 
     /// パンの可動域: キャンバスがビューポートより小さい軸は中央固定、大きい軸は端まで
@@ -341,6 +361,7 @@ struct PageEditorView: View {
         let z = zoom ?? viewZoom
         let stripHeight = geo.size.height * z
         let stripWidth = CGFloat(SpreadGeometry.totalWidth(project: viewModel.project)) * stripHeight
+        let layoutHeight = editorLayoutHeight(geo: geo)
         var x = desired.width
         var y = desired.height
         if stripWidth <= geo.size.width {
@@ -348,10 +369,10 @@ struct PageEditorView: View {
         } else {
             x = min(max(x, geo.size.width - stripWidth), 0)
         }
-        if stripHeight <= geo.size.height {
-            y = (geo.size.height - stripHeight) / 2
+        if stripHeight <= layoutHeight {
+            y = (layoutHeight - stripHeight) / 2
         } else {
-            y = min(max(y, geo.size.height - stripHeight), 0)
+            y = min(max(y, layoutHeight - stripHeight), 0)
         }
         return CGSize(width: x, height: y)
     }
@@ -761,18 +782,12 @@ struct PageEditorView: View {
     /// 前面/背面はページ選択の「レイヤー」に集約、差し替えは廃止。移動/拡縮はドラッグ。
     private var photoControls: some View {
         toolbarStrip {
-            Menu {
-                Button("元画像の比率（全体を表示）") {
-                    Task { await viewModel.applyPhotoNativeAspect() }
-                }
-                ForEach(Self.frameAspectChoices, id: \.label) { choice in
-                    Button(choice.label) {
-                        Task { await viewModel.applyFrameAspect(pixelAspect: choice.pixelAspect) }
-                    }
-                }
+            Button {
+                activeSheet = .frameAspect
             } label: {
                 toolItemLabel("枠比率", systemImage: "aspectratio")
             }
+            .buttonStyle(.plain)
             .accessibilityIdentifier("pageEditor.frameAspectMenu")
 
             toolButton("クロップ", systemImage: "crop", identifier: "pageEditor.cropButton") {
@@ -976,6 +991,53 @@ struct PageEditorView: View {
         }
         .presentationDetents([.medium, .large])
     }
+
+    private var frameAspectPickerSheet: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 3), spacing: 16) {
+                    Button {
+                        activeSheet = nil
+                        Task { await viewModel.applyPhotoNativeAspect() }
+                    } label: {
+                        VStack(spacing: 6) {
+                            AspectRatioSwatch(aspect: nil)
+                            Text("元画像")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("元画像の比率（全体を表示）")
+
+                    ForEach(Self.frameAspectChoices, id: \.label) { choice in
+                        Button {
+                            activeSheet = nil
+                            Task { await viewModel.applyFrameAspect(pixelAspect: choice.pixelAspect) }
+                        } label: {
+                            VStack(spacing: 6) {
+                                AspectRatioSwatch(aspect: choice.pixelAspect)
+                                Text(choice.label)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier(choice.label)
+                    }
+                }
+                .padding(20)
+            }
+            .navigationTitle("枠比率")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("閉じる") { activeSheet = nil }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
 }
 
 /// 型枠のスロット配置をマス目で表す小さなプレビュー（正方形）。
@@ -1031,5 +1093,35 @@ private struct FrameSwatch: View {
 
     private func color(_ c: LayoutColor) -> Color {
         Color(red: c.red, green: c.green, blue: c.blue, opacity: c.alpha)
+    }
+}
+
+private struct AspectRatioSwatch: View {
+    let aspect: Double?
+
+    var body: some View {
+        GeometryReader { g in
+            let ratio = CGFloat(max(aspect ?? 1, 0.01))
+            let maxWidth = g.size.width * 0.78
+            let maxHeight = g.size.height * 0.78
+            let fittedWidth = min(maxWidth, maxHeight * ratio)
+            let fittedHeight = fittedWidth / ratio
+
+            ZStack {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color(.systemGray5))
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(Color(.systemGray4), lineWidth: 0.5)
+
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(Color.accentColor.opacity(0.22))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 5)
+                            .strokeBorder(Color.accentColor, lineWidth: 1)
+                    )
+                    .frame(width: fittedWidth, height: fittedHeight)
+            }
+        }
+        .aspectRatio(1, contentMode: .fit)
     }
 }
