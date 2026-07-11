@@ -14,9 +14,10 @@ on:
     types: [completed]
     branches: [main]
 
-# 最小権限（コードの読み取りのみ）
+# 最小権限。他ワークフロー（core-tests）の結論参照のため actions: read を付与。
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: appetize-${{ github.ref }}
@@ -37,6 +38,24 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+
+      # ios-ci（workflow_run 起動条件）に加え、同一コミットで core-tests も成功していることを要求。
+      # App は PhotoLayoutCore をリンクするためコンパイル不備は ios-ci で落ちるが、
+      # 「コンパイルは通るが Core のロジックテストが落ちる」ケースをここで塞ぐ。
+      - name: Gate on core-tests (same commit)
+        if: github.event_name == 'workflow_run'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          conclusion=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow core-tests \
+            --branch main --json headSha,conclusion \
+            --jq "[.[] | select(.headSha==\"$SHA\")][0].conclusion // \"missing\"")
+          echo "core-tests($SHA) = $conclusion"
+          if [ "$conclusion" != "success" ]; then
+            echo "::error::core-tests がこのコミットで成功していません（=$conclusion）。Appetize デプロイを中止します。"
+            exit 1
+          fi
 
       - name: Check secret
         env:
@@ -67,7 +86,7 @@ jobs:
 
       - name: Zip .app bundle
         run: |
-          cd DerivedData/Build/Products/Release-iphonesimulator
+          cd DerivedData/Build/Products/Release-iphonesimulator || exit 1
           zip -qry "$GITHUB_WORKSPACE/PhotoLayout-simulator.zip" PhotoLayout.app
 
       - name: Upload to Appetize

@@ -44,8 +44,11 @@ jobs:
           done
           if [ "$missing" = 1 ]; then
             echo "::warning::App Store Connect API の Secrets が未設定です。docs/release.md の手順で設定してください。"
+            configured=false
+          else
+            configured=true
           fi
-          echo "configured=$([ "$missing" = 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "configured=$configured" >> "$GITHUB_OUTPUT"
 
       - name: Install XcodeGen
         run: brew install xcodegen
