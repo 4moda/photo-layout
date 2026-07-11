@@ -15,20 +15,29 @@ PhotoLayout の全画面について、**画面の状態**と**操作のバリ�
     S02｜写真1枚（自然配置）        ← 状態のみ（特定機能に紐づかない）
 ```
 
-fastlane snapshot の出力ファイルは `<言語>/<端末>-<スナップ名>.png`。したがって
+fastlane snapshot の生ファイルは `<言語>/<端末>-<スナップ名>.png`。`build_screenshot_index.py`
+はそこから **安全なASCIIだけのミラーパス**:
+
+```
+<device-slug>/<lang>/<画面ID[-機能ID]-action-in-english>.png
+例: iphone-16/ja-jp/S01-F02-project-list-empty-state.png
+```
+
+を生成し、`index.html` はこの安全なパスを参照する。したがって
 
 | 軸 | 取得元 |
 |---|---|
-| 言語 | ディレクトリ名（`ja-JP` など） |
-| 端末 | ファイル名の先頭（`iPhone 16-…`） |
-| 画面ID / 機能ID | スナップ名の先頭トークン |
+| 言語 | 生ファイルのディレクトリ名（`ja-JP` など） / ミラーでは `ja-jp` |
+| 端末 | 生ファイル名の先頭（`iPhone 16-…`） / ミラーでは `iphone-16/` |
+| 画面ID / 機能ID | スナップ名の先頭トークン → ミラーのファイル名プレフィックス |
 
 > **スナップ名に使えない文字**: スナップ名はそのままPNGファイル名になり、GitHub Actions の
 > 成果物アップロードは `: " < > | * ? \r \n` と `/`（パス区切り）を拒否する。比率などは
 > 全角「：」、区切りは「・」を使う（例: `1：1`, `元画像・各比率`）。区切り記号 `｜` は全角なのでOK。
 
 `AppTests/PhotoLayoutUITests/tools/build_screenshot_index.py` がこの規約でファイル名を解析し、
-**言語・画面ID・端末で絞り込めて説明文で検索できる `index.html`** を生成する
+**安全なASCIIミラーファイル群** と、**言語・画面ID・端末で絞り込めて説明文で検索できる
+`index.html`** を生成する
 （CIの `screenshots` artifact に同梱）。fastlane 標準の `screenshots.html` も併存する
 （言語・端末のみの素朴な一覧）。
 
