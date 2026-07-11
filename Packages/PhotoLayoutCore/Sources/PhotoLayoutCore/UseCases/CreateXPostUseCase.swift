@@ -21,7 +21,6 @@ public struct CreateXPostUseCase: Sendable {
         }
 
         // 1ページにXタイムライン合成テンプレートを敷き、各写真をスロットへ当てはめる。
-        // 書き出し時にスロット個別画像へ分割する（ExportPageUseCase.executeSlots）。
         let template = LayoutTemplateTable.xTimeline(photoCount: count)
         let pageAspect = template.recommendedAspect ?? XTimelineComposite.canvasAspect(photoCount: count)
         var project = ProjectEntity(

@@ -33,7 +33,8 @@ struct PageOverviewView: View {
                 Color(white: 0.11).ignoresSafeArea()
                 ScrollView(.horizontal, showsIndicators: true) {
                     HStack(alignment: .top, spacing: 16) {
-                        ForEach(viewModel.project.orderedPages, id: \.id) { page in
+                        let pages = viewModel.project.orderedPages
+                        ForEach(Array(pages.enumerated()), id: \.element.id) { offset, page in
                             card(for: page)
                                 // ドラッグで並べ替え（このカードへドロップ＝その位置へ移動）
                                 .draggable("\(page.index)")
@@ -42,6 +43,9 @@ struct PageOverviewView: View {
                                     viewModel.overviewMovePage(from: from, to: page.index)
                                     return true
                                 }
+                            if offset < pages.count - 1 {
+                                insertCard(at: page.index + 1)
+                            }
                         }
                         appendCard
                     }
@@ -184,5 +188,31 @@ struct PageOverviewView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("overview.appendCard")
+    }
+
+    /// ページ間へ直接差し込むための挿入ボタン
+    private func insertCard(at index: Int) -> some View {
+        Button {
+            viewModel.overviewInsertPage(at: index)
+        } label: {
+            VStack(spacing: 10) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 28))
+                Text("追加")
+                    .font(.caption2)
+            }
+            .foregroundStyle(.white.opacity(0.88))
+            .frame(width: 52, height: thumbnailHeight)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color.white.opacity(0.06))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(Color.white.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("overview.insertBetween\(index)")
     }
 }

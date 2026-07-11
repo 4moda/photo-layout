@@ -402,9 +402,6 @@ final class PageEditorViewModel {
 
     // MARK: - 書き出し
 
-    /// 現在ページの写真枚数（個別書き出しを出すか判定に使う）
-    var currentPagePhotoCount: Int { pagePlacements.count }
-
     /// ページを1枚の画像として書き出す（複数ページなら各ページを投稿順に）。合成レイアウトの基本。
     func exportPages() async {
         guard hasPhoto else {
@@ -429,26 +426,6 @@ final class PageEditorViewModel {
                     result.pixelSize.width, result.pixelSize.height, mb
                 )
             }
-        } catch {
-            exportMessage = "書き出しに失敗しました: \(error.localizedDescription)"
-        }
-    }
-
-    /// 現在ページの各写真を、トリミング済みの個別画像として書き出す（汎用モード。X複数投稿等）。
-    func exportIndividualPhotos() async {
-        guard currentPagePhotoCount > 0 else {
-            exportMessage = "写真を追加してください"
-            return
-        }
-        isExporting = true
-        defer { isExporting = false }
-        do {
-            let results = try await exportPage.executeSlots(project: project, pageIndex: currentPageIndex)
-            let totalMB = Double(results.reduce(0) { $0 + $1.byteCount }) / 1_000_000
-            exportMessage = String(
-                format: "%d枚を個別画像で書き出しました（計%.1fMB）\nカメラロールに保存済み",
-                results.count, totalMB
-            )
         } catch {
             exportMessage = "書き出しに失敗しました: \(error.localizedDescription)"
         }

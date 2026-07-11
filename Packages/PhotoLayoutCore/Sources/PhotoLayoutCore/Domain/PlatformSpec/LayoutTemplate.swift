@@ -89,7 +89,7 @@ public enum LayoutTemplateTable {
     }
 
     /// Xタイムライン合成（2〜4枚。スロットはXTimelineCompositeを流用）。
-    /// 推奨ページアスペクトは16:9で、書き出しはスロット個別画像で行う。
+    /// 推奨ページアスペクトは16:9。
     public static func xTimeline(photoCount: Int) -> LayoutTemplate {
         LayoutTemplate(
             id: "x-timeline-\(photoCount)",

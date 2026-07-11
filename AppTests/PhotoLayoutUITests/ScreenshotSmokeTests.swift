@@ -181,7 +181,7 @@ final class ScreenshotSmokeTests: XCTestCase {
         }
     }
 
-    // MARK: - S02 レイアウト種別（コラージュ / 枠付き / パノラマ / X組写真）と S04 個別保存
+    // MARK: - S02 レイアウト種別（コラージュ / 枠付き / パノラマ / X組写真）
 
     @MainActor
     func testLayoutKinds() throws {
@@ -212,15 +212,6 @@ final class ScreenshotSmokeTests: XCTestCase {
         openDemo(app, "X投稿（3枚）")
         sleep(2)
         snapshot("S02-x-timeline-composite")
-        // X投稿は1スライドに複数枚 → プレビューで「各写真を個別に保存」が出る
-        if app.buttons["pageEditor.export"].isEnabled {
-            app.buttons["pageEditor.export"].tap()
-            if app.buttons["preview.save"].waitForExistence(timeout: 5) {
-                sleep(1)
-                snapshot("S04-F03-export-preview-save-each-photo")
-            }
-            tapClose(app)
-        }
     }
 
     // MARK: - helpers

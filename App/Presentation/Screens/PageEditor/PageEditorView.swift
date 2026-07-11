@@ -115,8 +115,11 @@ struct PageEditorView: View {
                     .foregroundStyle(.secondary)
                     .accessibilityIdentifier("pageEditor.pageLabel")
             }
+            ToolbarItem(placement: .topBarTrailing) {
+                exportToolbarButton
+            }
         }
-        // 俯瞰・書き出しはフッターへ集約（上部バーは戻る/undo/redo/番号のみ）
+        // 俯瞰はフッター、書き出しは右上へ集約（上部バーは戻る/undo/redo/番号/保存）
         .fullScreenCover(isPresented: Binding(
             get: { viewModel.isOverviewMode },
             set: { if !$0 { viewModel.cancelOverview() } }
@@ -675,13 +678,25 @@ struct PageEditorView: View {
     /// クロップ中=完了のみ / 写真選択=写真メニュー / それ以外=スライド編集メニュー
     @ViewBuilder
     private var controls: some View {
-        if viewModel.cropModePlacementID != nil {
-            cropControls
-        } else if viewModel.selectedPlacementID != nil {
-            photoControls
-        } else {
-            slideControls
+        Group {
+            if viewModel.cropModePlacementID != nil {
+                cropControls
+            } else if viewModel.selectedPlacementID != nil {
+                photoControls
+            } else {
+                slideControls
+            }
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8)
+        )
+        .shadow(color: .black.opacity(0.14), radius: 16, y: 8)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
     }
 
     private var cropControls: some View {
@@ -787,57 +802,58 @@ struct PageEditorView: View {
     ]
 
     /// スライド編集メニュー（=既定/何も選択なし）。
-    /// テンプレート / ⊕写真追加 / ↓ダウンロード(中央・主役) / レイヤー / 俯瞰(右端)。
-    /// 背景はプロジェクト共通なので俯瞰・新規作成で設定（ここには置かない）。
+    /// 写真追加は中央のフローティング +、書き出しは右上ツールバーへ移動。
     private var slideControls: some View {
-        HStack(alignment: .top, spacing: 0) {
-            templateButton.frame(maxWidth: .infinity)
-            addPhotoButton.frame(maxWidth: .infinity)
-            downloadHero.frame(maxWidth: .infinity)
-            toolButton("レイヤー", systemImage: "square.stack.3d.up", identifier: "pageEditor.layerButton") {
-                activeSheet = .layers
+        ZStack {
+            HStack(alignment: .center, spacing: 10) {
+                HStack(spacing: 10) {
+                    templateButton
+                    toolButton("レイヤー", systemImage: "square.stack.3d.up", identifier: "pageEditor.layerButton") {
+                        activeSheet = .layers
+                    }
+                }
+                Spacer(minLength: 0)
+                toolButton("スライド", systemImage: "rectangle.stack", identifier: "pageEditor.overview") {
+                    viewModel.enterOverview()
+                }
             }
-            .frame(maxWidth: .infinity)
-            toolButton("スライド", systemImage: "rectangle.stack", identifier: "pageEditor.overview") {
-                viewModel.enterOverview()
-            }
-            .frame(maxWidth: .infinity)
+            addPhotoButton
         }
-        .padding(.horizontal, 4)
     }
 
-    /// 写真追加（アイコンのみ・文字なし）
+    /// 写真追加（中央のフローティング +）
     private var addPhotoButton: some View {
         Button {
             photoPickerPresented = true
         } label: {
-            Image(systemName: "photo.badge.plus")
-                .font(.system(size: 24))
-                .foregroundStyle(Color.accentColor)
-                .frame(height: 34)
-                .padding(.vertical, 6)
-                .contentShape(Rectangle())
+            Image(systemName: "plus")
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 52, height: 52)
+                .background(
+                    Circle()
+                        .fill(Color.accentColor)
+                )
+                .shadow(color: Color.accentColor.opacity(0.28), radius: 12, y: 4)
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("pageEditor.addPhoto")
     }
 
-    /// フッター中央の主役: ダウンロード（↓）。押すとプレビュー画面へ。
+    /// 右上ツールバーの書き出し。押すとプレビュー画面へ。
     @ViewBuilder
-    private var downloadHero: some View {
+    private var exportToolbarButton: some View {
         if viewModel.isExporting {
-            ProgressView().frame(height: 44).padding(.vertical, 4)
+            ProgressView()
+                .accessibilityIdentifier("pageEditor.export")
         } else {
             Button {
                 previewPresented = true
             } label: {
-                Image(systemName: "arrow.down.circle.fill")
-                    .font(.system(size: 42))
-                    .foregroundStyle(viewModel.hasPhoto ? Color.accentColor : Color.gray)
-                    .padding(.vertical, 4)
-                    .contentShape(Rectangle())
+                Image(systemName: "square.and.arrow.down")
             }
-            .buttonStyle(.plain)
+            .foregroundStyle(viewModel.hasPhoto ? Color.accentColor : Color.gray)
             .disabled(!viewModel.hasPhoto)
             .accessibilityIdentifier("pageEditor.export")
         }

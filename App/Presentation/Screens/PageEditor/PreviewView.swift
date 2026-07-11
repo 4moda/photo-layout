@@ -1,7 +1,7 @@
 import SwiftUI
 import PhotoLayoutCore
 
-/// 書き出しプレビュー画面。ダウンロード（↓）で遷移し、各スライドの仕上がりを確認してから保存する。
+/// 書き出しプレビュー画面。右上の保存ボタンで遷移し、各スライドの仕上がりを確認してから保存する。
 struct PreviewView: View {
     @Bindable var viewModel: PageEditorViewModel
     @Environment(\.dismiss) private var dismiss
@@ -54,19 +54,6 @@ struct PreviewView: View {
     @ViewBuilder
     private var saveBar: some View {
         VStack(spacing: 10) {
-            // 現在スライドに2枚以上あれば「各写真を個別に保存」も提示（汎用・X複数投稿など）
-            if viewModel.currentPagePhotoCount >= 2 {
-                Button {
-                    Task { await viewModel.exportIndividualPhotos() }
-                } label: {
-                    Label("各写真を個別に保存（\(viewModel.currentPagePhotoCount)枚）",
-                          systemImage: "square.grid.2x2")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .disabled(viewModel.isExporting)
-            }
-
             Button {
                 Task { await viewModel.exportPages() }
             } label: {

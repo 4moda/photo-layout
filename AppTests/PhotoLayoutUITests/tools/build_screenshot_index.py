@@ -68,7 +68,6 @@ SNAPSHOT_LABELS = {
     "S03-F11-carousel-ratio-menu": "比率メニュー（カルーセル全体の比率）",
     "S03-F12-project-background-menu": "背景メニュー（プロジェクト共通の背景色）",
     "S04-export-preview": "書き出しプレビュー画面",
-    "S04-F03-export-preview-save-each-photo": "書き出しプレビュー（各写真を個別に保存ボタン）",
 }
 
 def parse_entry(lang: str, device: str, snap_name: str, rel_path: str) -> dict:
