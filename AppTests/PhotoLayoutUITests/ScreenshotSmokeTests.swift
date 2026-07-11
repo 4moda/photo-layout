@@ -3,7 +3,7 @@ import XCTest
 /// 主要画面・主要状態・主要操作を巡回し、fastlane snapshot でスクリーンショットを撮る。
 /// `fastlane snapshot` が本テストを駆動し、screenshots.html（一覧）を自動生成する。
 ///
-/// スクショ名は `画面ID[-機能ID]｜状態/操作の説明` の構造化名。
+/// スクショ名は `画面ID[-機能ID]-action-in-english` の安全なASCII名。
 /// 画面ID・機能IDは docs/screens.md の一覧と対応し、フィルタ用インデックス
 /// （tools/build_screenshot_index.py が生成する index.html）で画面別に絞り込める。
 ///
@@ -30,35 +30,35 @@ final class ScreenshotSmokeTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["PhotoLayout"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.otherElements["projectList.empty"].waitForExistence(timeout: 5)
                       || app.staticTexts["レイアウトがありません"].waitForExistence(timeout: 5))
-        snapshot("S01-F02｜プロジェクトなし（空状態）")
+        snapshot("S01-F02-project-list-empty-state")
 
         let addButton = app.buttons["projectList.add"]
         XCTAssertTrue(addButton.waitForExistence(timeout: 5))
         addButton.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         let squareButton = app.buttons["projectList.new_square"]
         XCTAssertTrue(squareButton.waitForExistence(timeout: 5))
-        snapshot("S01-F03｜用紙サイズ選択メニュー")
+        snapshot("S01-F03-project-list-paper-size-menu")
         squareButton.tap()
 
         XCTAssertTrue(app.buttons["pageEditor.export"].waitForExistence(timeout: 10))
-        snapshot("S02｜新規スライド（空・スライド編集メニュー）")
+        snapshot("S02-empty-slide-editor")
 
         app.buttons["pageEditor.templateMenu"].tap()
         if app.buttons["田の字"].waitForExistence(timeout: 5) {
             sleep(1)
-            snapshot("S02-F14｜テンプレート選択シート（型枠ビジュアル一覧）")
+            snapshot("S02-F14-template-sheet")
             app.buttons["田の字"].tap()
             sleep(1)
-            snapshot("S02-F14｜田の字を適用（空スロット4つ・グレー範囲）")
+            snapshot("S02-F14-four-grid-empty-slots")
         }
 
         if app.buttons["pageEditor.overview"].waitForExistence(timeout: 3) {
             app.buttons["pageEditor.overview"].tap()
             if app.buttons["overview.append"].waitForExistence(timeout: 5) {
-                snapshot("S03｜スライド一覧（俯瞰）")
+                snapshot("S03-slide-overview")
                 app.buttons["overview.append"].tap()
                 sleep(1)
-                snapshot("S03-F03｜スライドを追加（2スライドに増える）")
+                snapshot("S03-F03-append-slide")
                 app.buttons["overview.done"].tap()
             }
         }
@@ -73,14 +73,14 @@ final class ScreenshotSmokeTests: XCTestCase {
 
         XCTAssertTrue(app.buttons["デモ"].waitForExistence(timeout: 15))
         sleep(1)
-        snapshot("S01-F01｜一覧（複数プロジェクト・サムネイル＋ページ数バッジ）")
+        snapshot("S01-F01-project-list-populated")
 
         // S01-F10: セル右上の⋯メニュー（削除）。開くだけで削除はしない。
         let cellMenu = app.buttons["projectList.menu"].firstMatch
         if cellMenu.waitForExistence(timeout: 3) {
             cellMenu.tap()
             if app.buttons["削除"].waitForExistence(timeout: 3) {
-                snapshot("S01-F10｜セルの⋯メニュー（削除）")
+                snapshot("S01-F10-project-cell-delete-menu")
             }
         }
     }
@@ -93,14 +93,13 @@ final class ScreenshotSmokeTests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.navigationBars["PhotoLayout"].waitForExistence(timeout: 15))
 
-        // 注: スクショ名はそのままファイル名になる。成果物アップロードが拒否する
-        // ASCII の `:` `/` は使わず、全角「：」等で表す。
+        // 注: スクショ名はそのままファイル名になる。安全なASCII slugだけを使う。
         let sizes: [(id: String, name: String)] = [
-            ("projectList.new_square", "S01-F04｜新規作成 正方形 1：1（空キャンバス）"),
-            ("projectList.new_portrait45", "S01-F05｜新規作成 縦 4：5（空キャンバス）"),
-            ("projectList.new_portrait34", "S01-F06｜新規作成 縦 3：4（空キャンバス）"),
-            ("projectList.new_landscape169", "S01-F07｜新規作成 横 16：9（空キャンバス）"),
-            ("projectList.new_landscape191", "S01-F08｜新規作成 横長 1.91：1（空キャンバス）")
+            ("projectList.new_square", "S01-F04-create-square-canvas"),
+            ("projectList.new_portrait45", "S01-F05-create-portrait-4-5-canvas"),
+            ("projectList.new_portrait34", "S01-F06-create-portrait-3-4-canvas"),
+            ("projectList.new_landscape169", "S01-F07-create-landscape-16-9-canvas"),
+            ("projectList.new_landscape191", "S01-F08-create-landscape-1-91-1-canvas")
         ]
         for size in sizes {
             let add = app.buttons["projectList.add"]
@@ -128,12 +127,12 @@ final class ScreenshotSmokeTests: XCTestCase {
         demoRow.tap()
         XCTAssertTrue(app.buttons["pageEditor.export"].waitForExistence(timeout: 15))
         sleep(2)
-        snapshot("S02｜写真1枚（自然配置・元アスペクトのまま中央）")
+        snapshot("S02-single-photo-natural-placement")
 
         if app.buttons["pageEditor.layerButton"].waitForExistence(timeout: 3) {
             app.buttons["pageEditor.layerButton"].tap()
             sleep(1)
-            snapshot("S02-F15｜レイヤー順シート（重なり順）")
+            snapshot("S02-F15-layer-order-sheet")
             tapClose(app)
         }
 
@@ -142,7 +141,7 @@ final class ScreenshotSmokeTests: XCTestCase {
             export.tap()
             if app.buttons["preview.save"].waitForExistence(timeout: 5) {
                 sleep(1)
-                snapshot("S04｜書き出しプレビュー画面")
+                snapshot("S04-export-preview")
             }
             tapClose(app)
         }
@@ -151,12 +150,12 @@ final class ScreenshotSmokeTests: XCTestCase {
         guard canvas.exists else { return }
         canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         guard app.buttons["pageEditor.deletePhoto"].waitForExistence(timeout: 5) else { return }
-        snapshot("S02-F09｜写真を選択（写真メニュー＋四隅ハンドル）")
+        snapshot("S02-F09-photo-selected-menu")
 
         if app.buttons["pageEditor.frameAspectMenu"].waitForExistence(timeout: 3) {
             app.buttons["pageEditor.frameAspectMenu"].tap()
             if app.buttons["4:5 縦"].waitForExistence(timeout: 3) {
-                snapshot("S02-F09｜枠比率メニュー（元画像・1：1・4：5・3：4・16：9）")
+                snapshot("S02-F09-frame-aspect-menu")
                 app.buttons["4:5 縦"].tap()
                 sleep(1)
             }
@@ -166,7 +165,7 @@ final class ScreenshotSmokeTests: XCTestCase {
             app.buttons["pageEditor.cropButton"].tap()
             if app.buttons["pageEditor.cropDone"].waitForExistence(timeout: 3) {
                 sleep(1)
-                snapshot("S02-F10｜クロップ調整モード")
+                snapshot("S02-F10-crop-mode")
                 app.buttons["pageEditor.cropDone"].tap()
                 sleep(1)
             }
@@ -176,7 +175,7 @@ final class ScreenshotSmokeTests: XCTestCase {
             app.buttons["pageEditor.frameButton"].tap()
             if app.buttons["白フチ"].waitForExistence(timeout: 5) {
                 sleep(1)
-                snapshot("S02-F16｜枠プリセット一覧シート")
+                snapshot("S02-F16-frame-preset-sheet")
             }
             tapClose(app)
         }
@@ -190,20 +189,20 @@ final class ScreenshotSmokeTests: XCTestCase {
         app.launch()
 
         openDemo(app, "コラージュ（4枚）")
-        snapshot("S02｜コラージュ（田の字4枚の合成）")
+        snapshot("S02-collage-four-grid")
         back(app)
 
         openDemo(app, "枠付き（黒背景）")
-        snapshot("S02｜枠付き（黒背景＋白フチ＋マット）")
+        snapshot("S02-framed-black-background")
         back(app)
 
         openDemo(app, "パノラマ（3連）")
-        snapshot("S02｜パノラマ（1枚が3スライドに跨る）")
+        snapshot("S02-panorama-three-slides")
         if app.buttons["pageEditor.overview"].waitForExistence(timeout: 3) {
             app.buttons["pageEditor.overview"].tap()
             if app.buttons["overview.done"].waitForExistence(timeout: 5) {
                 sleep(1)
-                snapshot("S03｜スライド一覧（3スライド）")
+                snapshot("S03-slide-overview-three-pages")
                 captureOverviewMenus(app)
                 app.buttons["overview.done"].tap()
             }
@@ -212,13 +211,13 @@ final class ScreenshotSmokeTests: XCTestCase {
 
         openDemo(app, "X投稿（3枚）")
         sleep(2)
-        snapshot("S02｜X組写真（タイムライン合成・左大＋右2）")
+        snapshot("S02-x-timeline-composite")
         // X投稿は1スライドに複数枚 → プレビューで「各写真を個別に保存」が出る
         if app.buttons["pageEditor.export"].isEnabled {
             app.buttons["pageEditor.export"].tap()
             if app.buttons["preview.save"].waitForExistence(timeout: 5) {
                 sleep(1)
-                snapshot("S04-F03｜書き出しプレビュー（各写真を個別に保存ボタン）")
+                snapshot("S04-F03-export-preview-save-each-photo")
             }
             tapClose(app)
         }
@@ -244,7 +243,7 @@ final class ScreenshotSmokeTests: XCTestCase {
         if app.buttons["overview.ratio"].waitForExistence(timeout: 3) {
             app.buttons["overview.ratio"].tap()
             if app.buttons["1:1"].waitForExistence(timeout: 3) {
-                snapshot("S03-F11｜比率メニュー（カルーセル全体の比率）")
+                snapshot("S03-F11-carousel-ratio-menu")
             }
             if nav.exists { nav.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
         }
@@ -252,7 +251,7 @@ final class ScreenshotSmokeTests: XCTestCase {
         if app.buttons["overview.background"].waitForExistence(timeout: 3) {
             app.buttons["overview.background"].tap()
             if app.buttons["黒"].waitForExistence(timeout: 3) {
-                snapshot("S03-F12｜背景メニュー（プロジェクト共通の背景色）")
+                snapshot("S03-F12-project-background-menu")
             }
             if nav.exists { nav.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
         }
@@ -263,7 +262,7 @@ final class ScreenshotSmokeTests: XCTestCase {
         if card.waitForExistence(timeout: 3) {
             card.press(forDuration: 1.1)
             if app.buttons["複製"].waitForExistence(timeout: 3) {
-                snapshot("S03-F04〜F09｜カード長押しメニュー（追加・複製・移動・削除）")
+                snapshot("S03-F04-F09-card-context-menu")
             }
             if nav.exists { nav.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
         }

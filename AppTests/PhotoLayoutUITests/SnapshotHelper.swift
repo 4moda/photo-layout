@@ -182,17 +182,38 @@ open class Snapshot: NSObject {
                 let range = NSRange(location: 0, length: simulator.count)
                 simulator = regex.stringByReplacingMatches(in: simulator, range: range, withTemplate: "")
 
-                let path = screenshotsDir.appendingPathComponent("\(simulator)-\(name).png")
+                let simulatorSlug = sanitizedFileToken(simulator)
+                let snapshotSlug = sanitizedSnapshotName(name)
+                let path = screenshotsDir.appendingPathComponent("\(simulatorSlug)--\(snapshotSlug).png")
                 #if swift(<5.0)
                     try UIImagePNGRepresentation(image)?.write(to: path, options: .atomic)
                 #else
                     try image.pngData()?.write(to: path, options: .atomic)
                 #endif
             } catch let error {
-                NSLog("Problem writing screenshot: \(name) to \(screenshotsDir)/\(simulator)-\(name).png")
+                NSLog("Problem writing screenshot: \(name) to \(screenshotsDir)")
                 NSLog(error.localizedDescription)
             }
         #endif
+    }
+
+    private class func sanitizedSnapshotName(_ name: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-"))
+        let scalarView = name.unicodeScalars.map { allowed.contains($0) ? Character($0) : "-" }
+        let sanitized = String(scalarView).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        return sanitized.isEmpty ? "snapshot" : sanitized
+    }
+
+    private class func sanitizedFileToken(_ value: String) -> String {
+        let pattern = "[^A-Za-z0-9]+"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return value.lowercased()
+        }
+
+        let range = NSRange(location: 0, length: value.utf16.count)
+        let replaced = regex.stringByReplacingMatches(in: value, range: range, withTemplate: "-")
+        let trimmed = replaced.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        return trimmed.isEmpty ? "unknown" : trimmed.lowercased()
     }
 
     class func fixLandscapeOrientation(image: UIImage) -> UIImage {

@@ -2,15 +2,14 @@
 """fastlane snapshot の出力からフィルタ可能なスクショ一覧 index.html を生成する。
 
 fastlane 標準の screenshots.html は言語・端末でしか分類できない。本スクリプトは
-ファイル名に埋めた「画面ID(-機能ID)｜説明」を解析し、ASCIIのみの安全な
-`<device-slug>/<lang>/<screen-id[-feature-id]-action>.png` ミラーを生成したうえで、
-言語・端末・画面IDで絞り込めるビューア（単一の自己完結HTML）を出力する。
-撮影自体は fastlane snapshot に任せ、これは出力の見せ方だけを担う薄い後処理。
+安全なASCII名のスクリーンショットを解析し、言語・端末・画面IDで絞り込める
+ビューア（単一の自己完結HTML）を生成する。撮影自体は fastlane snapshot に任せ、
+これは出力の見せ方だけを担う薄い後処理。
 
 命名規約（AppTests/PhotoLayoutUITests/ScreenshotSmokeTests.swift）:
-    <画面ID>[-<機能ID>]｜<状態/操作の説明>
-    例: S01-F02｜プロジェクトなし（空状態）
-ファイル名は fastlane の規約で `<端末>-<スナップ名>.png`。ディレクトリ名が言語。
+    <画面ID>[-<機能ID>]-action-in-english
+    例: S01-F02-project-list-empty-state
+ファイル名は fastlane の規約で `<端末slug>--<スナップ名>.png`。ディレクトリ名が言語。
 画面ID・機能IDの一覧は docs/screens.md と対応する。
 
 使い方（リポジトリ直下から）:
@@ -19,15 +18,12 @@ fastlane 標準の screenshots.html は言語・端末でしか分類できな�
       引数省略時の既定は CWD 基準の fastlane/screenshots
 出力:
     <screenshots_dir>/index.html
-    <screenshots_dir>/<device-slug>/<lang>/<safe-name>.png
 """
 from __future__ import annotations
 
 import json
 import re
-import shutil
 import sys
-import unicodedata
 from html import escape
 from pathlib import Path
 
@@ -40,89 +36,56 @@ SCREEN_LABELS = {
 }
 
 LANG_DIR_RE = re.compile(r"^[a-z]{2}(-[A-Za-z]{2,4})?$")  # ja-JP, en-US など
-SCREEN_RE = re.compile(r"^(S\d+)")
-FEATURE_RE = re.compile(r"(F\d+)")
-SAFE_TOKEN_RE = re.compile(r"[^A-Za-z0-9]+")
+SNAP_RE = re.compile(r"^(S\d+)(?:-(F\d+(?:-F\d+)?))?(?:-(.*))?$")
 
-# raw snapshot name -> safe ASCII file stem used by index.html
-SAFE_NAME_MAP = {
-    "S01-F01｜一覧（複数プロジェクト・サムネイル＋ページ数バッジ）": "S01-F01-project-list-populated",
-    "S01-F02｜プロジェクトなし（空状態）": "S01-F02-project-list-empty-state",
-    "S01-F03｜用紙サイズ選択メニュー": "S01-F03-project-list-paper-size-menu",
-    "S01-F04｜新規作成 正方形 1：1（空キャンバス）": "S01-F04-create-square-canvas",
-    "S01-F05｜新規作成 縦 4：5（空キャンバス）": "S01-F05-create-portrait-4-5-canvas",
-    "S01-F06｜新規作成 縦 3：4（空キャンバス）": "S01-F06-create-portrait-3-4-canvas",
-    "S01-F07｜新規作成 横 16：9（空キャンバス）": "S01-F07-create-landscape-16-9-canvas",
-    "S01-F08｜新規作成 横長 1.91：1（空キャンバス）": "S01-F08-create-landscape-1-91-1-canvas",
-    "S01-F10｜セルの⋯メニュー（削除）": "S01-F10-project-cell-delete-menu",
-    "S02｜新規スライド（空・スライド編集メニュー）": "S02-empty-slide-editor",
-    "S02｜写真1枚（自然配置・元アスペクトのまま中央）": "S02-single-photo-natural-placement",
-    "S02｜コラージュ（田の字4枚の合成）": "S02-collage-four-grid",
-    "S02｜枠付き（黒背景＋白フチ＋マット）": "S02-framed-black-background",
-    "S02｜パノラマ（1枚が3スライドに跨る）": "S02-panorama-three-slides",
-    "S02｜X組写真（タイムライン合成・左大＋右2）": "S02-x-timeline-composite",
-    "S02-F09｜写真を選択（写真メニュー＋四隅ハンドル）": "S02-F09-photo-selected-menu",
-    "S02-F09｜枠比率メニュー（元画像・1：1・4：5・3：4・16：9）": "S02-F09-frame-aspect-menu",
-    "S02-F10｜クロップ調整モード": "S02-F10-crop-mode",
-    "S02-F14｜テンプレート選択シート（型枠ビジュアル一覧）": "S02-F14-template-sheet",
-    "S02-F14｜田の字を適用（空スロット4つ・グレー範囲）": "S02-F14-four-grid-empty-slots",
-    "S02-F15｜レイヤー順シート（重なり順）": "S02-F15-layer-order-sheet",
-    "S02-F16｜枠プリセット一覧シート": "S02-F16-frame-preset-sheet",
-    "S03｜スライド一覧（俯瞰）": "S03-slide-overview",
-    "S03｜スライド一覧（3スライド）": "S03-slide-overview-three-pages",
-    "S03-F03｜スライドを追加（2スライドに増える）": "S03-F03-append-slide",
-    "S03-F04〜F09｜カード長押しメニュー（追加・複製・移動・削除）": "S03-F04-F09-card-context-menu",
-    "S03-F11｜比率メニュー（カルーセル全体の比率）": "S03-F11-carousel-ratio-menu",
-    "S03-F12｜背景メニュー（プロジェクト共通の背景色）": "S03-F12-project-background-menu",
-    "S04｜書き出しプレビュー画面": "S04-export-preview",
-    "S04-F03｜書き出しプレビュー（各写真を個別に保存ボタン）": "S04-F03-export-preview-save-each-photo",
+SNAPSHOT_LABELS = {
+    "S01-F01-project-list-populated": "一覧（複数プロジェクト・サムネイル＋ページ数バッジ）",
+    "S01-F02-project-list-empty-state": "プロジェクトなし（空状態）",
+    "S01-F03-project-list-paper-size-menu": "用紙サイズ選択メニュー",
+    "S01-F04-create-square-canvas": "新規作成 正方形 1：1（空キャンバス）",
+    "S01-F05-create-portrait-4-5-canvas": "新規作成 縦 4：5（空キャンバス）",
+    "S01-F06-create-portrait-3-4-canvas": "新規作成 縦 3：4（空キャンバス）",
+    "S01-F07-create-landscape-16-9-canvas": "新規作成 横 16：9（空キャンバス）",
+    "S01-F08-create-landscape-1-91-1-canvas": "新規作成 横長 1.91：1（空キャンバス）",
+    "S01-F10-project-cell-delete-menu": "セルの⋯メニュー（削除）",
+    "S02-empty-slide-editor": "新規スライド（空・スライド編集メニュー）",
+    "S02-single-photo-natural-placement": "写真1枚（自然配置・元アスペクトのまま中央）",
+    "S02-collage-four-grid": "コラージュ（田の字4枚の合成）",
+    "S02-framed-black-background": "枠付き（黒背景＋白フチ＋マット）",
+    "S02-panorama-three-slides": "パノラマ（1枚が3スライドに跨る）",
+    "S02-x-timeline-composite": "X組写真（タイムライン合成・左大＋右2）",
+    "S02-F09-photo-selected-menu": "写真を選択（写真メニュー＋四隅ハンドル）",
+    "S02-F09-frame-aspect-menu": "枠比率メニュー（元画像・1：1・4：5・3：4・16：9）",
+    "S02-F10-crop-mode": "クロップ調整モード",
+    "S02-F14-template-sheet": "テンプレート選択シート（型枠ビジュアル一覧）",
+    "S02-F14-four-grid-empty-slots": "田の字を適用（空スロット4つ・グレー範囲）",
+    "S02-F15-layer-order-sheet": "レイヤー順シート（重なり順）",
+    "S02-F16-frame-preset-sheet": "枠プリセット一覧シート",
+    "S03-slide-overview": "スライド一覧（俯瞰）",
+    "S03-slide-overview-three-pages": "スライド一覧（3スライド）",
+    "S03-F03-append-slide": "スライドを追加（2スライドに増える）",
+    "S03-F04-F09-card-context-menu": "カード長押しメニュー（追加・複製・移動・削除）",
+    "S03-F11-carousel-ratio-menu": "比率メニュー（カルーセル全体の比率）",
+    "S03-F12-project-background-menu": "背景メニュー（プロジェクト共通の背景色）",
+    "S04-export-preview": "書き出しプレビュー画面",
+    "S04-F03-export-preview-save-each-photo": "書き出しプレビュー（各写真を個別に保存ボタン）",
 }
 
-
-def slugify_ascii(text: str) -> str:
-    normalized = unicodedata.normalize("NFKD", text)
-    ascii_text = normalized.encode("ascii", "ignore").decode("ascii")
-    slug = SAFE_TOKEN_RE.sub("-", ascii_text).strip("-").lower()
-    return slug or "unknown"
-
-
-def safe_head_token(head: str) -> str:
-    return SAFE_TOKEN_RE.sub("-", head.replace("〜", "-")).strip("-") or "SCREEN"
-
-
-def build_safe_stem(head: str, desc: str, snap_name: str) -> str:
-    if mapped := SAFE_NAME_MAP.get(snap_name):
-        return mapped
-    return f"{safe_head_token(head)}-{slugify_ascii(desc)}"
-
-
 def parse_entry(lang: str, device: str, snap_name: str, rel_path: str) -> dict:
-    """スナップ名 `S01-F02｜説明` を画面ID・機能ID・説明に分解する。"""
-    # 全角/半角の縦棒どちらでも区切れるようにする
-    sep = "｜" if "｜" in snap_name else ("|" if "|" in snap_name else None)
-    head, desc = (snap_name.split(sep, 1) if sep else (snap_name, ""))
-    head = head.strip()
-    desc = desc.strip() or snap_name
-    m_screen = SCREEN_RE.match(head.strip())
-    screen = m_screen.group(1) if m_screen else "その他"
-    m_feat = FEATURE_RE.search(head)
-    feature = m_feat.group(1) if m_feat else ""
-    device_slug = slugify_ascii(device)
-    lang_slug = slugify_ascii(lang)
-    safe_stem = build_safe_stem(head, desc, snap_name)
+    """安全名 `S01-F02-project-list-empty-state` を画面ID・機能ID・説明に分解する。"""
+    match = SNAP_RE.match(snap_name)
+    screen = match.group(1) if match else "その他"
+    feature = match.group(2) if match and match.group(2) else ""
+    desc = SNAPSHOT_LABELS.get(snap_name, snap_name)
     return {
         "lang": lang,
-        "langSlug": lang_slug,
         "device": device,
-        "deviceSlug": device_slug,
         "screen": screen,
         "screenLabel": SCREEN_LABELS.get(screen, screen),
         "feature": feature,
         "desc": desc,
         "name": snap_name,
-        "sourcePath": rel_path,
-        "safeStem": safe_stem,
-        "path": f"{device_slug}/{lang_slug}/{safe_stem}.png",
+        "path": rel_path,
     }
 
 
@@ -133,31 +96,15 @@ def collect(root: Path) -> list[dict]:
             continue
         lang = lang_dir.name
         for png in sorted(lang_dir.glob("*.png")):
-            stem = png.stem  # `<端末>-<スナップ名>`
-            # fastlane は端末名を先頭に付ける（例: "iPhone 16-..."）。最初の "-" で分割。
-            device, _, snap_name = stem.partition("-")
-            if not snap_name:  # 区切りが無いものは端末不明扱い
+            stem = png.stem  # `<端末slug>--<スナップ名>`
+            device, sep, snap_name = stem.partition("--")
+            if not sep:  # 区切りが無いものは端末不明扱い
                 device, snap_name = "", stem
             rel = f"{lang}/{png.name}"
             entries.append(parse_entry(lang, device.strip(), snap_name, rel))
     # 画面ID → 機能ID → 言語 → 端末 の順で安定ソート
     entries.sort(key=lambda e: (e["screen"], e["feature"], e["desc"], e["lang"], e["device"]))
     return entries
-
-
-def mirror_safe_files(root: Path, entries: list[dict]) -> None:
-    for device_slug in sorted({entry["deviceSlug"] for entry in entries}):
-        generated_dir = root / device_slug
-        if generated_dir.is_dir():
-            shutil.rmtree(generated_dir)
-
-    for entry in entries:
-        source = root / entry["sourcePath"]
-        target = root / entry["path"]
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, target)
-
-
 HTML_TEMPLATE = """<!doctype html>
 <html lang="ja">
 <head>
@@ -290,7 +237,6 @@ def main() -> int:
         print(f"screenshots dir not found: {root}", file=sys.stderr)
         return 0  # CIを止めない
     entries = collect(root)
-    mirror_safe_files(root, entries)
     # 説明文はHTMLに直接埋めるためエスケープ
     for e in entries:
         e["desc"] = escape(e["desc"])
@@ -299,8 +245,7 @@ def main() -> int:
             .replace("__DATA__", json.dumps(entries, ensure_ascii=False))
             .replace("__LABELS__", json.dumps(SCREEN_LABELS, ensure_ascii=False)))
     out = root / "index.html"
-    # NFC 正規化して書き出す（macOSのNFDファイル名との突合を避ける）
-    out.write_text(unicodedata.normalize("NFC", html), encoding="utf-8")
+    out.write_text(html, encoding="utf-8")
     print(f"wrote {out} ({len(entries)} screenshots)")
     return 0
 

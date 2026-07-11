@@ -45,7 +45,7 @@ AppTests/
     ScreenshotSmokeTests.swift  画面・状態・操作を巡回して撮影
     SnapshotHelper.swift        fastlane snapshot 公式ヘルパ
     fastlane/Snapfile           snapshot 設定（撮影対象のUITestと同じ場所に置く）
-    tools/build_screenshot_index.py  安全なASCII名のミラー画像と filterable index.html を生成
+    tools/build_screenshot_index.py  安全なASCIIスクショ名を解析して filterable index.html を生成
 project.yml          XcodeGen 定義（.xcodeproj は生成物・非コミット）
 docs/                design.md / decisions.md / screens.md（画面カタログ）
 ```
