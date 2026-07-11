@@ -1,0 +1,93 @@
+name: Release (TestFlight)
+
+# 手動実行のみの「骨組み」ワークフロー。TestFlight / App Store 配布のパイプラインを
+# リポジトリ内に可視化しておくためのもの。署名・archive・export・upload の実装と
+# Secrets 設定は後日行う（docs/release.md 参照）。実ステップは `if: false` で無効化してある。
+on:
+  workflow_dispatch:
+    inputs:
+      track:
+        description: 配布トラック
+        type: choice
+        options: [testflight]
+        default: testflight
+
+# 最小権限（コードの読み取りのみ）。配布は App Store Connect API キー（Secrets）で行う。
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false # リリースは進行中でもキャンセルしない
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+
+jobs:
+  testflight:
+    name: Archive & upload to TestFlight
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preflight — 必要な Secrets を確認
+        id: preflight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+        run: |
+          missing=0
+          for v in ASC_KEY_ID ASC_ISSUER_ID ASC_API_KEY_P8; do
+            if [ -z "${!v}" ]; then echo "::warning::$v secret 未設定"; missing=1; fi
+          done
+          if [ "$missing" = 1 ]; then
+            echo "::warning::App Store Connect API の Secrets が未設定です。docs/release.md の手順で設定してください。"
+          fi
+          echo "configured=$([ "$missing" = 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      # ↓↓↓ 実装は後日（docs/release.md）。Secrets 設定後に `if: false` を外して有効化する。 ↓↓↓
+      - name: Import signing (証明書 / provisioning profile)
+        if: ${{ false }}
+        run: |
+          echo "TODO: fastlane match もしくは手動 import で署名資産を導入"
+
+      - name: Archive
+        if: ${{ false }}
+        run: |
+          xcodebuild archive \
+            -project PhotoLayout.xcodeproj -scheme PhotoLayout \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -archivePath build/PhotoLayout.xcarchive
+
+      - name: Export IPA
+        if: ${{ false }}
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath build/PhotoLayout.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath build/export
+
+      - name: Upload to TestFlight
+        if: ${{ false }}
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+        run: |
+          echo "TODO: xcrun altool / app-store-connect で TestFlight へアップロード"
+
+      - name: Scaffold notice
+        run: |
+          {
+            echo "## リリースワークフロー（骨組み）"
+            echo ""
+            echo "現状は雛形のみ。署名・archive・export・upload は未実装（\`if: false\`）。"
+            echo "有効化手順と必要 Secrets は **docs/release.md** を参照。"
+          } >> "$GITHUB_STEP_SUMMARY"

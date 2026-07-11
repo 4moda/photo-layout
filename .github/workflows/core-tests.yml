@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
 
+# 最小権限（コードの読み取りのみ。トークンで書き込みは行わない）
+permissions:
+  contents: read
+
 concurrency:
   group: core-tests-${{ github.ref }}
   cancel-in-progress: true
@@ -13,6 +17,7 @@ jobs:
   core-tests:
     name: Core Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # CLAUDE.mdのツールチェーン表と揃えること（Xcode 16.4 = Swift 6.1）
     container: swift:6.1-noble
     steps:
