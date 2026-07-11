@@ -1,0 +1,5 @@
+# fastlane の Snapfile は Ruby DSL だが、解析対象のプロダクトコードではない。
+# GitHub Linguist の言語統計から除外することで、CodeQL の default setup が Ruby を
+# 解析対象に自動追加し「no source code seen during build」で失敗するのを防ぐ
+# （過去に Analyze (ruby) の finalize が exit 32 で失敗した）。
+AppTests/PhotoLayoutUITests/fastlane/** linguist-vendored
