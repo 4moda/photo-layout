@@ -7,8 +7,10 @@
 project("../../PhotoLayout.xcodeproj")
 
 # iPhone 16（標準）＋ iPhone SE 第3世代（最小4.7"幅＝コンパイル/レイアウト崩れの検知用）。
-# 端末を増やすと撮影は逐次に増える。index.html は端末フィルタ対応済み。
-devices(["iPhone 16", "iPhone SE (3rd generation)"])
+# CIは機種ごとに独立したジョブ（matrix）で並列撮影し、SNAPSHOT_DEVICES（カンマ区切り）で
+# そのジョブが担当する機種だけに絞り込む。未設定時（ローカル実行）は全機種を逐次撮影する。
+default_devices = ["iPhone 16", "iPhone SE (3rd generation)"]
+devices(ENV["SNAPSHOT_DEVICES"]&.split(",") || default_devices)
 languages(["ja-JP"])
 
 scheme("PhotoLayout")
