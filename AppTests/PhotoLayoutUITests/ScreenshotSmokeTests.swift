@@ -80,12 +80,20 @@ final class ScreenshotSmokeTests: XCTestCase {
         sleep(1)
         snapshot("S01-F01-project-list-populated")
 
-        // S01-F10: セル右上の⋯メニュー（削除）。開くだけで削除はしない。
+        // S01-F10: セル右上の⋯メニュー（削除）。タップしても確認ダイアログが出るだけで即削除はしない。
         let cellMenu = app.buttons["projectList.menu"].firstMatch
         if cellMenu.waitForExistence(timeout: 3) {
             cellMenu.tap()
             if app.buttons["削除"].waitForExistence(timeout: 3) {
                 snapshot("S01-F10-project-cell-delete-menu")
+                app.buttons["削除"].tap()
+
+                // S01-F11: 削除確認ダイアログ。「キャンセル」で閉じ、一覧に残ることを確認する。
+                if app.buttons["キャンセル"].waitForExistence(timeout: 3) {
+                    snapshot("S01-F11-project-cell-delete-confirm")
+                    app.buttons["キャンセル"].tap()
+                    XCTAssertTrue(app.buttons["デモ"].waitForExistence(timeout: 3))
+                }
             }
         }
     }

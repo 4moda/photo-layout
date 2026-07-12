@@ -127,6 +127,11 @@ private struct ProjectCell: View {
     /// 1ページ目の配置ID→サムネイル画像（ViewModelのキャッシュから供給）
     let thumbnailImages: [UUID: UIImage]
     let onDelete: () -> Void
+    @State private var showingDeleteConfirmation = false
+
+    private var displayTitle: String {
+        project.title ?? "無題のレイアウト"
+    }
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -134,10 +139,12 @@ private struct ProjectCell: View {
                 thumbnail
             }
             .buttonStyle(.plain)
-            .accessibilityIdentifier(project.title ?? "無題のレイアウト")
+            .accessibilityIdentifier(displayTitle)
 
             Menu {
-                Button(role: .destructive, action: onDelete) {
+                Button(role: .destructive) {
+                    showingDeleteConfirmation = true
+                } label: {
                     Label("削除", systemImage: "trash")
                 }
             } label: {
@@ -151,6 +158,14 @@ private struct ProjectCell: View {
         }
         // 注: ここで .accessibilityIdentifier を付けると子（NavigationLink）へ伝播して
         // タイトルidentifierを上書きしてしまうため付けない（UIテストはタイトルでタップする）
+        .confirmationDialog(
+            "\(displayTitle)を削除しますか？（\(project.pages.count)ページ）",
+            isPresented: $showingDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("削除", role: .destructive, action: onDelete)
+            Button("キャンセル", role: .cancel) {}
+        }
     }
 
     private var thumbnail: some View {
