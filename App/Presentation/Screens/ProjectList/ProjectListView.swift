@@ -167,40 +167,45 @@ private struct ProjectCell: View {
     /// サムネイル写真でレイアウトを認知しているため、`confirmationDialog`（テキストのみ）ではなく
     /// 拡大サムネイルを添えた確認シートにする。タイトル・ページ数のテキストはVoiceOver向けに残す。
     private var deleteConfirmationSheet: some View {
-        VStack(spacing: 20) {
-            thumbnail
-                .frame(width: 200, height: 200)
-                .accessibilityIdentifier("projectList.deleteConfirm.thumbnail")
+        VStack {
+            Spacer(minLength: 24)
 
-            VStack(spacing: 6) {
-                Text("このレイアウトを削除しますか？")
-                    .font(.headline)
-                Text("\(displayTitle)・\(project.pages.count)ページの内容が完全に削除されます")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(.horizontal, 24)
+            VStack(spacing: 20) {
+                thumbnail
+                    .frame(width: 200, height: 200)
+                    .accessibilityIdentifier("projectList.deleteConfirm.thumbnail")
 
-            VStack(spacing: 12) {
-                Button(role: .destructive) {
-                    showingDeleteConfirmation = false
-                    onDelete()
-                } label: {
-                    Text("削除").frame(maxWidth: .infinity)
+                VStack(spacing: 6) {
+                    Text("このレイアウトを削除しますか？")
+                        .font(.headline)
+                    Text("\(displayTitle)・\(project.pages.count)ページの内容が完全に削除されます")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                 }
-                .buttonStyle(.borderedProminent)
+                .padding(.horizontal, 24)
 
-                Button("キャンセル") {
-                    showingDeleteConfirmation = false
+                VStack(spacing: 12) {
+                    Button(role: .destructive) {
+                        showingDeleteConfirmation = false
+                        onDelete()
+                    } label: {
+                        Text("削除").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    Button {
+                        showingDeleteConfirmation = false
+                    } label: {
+                        Text("キャンセル").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
                 }
-                .buttonStyle(.bordered)
+                .padding(.horizontal, 24)
             }
-            .padding(.horizontal, 24)
 
-            Spacer(minLength: 0)
+            Spacer(minLength: 24)
         }
-        .padding(.top, 32)
         .presentationDetents([.medium])
     }
 
