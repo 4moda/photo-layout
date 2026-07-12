@@ -61,30 +61,24 @@ jobs:
             -resultBundlePath TestResults.xcresult \
             | tee test.log
 
-      # 各操作を自動撮影し screenshots.html を生成（標準ツール fastlane snapshot）。
-      # Macを持たない開発者が実際の画面を確認する手段。設定は fastlane/Snapfile。
-      # fastlane/tools は UITest 配下に置く（AppTests/PhotoLayoutUITests）。
-      # そこをCWDにして実行する（Snapfileのパスは ../../ でリポジトリ直下を参照）。
-      - name: Capture screenshots (fastlane snapshot)
+      # UITestのビルド成果物（.app/.xctest/.xctestrun）はscreenshotsジョブ（機種matrix）で
+      # test-without-buildingとして再利用する。tarはzip系artifact実装より実行ビットや
+      # シンボリックリンクの保存が確実なため、自前でアーカイブしてから1ファイルとしてアップロードする。
+      # Build/Products配下だけで足り、容量の大きいIntermediates.noindexは含めない。
+      - name: Package built test products (for screenshots matrix)
         if: always()
-        working-directory: AppTests/PhotoLayoutUITests
-        env:
-          FASTLANE_SKIP_UPDATE_CHECK: "1"
-          FASTLANE_HIDE_CHANGELOG: "1"
-        run: fastlane snapshot
+        run: |
+          mkdir -p artifact
+          tar -C DerivedData/Build/Products -czf artifact/build-products.tar.gz .
 
-      # 画面ID/機能ID/言語/端末で絞り込める一覧 index.html を生成（fastlane出力の見せ方を補強）。
-      - name: Build filterable screenshot index
-        if: always()
-        run: python3 AppTests/PhotoLayoutUITests/tools/build_screenshot_index.py AppTests/PhotoLayoutUITests/fastlane/screenshots
-
-      - name: Upload screenshots
+      - name: Upload built test products
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: screenshots
-          path: AppTests/PhotoLayoutUITests/fastlane/screenshots
+          name: build-products
+          path: artifact/build-products.tar.gz
           if-no-files-found: ignore
+          retention-days: 1
 
       - name: Upload test results and logs
         if: always()
@@ -128,3 +122,97 @@ jobs:
         with:
           name: PhotoLayout-unsigned-ipa
           path: PhotoLayout-unsigned.ipa
+
+  # 機種ごとに独立したジョブでfastlane snapshotを実行する（並列化）。
+  # build-testでビルド済みのBuild/Productsを artifact 経由で使い回し、機種ごとの再ビルドはしない
+  # （Swift再コンパイルは数分かかるが、ビルド成果物は機種に依存しないため）。
+  # 将来テーマ軸（ライト/ダーク）を追加する際は、この matrix.device を
+  # matrix.device × matrix.theme に拡張する想定（軸を機種決め打ちにしない）。
+  screenshots:
+    name: Screenshots (${{ matrix.device.label }})
+    needs: build-test
+    runs-on: macos-15
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        device:
+          - name: iPhone 16
+            label: iPhone 16
+            slug: iphone-16
+          - name: iPhone SE (3rd generation)
+            label: iPhone SE 3rd gen
+            slug: iphone-se-3rd-gen
+    env:
+      # DEVELOPER_DIRはworkflow直下のenv(Xcode 16.4固定)をそのまま継承する。
+      # Snapfile側でこの環境変数を読み、1機種だけに絞り込んで撮影する。
+      SNAPSHOT_DEVICES: ${{ matrix.device.name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      # .xcodeprojはgitignore対象（project.ymlから都度生成）。ビルド成果物のみ使い回すため
+      # プロジェクトファイル自体はこのジョブでも生成し直す（コンパイルは発生せず高速）。
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Download built test products
+        uses: actions/download-artifact@v4
+        with:
+          name: build-products
+          path: artifact
+
+      - name: Extract built test products
+        run: |
+          mkdir -p DerivedData/Build/Products
+          tar -C DerivedData/Build/Products -xzf artifact/build-products.tar.gz
+
+      # 各操作を自動撮影し screenshots.html を生成（標準ツール fastlane snapshot）。
+      # Macを持たない開発者が実際の画面を確認する手段。設定は fastlane/Snapfile。
+      # fastlane/tools は UITest 配下に置く（AppTests/PhotoLayoutUITests）。
+      # そこをCWDにして実行する（Snapfileのパスは ../../ でリポジトリ直下を参照）。
+      - name: Capture screenshots (fastlane snapshot)
+        working-directory: AppTests/PhotoLayoutUITests
+        env:
+          FASTLANE_SKIP_UPDATE_CHECK: "1"
+          FASTLANE_HIDE_CHANGELOG: "1"
+        run: fastlane snapshot
+
+      - name: Upload screenshots (${{ matrix.device.slug }})
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ matrix.device.slug }}
+          path: AppTests/PhotoLayoutUITests/fastlane/screenshots
+          if-no-files-found: ignore
+          retention-days: 1
+
+  # 全機種分のscreenshots-*artifactを1つに統合し、既存と同じ単一の`screenshots`artifactにする
+  # （消費側の運用・index.htmlの絞り込みを崩さない）。Xcode不要なのでubuntu-latestで十分。
+  screenshots-index:
+    name: Merge screenshots & build index
+    needs: screenshots
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all device screenshots
+        uses: actions/download-artifact@v4
+        with:
+          pattern: screenshots-*
+          path: screenshots
+          merge-multiple: true
+
+      # 画面ID/機能ID/言語/端末で絞り込める一覧 index.html を生成（fastlane出力の見せ方を補強）。
+      - name: Build filterable screenshot index
+        run: python3 AppTests/PhotoLayoutUITests/tools/build_screenshot_index.py screenshots
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots
+          if-no-files-found: ignore
