@@ -1,0 +1,99 @@
+# 課題探索（手動実行）: CIスクショ成果物・実装・docs を利用者目線でレビューし、
+# 改善点を GitHub Issue として起票する。
+#
+# - Actions タブから手動実行（workflow_dispatch）。実行時に使用モデルを選べる
+# - エージェントは Claude Code 固定（issue-driven-flow と同じ CLAUDE_CODE_OAUTH_TOKEN を使用）
+# - 起票された Issue はそのまま issue-driven-flow に乗せられる（人間が `flow` ラベルを付けて開始）
+# - GITHUB_TOKEN で起票するため、起票イベントから他のワークフローは発火しない（意図どおり）
+name: issue-exploration
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: 使用するモデル
+        type: choice
+        required: true
+        default: claude-fable-5
+        options:
+          - claude-fable-5
+          - claude-opus-4-8
+          - claude-sonnet-5
+      focus:
+        description: 重点的に見る観点（任意。例「SE×ライトの画面崩れ」「書き出しフロー」）
+        type: string
+        required: false
+        default: ""
+
+jobs:
+  explore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # 同時に2本走ると重複起票しかねないため直列化
+    concurrency:
+      group: issue-exploration
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      issues: write # Issue の起票・既存 Issue の参照
+      actions: read # ios-ci の screenshots artifact のダウンロード（gh run download）
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Compose prompt
+        env:
+          FOCUS: ${{ inputs.focus }}
+        run: |
+          {
+            echo 'AGENT_PROMPT<<GF_PROMPT_EOF'
+            echo "あなたは photo-layout（${GITHUB_REPOSITORY}）の課題探索エージェント。"
+            echo "CIスクリーンショット成果物・実装・ドキュメントを確認し、利用者目線でアプリの改善点を洗い出して GitHub Issue を起票する。"
+            echo
+            echo "## 手順"
+            echo
+            echo "1. まず CLAUDE.md と docs/design.md・docs/screens.md・docs/decisions.md を読む（screens.md のスクショ命名規約と decisions.md の「廃止した設計（復活させないこと）」は必読）。"
+            echo "2. 既存 Issue を確認する（重複起票の禁止）:"
+            echo '   - `gh issue list --state open --limit 100 --json number,title,labels`'
+            echo '   - `gh issue list --state closed --limit 30 --json number,title`（直近クローズ分も対象外）'
+            echo "3. main の最新の成功した ios-ci run を特定し、マージ済みスクショ artifact を取得する:"
+            echo '   - `gh run list --workflow ios-ci.yml --branch main --limit 5 --json databaseId,status,conclusion,headSha` で success かつ headSha がチェックアウト中のコミット（`git rev-parse HEAD`）と一致する run を選ぶ。一致がなければ最新 success を使い、その旨を Issue と Step Summary に明記する。'
+            echo '   - `gh run download <run-id> -n screenshots -D "${RUNNER_TEMP}/screenshots"` でダウンロードし、Read ツールで PNG を1枚ずつ目視確認する。'
+            echo "4. スクショレビューの優先順位: ① iPhone SE 第3世代 × ライト（画面幅が最小で崩れ検出の本命）② iPhone 16 × ライト ③ ダーク。"
+            echo "   - ダーク版（-dark サフィックス）がライト外観のままの場合は撮影側の既知バグの可能性がある。同件の既存 Issue がないか確認し、あれば重複起票しない。"
+            echo "5. 指摘対象: UI/UXや操作性の改善、既存機能の改善、追加機能の提案、そろっているべき位置がそろっていない等の細かなずれ、文字の見にくさ、表記の不統一。気になった点は App/ の実装（SwiftUI）も読んで裏取りする。"
+            echo "6. 指摘を GitHub Issue として起票する:"
+            echo '   - `gh issue create --label <bug|enhancement> --title "..." --body "..."`'
+            echo "   - 本文は「現状 / 根拠（スクショファイル名・run ID・該当コードのパス）/ 期待・修正案」の構成。関連する既存 Issue は #番号 で参照し、範囲外を明記する。"
+            echo "   - 1件1論点で分割し、量より質。1回の実行で最大8件まで。確信の持てない指摘は起票せず Step Summary に候補として書く。"
+            echo "   - docs/decisions.md で廃止済みの設計を復活させる提案はしない。"
+            echo "7. 最後に \$GITHUB_STEP_SUMMARY へ Markdown で結果を書く: 起票した Issue の一覧（番号・タイトル）、確認したが問題なしと判断した点、レビューに使った run ID とコミット。"
+            echo
+            echo "## 制約"
+            echo
+            echo "- リポジトリのファイルは変更しない（git commit / push 禁止。作業ファイルは \$RUNNER_TEMP へ）。"
+            echo "- Issue の起票以外の GitHub 書き込み（ラベル作成・既存 Issue の編集など）はしない。"
+            if [ -n "$FOCUS" ]; then
+              echo
+              echo "## 今回の重点観点（実行者の指定）"
+              echo
+              echo "$FOCUS"
+            fi
+            echo 'GF_PROMPT_EOF'
+          } >> "$GITHUB_ENV"
+
+      - name: Run explorer (Claude Code)
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          prompt: ${{ env.AGENT_PROMPT }}
+          # 読み取り＋gh は許可、リポジトリへの書き込み系は禁止
+          claude_args: >-
+            --model ${{ inputs.model }}
+            --allowedTools "Bash,Read,Write,Edit,Glob,Grep"
+            --disallowedTools "Bash(git commit:*),Bash(git push:*),Bash(gh pr:*),Bash(gh release:*)"
+            --max-turns 150
