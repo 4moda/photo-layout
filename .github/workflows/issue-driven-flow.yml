@@ -9,26 +9,22 @@ on:
     types: [submitted]
 
 jobs:
-  # the label name below must match the workflows' trigger_label input
-  # (default "flow")
   shape:
     if: github.event_name == 'issues' && github.event.label.name == 'flow'
-    uses: ./.github/workflows/shape.yml
+    uses: 4moda/issue-driven-flow/.github/workflows/shape.yml@v2
     permissions:
       contents: read
       issues: write
     with:
-      # model must match the auto-selected agent; this repo provides Claude
-      # credentials only, so claude always wins the auto-detection
       model: claude-sonnet-5
       max_turns: 50
     secrets:
       claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
   build:
-    # fires for `flow` on an issue AND on a flow/issue-N pull request
+    # fires for `flow` on an issue AND for `flow` on a flow/issue-N pull request
     if: github.event.label.name == 'flow'
-    uses: ./.github/workflows/build.yml
+    uses: 4moda/issue-driven-flow/.github/workflows/build.yml@v2
     permissions:
       contents: write
       issues: write
@@ -43,7 +39,7 @@ jobs:
     if: >-
       github.event_name == 'pull_request_review' ||
       (github.event_name == 'pull_request' && github.event.action != 'labeled')
-    uses: ./.github/workflows/sync-pr.yml
+    uses: 4moda/issue-driven-flow/.github/workflows/sync-pr.yml@v2
     permissions:
       issues: write
       pull-requests: read
