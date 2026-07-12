@@ -200,8 +200,10 @@ jobs:
           retention-days: 1
 
   # 全機種×テーマ分のscreenshots-*artifactを1つにマージしてindex.htmlを生成する。
-  # PRではその場でCloudflare Pagesへプレビューデプロイし、GitHub Actionsの成果物としては
-  # 一切残さない（レビュアーがartifactをダウンロード・展開する手間をなくすのが目的。#32）。
+  # 人間のレビュアー向けにはPRでその場でCloudflare Pagesへプレビューデプロイする
+  # （artifactを手動ダウンロード・展開する手間をなくすのが目的。#32）。
+  # 統合後の単一screenshots artifactはCloudflareとは別に残す（AIエージェントが
+  # gh run downloadで直接参照するための経路。Cloudflare Accessのログインが要らない）。
   # Xcode不要なのでubuntu-latestで十分。
   screenshots-index:
     name: Merge screenshots & deploy preview
@@ -307,3 +309,14 @@ jobs:
           else
             gh api "repos/$REPO/issues/$PR_NUMBER/comments" -X POST -f body="$body" >/dev/null
           fi
+
+      # AIエージェント（Claude Code等）がgh run downloadで直接参照するための経路。
+      # Cloudflare Pagesの成否とは無関係に、screenshotsさえあれば常にアップロードする。
+      # 保持期間はリポジトリ既定のまま（人間向けではないため短縮しない）。
+      - name: Upload merged screenshots (for AI reference)
+        if: steps.screenshots_check.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots
+          if-no-files-found: ignore

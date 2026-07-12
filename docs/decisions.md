@@ -77,11 +77,15 @@
 `ios-ci.yml` の `screenshots-index` ジョブから `actions/upload-artifact` によるスクショartifactアップロードを廃止し、代わりに同ジョブ内でマージ済みディレクトリをそのまま `cloudflare/pages-action@v1` でCloudflare Pagesへデプロイする（PRイベント時のみ）。PRクローズ（マージ含む）時は別ワークフロー `screenshots-preview-cleanup.yml` がそのPR用デプロイをCloudflare REST APIで削除する。
 
 - **理由**（[#32](https://github.com/4moda/photo-layout/issues/32)）: レビュアーがartifactを手動ダウンロード・展開してindex.htmlを開く手間をなくす。オーナー承認: (1) Cloudflareアカウントは既存・Pagesプロジェクトは今後作成、Secretsは登録済み前提で実装してよい、(2) 保護方式はCloudflare Access（Zero Trust）+ GitHub OAuth SSO、(3) 削除トリガーはPRクローズ時、(4) 既存artifactアップロードは廃止し完全移行。
+  - **のちに一部撤回**: Cloudflare Access配下のページはSSOログインが要るため、AIエージェント（Claude Code等）は`WebFetch`/`curl`では中身を見られない（ログイン画面へリダイレクトされるだけ）。人間向け（Cloudflare Pages）とは別に、AIエージェントが`gh run download`で直接参照できる経路としてマージ後の単一`screenshots` artifactを復活させた（保持期間はリポジトリ既定のまま。オーナー判断）。(4)の「完全移行」は人間向け導線についてのみ有効とし、AI向けの経路は残す。
 - **デプロイ先を`screenshots-index`ジョブ内に統合**（Appetizeのような別workflow+`workflow_run`構成は不採用）: Appetizeは毎回Xcodeビルドが要る＋mainプッシュ後のみ実行なので別ワークフローで自然だが、こちらは`screenshots-index`ジョブの時点で静的ファイルが既にディスク上に揃っており、`workflow_run`で受け渡すには結局artifactを一度アップロードする必要が生じ「成果物を一切残さない」という受け入れ条件と矛盾する。ジョブ内で直接デプロイすれば、そもそもartifactを作らずに済む。
 - **PRごとのURL**: 同一Cloudflare Pagesプロジェクト（`photolayout-screenshots`）内で `branch=pr-<PR番号>` を指定してデプロイし、`https://pr-<番号>.photolayout-screenshots.pages.dev` が常に最新を指す（pushのたびに上書き）。Zero Trust Accessは `*.photolayout-screenshots.pages.dev` に対して一度だけ設定すれば、PRごとに新規Access設定は不要（人間が事前に1回だけダッシュボードで設定する前提。CIでは完結しない）。
 - **Secrets未設定時の挙動**: Appetizeの前例（`APPETIZE_API_TOKEN`未設定ならジョブを失敗させる）とは異なり、こちらは`screenshots-index`が全PRで毎回走るジョブのため、未設定のまま即失敗にすると人間がCloudflareを用意するまで全PRのCIが赤くなってしまう。そのため「Secretsが空なら`::notice::`を出してデプロイ・削除ステップだけを静かにスキップ」する設計にした。Secrets設定後に発生する本物のエラー（トークン誤りなど）はステップ自体が失敗するため見逃さない。
 - **削除の実装**: `cloudflare/pages-action`にはデプロイ削除機能が無いため、`screenshots-preview-cleanup.yml`でCloudflare REST API（`GET .../deployments`一覧を`deployment_trigger.metadata.branch`で自前フィルタ→`DELETE .../deployments/{id}?force=true`）を直接叩く。
 - **未確定事項**: Cloudflareアカウントでのプロジェクト作成・Zero Trust Access設定・`CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` Secretsの登録は人間側の作業として残っている。設定が完了するまでデプロイ・削除は静かにスキップされる。
+- **実CI検証で判明した問題と修正**（Secrets登録後の初回実機デプロイで発覚）:
+  - matrixの全leg（機種×テーマ）がconcurrency cancel等で空振りすると`screenshots`ディレクトリが作られず、`cloudflare/pages-action`のwranglerが存在しないディレクトリを`scandir`してcrashしていた。`screenshots`配下に最低1枚のpngがあるかを事前チェックし、無ければデプロイをスキップするよう修正。
+  - `cloudflare/pages-action`の`outputs.alias`は、direct uploadデプロイでは期待していたブランチエイリアス（`pr-<番号>.<project>.pages.dev`、安定URL）ではなく、デプロイ個別のハッシュURL（pushのたびに変わる）を返すことがあると判明。PRコメントに載せるURLはactionの出力に頼らず`https://pr-<PR番号>.photolayout-screenshots.pages.dev`を自前で組み立てる形にした（ブランチエイリアス自体は実在し安定して同じ内容を指すことをcurlで確認済み）。
 
 ### trunk ベース開発（2026-07-08 改定）
 
