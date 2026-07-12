@@ -1,0 +1,49 @@
+name: issue-driven-flow
+
+on:
+  issues:
+    types: [labeled]
+  pull_request:
+    types: [labeled, closed, reopened]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  # the label name below must match the workflows' trigger_label input
+  # (default "flow")
+  shape:
+    if: github.event_name == 'issues' && github.event.label.name == 'flow'
+    uses: ./.github/workflows/shape.yml
+    permissions:
+      contents: read
+      issues: write
+    with:
+      # model must match the auto-selected agent; this repo provides Claude
+      # credentials only, so claude always wins the auto-detection
+      model: claude-sonnet-5
+      max_turns: 50
+    secrets:
+      claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+  build:
+    # fires for `flow` on an issue AND on a flow/issue-N pull request
+    if: github.event.label.name == 'flow'
+    uses: ./.github/workflows/build.yml
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    with:
+      model: claude-sonnet-5
+      max_turns: 150
+    secrets:
+      claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+  sync-pr:
+    if: >-
+      github.event_name == 'pull_request_review' ||
+      (github.event_name == 'pull_request' && github.event.action != 'labeled')
+    uses: ./.github/workflows/sync-pr.yml
+    permissions:
+      issues: write
+      pull-requests: read
