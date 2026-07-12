@@ -100,7 +100,7 @@ fastlane snapshot の出力ファイルは安全なASCII名の
 | S02-f | 複数写真の重なり（カスケードずらし配置） | |
 | S02-g | 他スライドへ跨る写真（プロジェクト配置モデル・パノラマ） | `S02-panorama-three-slides` |
 | S02-h | スナップガイド表示中（ピンクの破線） | |
-| S02-i | undo/redo の活性・非活性 | |
+| S02-i | undo/redo の活性・非活性 | `S02-undo-redo-active` |
 | S02-j | 書き出し中（右上の保存ボタンがスピナー） | |
 | S02-k | 種別: コラージュ（田の字4枚合成） | `S02-collage-four-grid` |
 | S02-l | 種別: 枠付き（黒背景＋白フチ＋マット） | `S02-framed-black-background` |
@@ -224,8 +224,9 @@ fastlane snapshot の出力ファイルは安全なASCII名の
 | `testProjectListEmptyAndCreate` | `--reset-store` | S01(空)→S01-F03→S02(空/テンプレ)→S03 |
 | `testCanvasAspectsFromCreate` | `--reset-store` | S01-F04〜F08（用紙サイズ別の空キャンバス） |
 | `testProjectListPopulated` | `--reset-store --seed-demo` | S01(複数)、S01-F10(⋯削除) |
-| `testDemoPhotoOperations` | `--reset-store --seed-demo` | S02(選択/枠比率/クロップ/枠/レイヤー)、S04 |
+| `testDemoPhotoOperations` | `--reset-store --seed-demo` | S02(選択/枠比率/undo-redo/クロップ/枠/レイヤー)、S04 |
 | `testLayoutKinds` | `--reset-store --seed-demo` | S02(コラージュ/枠付き/パノラマ/X)、S03(比率/背景/ページ選択) |
+| `testDarkModeSpotCheck` | `--reset-store --seed-demo`（ダーク固定） | S01/S02/S03/S04 各1枚の最小巡回（`-dark`サフィックス） |
 
 ### カバレッジ凡例と方針
 
@@ -235,6 +236,8 @@ fastlane snapshot の出力ファイルは安全なASCII名の
 - **ジェスチャ・撮影対象外**（S02-F17〜F25, S03-F10） — キャンバス直接操作。離散的な1枚の画像に馴染まないため、**結果状態**（配置後の見た目など）で間接的に確認する。
 - **システムUI・撮影不可**（S02-F05 写真追加, S04-F02 カメラロール保存） — PhotosPicker / 写真ライブラリは別プロセス or 権限ダイアログのため、UIテストからの撮影は行わない。
 - **アクション（遷移のみ）**（S03-F01/F02 キャンセル/完了, S04-F01 閉じる） — 固有の画面を持たないため撮らない（遷移先の画面で確認）。
+- **ナビゲーション上到達不能**（S02-j 書き出し中スピナー） — `isExporting` は `PreviewView`（`.fullScreenCover` で全画面を覆う）の保存ボタン経由でしかtrueにならず、S02編集画面のツールバー自体は書き出し中は画面に出ない。実際に撮れる同等の状態はS04-c（`PreviewView`保存ボタンのスピナー）だが、こちらも非同期処理完了前の一瞬を捉える必要がありタイミング依存のため未着手。
+- **タイミング依存・未着手**（S02-h スナップガイド） — ドラッグ中の一瞬だけ表示され、指を離すと同期的に消える（`endGesture()`）。標準のXCUITest APIでは確実に撮れず、バックグラウンドスレッドからの撮影など実装コストが見合わないため見送り。
 
 この方針により「撮っていない＝抜け」ではなく、**撮らない理由が上のどれか**を各行で判別できる。
 

@@ -68,17 +68,27 @@ SNAPSHOT_LABELS = {
     "S03-F11-carousel-ratio-menu": "比率メニュー（カルーセル全体の比率）",
     "S03-F12-project-background-menu": "背景メニュー（プロジェクト共通の背景色）",
     "S04-export-preview": "書き出しプレビュー画面",
+    "S02-undo-redo-active": "undo/redoの活性状態（直前の枠比率変更でundoが活性・redoが非活性）",
 }
 
+# ダークモード撮影（ScreenshotSmokeTests.testDarkModeSpotCheck）はスナップ名の末尾に
+# この接尾辞を付けて区別する（例: S01-F01-project-list-populated-dark）。
+# ライトモードと同じテストターゲット内の1メソッドなので出力先は分かれず、
+# 接尾辞だけがテーマの手がかりになる。
+DARK_SUFFIX = "-dark"
+
 def parse_entry(lang: str, device: str, snap_name: str, rel_path: str) -> dict:
-    """安全名 `S01-F02-project-list-empty-state` を画面ID・機能ID・説明に分解する。"""
-    match = SNAP_RE.match(snap_name)
+    """安全名 `S01-F02-project-list-empty-state[-dark]` を画面ID・機能ID・テーマ・説明に分解する。"""
+    theme = "dark" if snap_name.endswith(DARK_SUFFIX) else "light"
+    base_name = snap_name[: -len(DARK_SUFFIX)] if theme == "dark" else snap_name
+    match = SNAP_RE.match(base_name)
     screen = match.group(1) if match else "その他"
     feature = match.group(2) if match and match.group(2) else ""
-    desc = SNAPSHOT_LABELS.get(snap_name, snap_name)
+    desc = SNAPSHOT_LABELS.get(base_name, base_name)
     return {
         "lang": lang,
         "device": device,
+        "theme": theme,
         "screen": screen,
         "screenLabel": SCREEN_LABELS.get(screen, screen),
         "feature": feature,
@@ -101,8 +111,8 @@ def collect(root: Path) -> list[dict]:
                 device, snap_name = "", stem
             rel = f"{lang}/{png.name}"
             entries.append(parse_entry(lang, device.strip(), snap_name, rel))
-    # 画面ID → 機能ID → 言語 → 端末 の順で安定ソート
-    entries.sort(key=lambda e: (e["screen"], e["feature"], e["desc"], e["lang"], e["device"]))
+    # 画面ID → 機能ID → テーマ → 言語 → 端末 の順で安定ソート
+    entries.sort(key=lambda e: (e["screen"], e["feature"], e["desc"], e["theme"], e["lang"], e["device"]))
     return entries
 HTML_TEMPLATE = """<!doctype html>
 <html lang="ja">
@@ -141,6 +151,7 @@ HTML_TEMPLATE = """<!doctype html>
          background: color-mix(in srgb, CanvasText 12%, transparent); }
   .tag.screen { background: #3b82f633; color: #2563eb; }
   .tag.feature { background: #10b98133; color: #059669; }
+  .tag.theme-dark { background: #6366f133; color: #4338ca; }
   .desc { font-size: 12px; line-height: 1.4; }
   .sub { font-size: 10px; opacity: 0.55; margin-top: 3px; }
   .empty { opacity: 0.6; padding: 40px; text-align: center; }
@@ -153,6 +164,7 @@ HTML_TEMPLATE = """<!doctype html>
     <label>言語 <select id="f-lang"></select></label>
     <label>画面 <select id="f-screen"></select></label>
     <label>端末 <select id="f-device"></select></label>
+    <label>テーマ <select id="f-theme"></select></label>
     <input id="f-text" type="search" placeholder="説明・機能IDで検索">
     <span class="count" id="count"></span>
   </div>
@@ -175,18 +187,24 @@ function fillSelect(el, values, allLabel, labeler) {
   }
 }
 
+const THEME_LABELS = { light: 'ライト', dark: 'ダーク' };
+
 fillSelect($('f-lang'), uniq(DATA.map(d => d.lang)).sort(), 'すべて');
 fillSelect($('f-screen'), uniq(DATA.map(d => d.screen)).sort(), 'すべて',
            v => (SCREEN_LABELS[v] ? v + ' ' + SCREEN_LABELS[v] : v));
 fillSelect($('f-device'), uniq(DATA.map(d => d.device)).sort(), 'すべて');
+fillSelect($('f-theme'), uniq(DATA.map(d => d.theme)).sort(), 'すべて',
+           v => THEME_LABELS[v] || v);
 
 function render() {
   const lang = $('f-lang').value, screen = $('f-screen').value, device = $('f-device').value;
+  const theme = $('f-theme').value;
   const q = $('f-text').value.trim().toLowerCase();
   const rows = DATA.filter(d =>
     (!lang || d.lang === lang) &&
     (!screen || d.screen === screen) &&
     (!device || d.device === device) &&
+    (!theme || d.theme === theme) &&
     (!q || (d.desc + ' ' + d.feature + ' ' + d.name).toLowerCase().includes(q)));
 
   const main = $('main');
@@ -208,7 +226,8 @@ function render() {
       const card = document.createElement('div');
       card.className = 'card';
       const tags = '<span class="tag screen">' + r.screen + '</span>'
-                 + (r.feature ? '<span class="tag feature">' + r.feature + '</span>' : '');
+                 + (r.feature ? '<span class="tag feature">' + r.feature + '</span>' : '')
+                 + (r.theme === 'dark' ? '<span class="tag theme-dark">ダーク</span>' : '');
       card.innerHTML =
         '<a href="' + r.path + '" target="_blank" rel="noopener"><img loading="lazy" src="' + r.path + '"></a>'
         + '<div class="meta"><div class="tags">' + tags + '</div>'

@@ -58,7 +58,19 @@
 - **artifact共有の実装判断**: GitHub標準のzip実装は実行ビット・シンボリックリンクの保持に不安があるため、`tar czf` で自前アーカイブしてから1ファイルとしてアップロード／ダウンロード時に展開する。共有するのは `DerivedData/Build/Products`（`.app`/`.xctest`/`.xctestrun`）のみで、容量の大きい `Build/Intermediates.noindex` は含めない。
 - **Snapfile**: `devices([...])` を固定配列からやめ、`ENV["SNAPSHOT_DEVICES"]`（カンマ区切り）で絞り込む形にした。未設定時（ローカル実行）は全機種を逐次撮影する既存動作を維持。
 - **既知のトレードオフ**: fastlane標準の `screenshots.html`（機種横断の素朴な一覧）は各matrixレグが機種単体分しか生成しないため、`merge-multiple` でのマージ時にどちらか一方の内容で上書きされる。実際に運用しているのは `build_screenshot_index.py` が生成する `index.html`（画面ID/機能ID/言語/端末で絞り込み可能）であり、これはマージ後に全機種分のデータで再生成するため影響なし。
-- **拡張性**: 将来テーマ軸（ライト/ダーク）を追加する際は `matrix.device` を `matrix.device × matrix.theme` に拡張する想定（[#27](https://github.com/4moda/photo-layout/issues/27) で追加予定の別Issue）。
+- **拡張性**: 将来テーマ軸（ライト/ダーク）を追加する際は `matrix.device` を `matrix.device × matrix.theme` に拡張する想定だった。[#30](https://github.com/4moda/photo-layout/issues/30) で実際に拡張した（次項）。
+
+### CIスクショ撮影にテーマ軸（ライト/ダーク）を追加・machine×themeへmatrix拡張（2026-07-12）
+
+`ScreenshotSmokeTests.swift` にダークモード専用の1テストメソッド `testDarkModeSpotCheck`（S01〜S04を各1枚、`XCUIDevice.shared.appearance = .dark` でシミュレータの外観を切り替えて起動。App層には手を入れない）を追加。スクショ名は既存のライト版と同じベース名に `-dark` サフィックスを付けるだけ（例: `S01-F01-project-list-populated-dark`）で、`ja-JP/` フラットのまま既存の命名規約に乗せる。
+
+- **並列化**: 当初は同じ `fastlane snapshot` 1回の実行にダークテストも含める案（ワークフロー変更なし）を検討したが、実行時間を鑑みてオーナーから「機種と同様に並列にしてほしい」という指示があり、`screenshots` ジョブの matrix を `device` だけから `device × theme` に拡張した（2機種×2テーマ=4並列ジョブ）。GitHub Actionsは複数のmatrix軸を書くと自動でクロス積になる。
+- **テストの絞り込み**: `Snapfile` に `SNAPSHOT_ONLY_TESTING` / `SNAPSHOT_SKIP_TESTING`（カンマ区切り、空文字は未指定扱い）を追加。light legは `testDarkModeSpotCheck` だけを `skip_testing` で除外して残り全部を撮り、dark legは逆に `only_testing` でそのメソッドだけに絞る。ビルド成果物（`build-products` artifact）はテーマに依存しないため、4 leg 全てが同じものを再利用する（再ビルドなし）。
+- **artifact名**: `screenshots-<device-slug>-<theme>`（例: `screenshots-iphone-16-dark`）で機種単体時と対称にした。最終的な統合は既存の `screenshots-index` ジョブがそのまま面倒を見る（パターンマッチなので軸が増えても変更不要）。
+- **index.htmlのテーマフィルタ**: `build_screenshot_index.py` はスナップ名の末尾 `-dark` を見てテーマを判定し（ディレクトリ分離はしない）、`f-theme` セレクトを追加した。ディレクトリで分離する案（`ja-JP/dark/`）も検討したが、同一テストターゲット内の1メソッドとして扱えるフラット命名の方が実装・CIとも単純なため不採用。
+- **見送った項目**（[#30](https://github.com/4moda/photo-layout/issues/30) 内でオーナーと合意）:
+  - S02-j（書き出し中スピナー）: `isExporting` は `PreviewView`（`.fullScreenCover`）経由でしかtrueにならず、S02編集画面のツールバーは書き出し中は画面に出ないため現在のナビゲーションでは到達不能と判明。相当する状態（S04-cのPreviewView保存ボタンのスピナー）も含め今回は見送り。
+  - S02-h（スナップガイド表示中）: ドラッグ中の一瞬だけ表示され指を離すと同期的に消えるため、標準のXCUITest APIでは撮れない。バックグラウンドスレッドからの撮影など実装コスト・タイミング調整のCI往復が見合わないため見送り。
 
 ### trunk ベース開発（2026-07-08 改定）
 
