@@ -30,29 +30,12 @@ struct PageOverviewView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .bottom) {
+            ZStack {
                 Color(white: 0.11).ignoresSafeArea()
-                ScrollView(.horizontal, showsIndicators: true) {
-                    HStack(alignment: .top, spacing: 10) {
-                        let pages = viewModel.project.orderedPages
-                        ForEach(Array(pages.enumerated()), id: \.element.id) { offset, page in
-                            card(for: page, showsInsertAfter: offset < pages.count - 1)
-                                // ドラッグで並べ替え（このカードへドロップ＝その位置へ移動）
-                                .draggable("\(page.index)")
-                                .dropDestination(for: String.self) { items, _ in
-                                    guard let from = items.first.flatMap(Int.init) else { return false }
-                                    selectedPageIndex = nil
-                                    viewModel.overviewMovePage(from: from, to: page.index)
-                                    return true
-                                }
-                        }
-                        appendCard
+                carousel
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        overviewControls
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 20)
-                    .padding(.bottom, 120)
-                }
-                overviewControls
             }
             .navigationTitle("スライド")
             .navigationBarTitleDisplayMode(.inline)
@@ -68,6 +51,36 @@ struct PageOverviewView: View {
                     .accessibilityIdentifier("overview.done")
                 }
             }
+        }
+    }
+
+    // MARK: - カルーセル
+
+    /// ページカードの横スクロールカルーセル。`overviewControls` 分の下部領域を除いた
+    /// 表示可能領域内で上下中央に配置する（`overviewControls` は `safeAreaInset` で分離）。
+    private var carousel: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            ScrollView(.horizontal, showsIndicators: true) {
+                HStack(alignment: .top, spacing: 10) {
+                    let pages = viewModel.project.orderedPages
+                    ForEach(Array(pages.enumerated()), id: \.element.id) { offset, page in
+                        card(for: page, showsInsertAfter: offset < pages.count - 1)
+                            // ドラッグで並べ替え（このカードへドロップ＝その位置へ移動）
+                            .draggable("\(page.index)")
+                            .dropDestination(for: String.self) { items, _ in
+                                guard let from = items.first.flatMap(Int.init) else { return false }
+                                selectedPageIndex = nil
+                                viewModel.overviewMovePage(from: from, to: page.index)
+                                return true
+                            }
+                    }
+                    appendCard
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 20)
+            }
+            Spacer(minLength: 0)
         }
     }
 
