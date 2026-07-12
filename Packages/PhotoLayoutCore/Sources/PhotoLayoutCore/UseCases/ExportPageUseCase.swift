@@ -51,6 +51,36 @@ public struct ExportPageUseCase: Sendable {
         return results
     }
 
+    /// 1ページを実解像度で書き出し、カメラロールへは保存せず画像Dataを返す（共有シート用）。
+    /// レンダリングは`execute`と同じ経路（RenderPlanBuilder→ImageExporting）を再利用する。
+    public func renderImageData(
+        project: ProjectEntity,
+        pageIndex: Int,
+        format: ExportFormat = .defaultJPEG
+    ) async throws -> Data {
+        guard let page = project.page(at: pageIndex) else {
+            throw ExportError.pageNotFound
+        }
+        return try await renderData(
+            page: page,
+            placements: SpreadGeometry.visiblePlacements(onPage: pageIndex, project: project),
+            defaultFrame: project.defaultPhotoFrame,
+            format: format
+        ).data
+    }
+
+    /// 全ページを投稿順に書き出し、カメラロールへは保存せず画像Dataの配列を返す（共有シート用）。
+    public func renderAllImageData(
+        project: ProjectEntity,
+        format: ExportFormat = .defaultJPEG
+    ) async throws -> [Data] {
+        var results: [Data] = []
+        for page in project.orderedPages {
+            results.append(try await renderImageData(project: project, pageIndex: page.index, format: format))
+        }
+        return results
+    }
+
     /// X組写真の書き出し: 1ページ上の各配置（スロット）を個別の実解像度画像として書き出す。
     /// スロット間のガター・ページ余白は含めず、各画像はスロットの内容を縁いっぱいに描く
     /// （写真ごとの枠線は保持される）。保存順＝表示順（sortIndex順）＝X投稿順。
@@ -90,6 +120,23 @@ public struct ExportPageUseCase: Sendable {
         defaultFrame: PhotoFrameStyle,
         format: ExportFormat
     ) async throws -> ExportResult {
+        let rendered = try await renderData(
+            page: page,
+            placements: placements,
+            defaultFrame: defaultFrame,
+            format: format
+        )
+        try await librarySaver.save(imageData: rendered.data)
+        return ExportResult(pixelSize: rendered.pixelSize, byteCount: rendered.data.count)
+    }
+
+    /// サイズ決定→プラン生成→描画のみを行い、保存はしない。`execute`系と`renderImageData`系の共通経路。
+    private func renderData(
+        page: PageEntity,
+        placements: [PlacementEntity],
+        defaultFrame: PhotoFrameStyle,
+        format: ExportFormat
+    ) async throws -> (data: Data, pixelSize: LayoutSize) {
         let pixelSize = ExportSizeCalculator.pageSize(page: page, placements: placements)
         let plan = RenderPlanBuilder.build(
             page: page,
@@ -98,8 +145,7 @@ public struct ExportPageUseCase: Sendable {
             pagePixelSize: pixelSize
         )
         let data = try await renderer.render(plan: plan, pixelSize: pixelSize, format: format)
-        try await librarySaver.save(imageData: data)
-        return ExportResult(pixelSize: pixelSize, byteCount: data.count)
+        return (data, pixelSize)
     }
 }
 

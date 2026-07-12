@@ -74,6 +74,42 @@ struct Phase2UseCaseTests {
         }
     }
 
+    @Test("ExportPage: renderImageDataは同じ描画経路でDataを返しライブラリへは保存しない（共有シート用）")
+    func renderImageDataDoesNotSave() async throws {
+        var project = ProjectEntity(
+            pages: [PageEntity(index: 0, aspect: AspectRatio(width: 4, height: 5))]
+        )
+        project.addPhoto(PhotoRef(fileName: "p.jpg", pixelWidth: 4000, pixelHeight: 5000))
+
+        let exporter = FakeImageExporter()
+        let saver = FakeLibrarySaver()
+        let data = try await ExportPageUseCase(renderer: exporter, librarySaver: saver)
+            .renderImageData(project: project, pageIndex: 0)
+
+        #expect(data.count == 123_456)
+        #expect(await saver.savedCount == 0)
+        let plan = await exporter.lastPlan
+        #expect(plan.count == 2) // execute()と同じプラン生成経路
+    }
+
+    @Test("ExportPage: renderAllImageDataはorderedPagesの投稿順でDataを返す")
+    func renderAllImageDataOrdersByOrderedPages() async throws {
+        var project = ProjectEntity(pages: [
+            PageEntity(index: 0, aspect: AspectRatio(width: 1, height: 1)),
+            PageEntity(index: 1, aspect: AspectRatio(width: 1, height: 1)),
+        ])
+        project.addPhoto(PhotoRef(fileName: "a.jpg", pixelWidth: 100, pixelHeight: 100), toPage: 0)
+        project.addPhoto(PhotoRef(fileName: "b.jpg", pixelWidth: 100, pixelHeight: 100), toPage: 1)
+        project.movePage(from: 1, to: 0) // 表示順を反転させ、orderedPages(index順)が保存順と一致することを確認
+
+        let saver = FakeLibrarySaver()
+        let results = try await ExportPageUseCase(renderer: FakeImageExporter(), librarySaver: saver)
+            .renderAllImageData(project: project)
+
+        #expect(results.count == 2)
+        #expect(await saver.savedCount == 0)
+    }
+
     @Test("Mutations: 全面/マット配置とプリセット適用")
     func mutations() {
         var project = ProjectEntity(pages: [PageEntity(index: 0, aspect: AspectRatio(width: 1, height: 1))])
