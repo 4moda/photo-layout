@@ -199,13 +199,22 @@ jobs:
           if-no-files-found: ignore
           retention-days: 1
 
-  # 全機種分のscreenshots-*artifactを1つに統合し、既存と同じ単一の`screenshots`artifactにする
-  # （消費側の運用・index.htmlの絞り込みを崩さない）。Xcode不要なのでubuntu-latestで十分。
+  # 全機種×テーマ分のscreenshots-*artifactを1つにマージしてindex.htmlを生成する。
+  # 人間のレビュアー向けにはPRでその場でCloudflare Pagesへプレビューデプロイする
+  # （artifactを手動ダウンロード・展開する手間をなくすのが目的。#32）。
+  # 統合後の単一screenshots artifactはCloudflareとは別に残す（AIエージェントが
+  # gh run downloadで直接参照するための経路。Cloudflare Accessのログインが要らない）。
+  # Xcode不要なのでubuntu-latestで十分。
   screenshots-index:
-    name: Merge screenshots & build index
+    name: Merge screenshots & deploy preview
     needs: screenshots
     if: always()
     runs-on: ubuntu-latest
+    # cloudflare/pages-actionがデプロイステータス・PRコメントを書き込むために必要。
+    permissions:
+      contents: read
+      pull-requests: write
+      deployments: write
     steps:
       - uses: actions/checkout@v4
 
@@ -216,11 +225,96 @@ jobs:
           path: screenshots
           merge-multiple: true
 
-      # 画面ID/機能ID/言語/端末で絞り込める一覧 index.html を生成（fastlane出力の見せ方を補強）。
+      # 画面ID/機能ID/言語/端末/テーマで絞り込める一覧 index.html を生成（fastlane出力の見せ方を補強）。
       - name: Build filterable screenshot index
         run: python3 AppTests/PhotoLayoutUITests/tools/build_screenshot_index.py screenshots
 
-      - name: Upload screenshots
+      # matrixレグが1つも成功しなかった（concurrency cancel等で全滅した）場合はscreenshotsが
+      # 作られない。存在チェックを挟まないとwranglerが存在しないディレクトリをscandirして
+      # crashするため、ここで検知してデプロイをスキップする。
+      - name: Check screenshots exist
+        id: screenshots_check
+        run: |
+          if [ -d screenshots ] && find screenshots -name '*.png' -print -quit | grep -q .; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::screenshotsディレクトリが空か存在しません（matrixレグが全滅した可能性）。Cloudflare Pagesプレビューをスキップします。"
+          fi
+
+      # Cloudflareのアカウント・Pagesプロジェクト・Zero Trust Accessポリシー（GitHub OAuth SSO）は
+      # 人間が事前に用意する前提（CIでは完結しない）。Secrets未設定の間は静かにスキップし、
+      # 通常のPR（Cloudflare未設定のPR）を赤くしない。設定後に本物のエラー（トークン誤りなど）が
+      # 出た場合はこのステップ自体が失敗して知らせる。
+      - name: Check Cloudflare secrets
+        id: cf_check
+        env:
+          CF_TOKEN_SET: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+          CF_ACCOUNT_SET: ${{ secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+        run: |
+          if [ "$CF_TOKEN_SET" = "true" ] && [ "$CF_ACCOUNT_SET" = "true" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CLOUDFLARE_API_TOKEN/CLOUDFLARE_ACCOUNT_ID が未設定のため、スクショのCloudflare Pagesプレビューをスキップします。"
+          fi
+
+      # レビュー用プレビュー。PRごとに branch=pr-<番号> で同一Pagesプロジェクト内へデプロイし、
+      # 常に https://pr-<番号>.<project>.pages.dev が最新を指す（push毎に上書き）。
+      - name: Deploy screenshots to Cloudflare Pages (PR preview)
+        id: deploy
+        if: |
+          github.event_name == 'pull_request' &&
+          steps.cf_check.outputs.configured == 'true' &&
+          steps.screenshots_check.outputs.present == 'true'
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: photolayout-screenshots
+          directory: screenshots
+          branch: pr-${{ github.event.pull_request.number }}
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+
+      # cloudflare/pages-actionはGitHub Deployment（PRタイムラインの小さな行）は作るが
+      # 本文コメントは投稿しないため、見落とし防止に明示コメントする。同じPRへの再pushでは
+      # 新規コメントを増やさず、マーカーで既存コメントを見つけて上書きする。
+      # URLは steps.deploy.outputs.alias を使わず自前で組み立てる: 実機確認したところ
+      # direct upload デプロイでは alias がブランチエイリアス（安定URL）ではなく
+      # デプロイ個別のハッシュURLを返すことがあり、pushのたびにURLが変わってしまうため。
+      # ブランチエイリアス自体（https://pr-<番号>.<project>.pages.dev）は実在し安定して
+      # 同じデプロイ内容を指すことをcurlで確認済み。
+      - name: Comment preview URL on PR
+        if: steps.deploy.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PREVIEW_URL: https://pr-${{ github.event.pull_request.number }}.photolayout-screenshots.pages.dev
+        run: |
+          set -euo pipefail
+          marker="<!-- screenshots-preview-comment -->"
+          body="$marker
+          ## 📸 スクショプレビュー
+
+          $PREVIEW_URL
+
+          画面ID・機能ID・言語・端末・テーマ（ライト/ダーク）で絞り込めます。Cloudflare Access配下で保護されています。このPRへの以降のpushでも同じURLが最新を指します。"
+
+          existing_id=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
+            --jq "[.[] | select(.body | startswith(\"$marker\"))][0].id // empty")
+
+          if [ -n "$existing_id" ]; then
+            gh api "repos/$REPO/issues/comments/$existing_id" -X PATCH -f body="$body" >/dev/null
+          else
+            gh api "repos/$REPO/issues/$PR_NUMBER/comments" -X POST -f body="$body" >/dev/null
+          fi
+
+      # AIエージェント（Claude Code等）がgh run downloadで直接参照するための経路。
+      # Cloudflare Pagesの成否とは無関係に、screenshotsさえあれば常にアップロードする。
+      # 保持期間はリポジトリ既定のまま（人間向けではないため短縮しない）。
+      - name: Upload merged screenshots (for AI reference)
+        if: steps.screenshots_check.outputs.present == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: screenshots

@@ -240,7 +240,7 @@ function render() {
   }
 }
 
-for (const id of ['f-lang', 'f-screen', 'f-device']) $(id).addEventListener('change', render);
+for (const id of ['f-lang', 'f-screen', 'f-device', 'f-theme']) $(id).addEventListener('change', render);
 $('f-text').addEventListener('input', render);
 render();
 </script>
