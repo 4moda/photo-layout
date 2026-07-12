@@ -88,8 +88,10 @@ final class ScreenshotSmokeTests: XCTestCase {
                 snapshot("S01-F10-project-cell-delete-menu")
                 app.buttons["削除"].tap()
 
-                // S01-F11: 削除確認ダイアログ。「キャンセル」で閉じ、一覧に残ることを確認する。
+                // S01-F11: 削除確認シート（拡大サムネイル＋タイトル＋ページ数）。
+                // 「キャンセル」で閉じ、一覧に残ることを確認する。
                 if app.buttons["キャンセル"].waitForExistence(timeout: 3) {
+                    sleep(1)
                     snapshot("S01-F11-project-cell-delete-confirm")
                     app.buttons["キャンセル"].tap()
                     XCTAssertTrue(app.buttons["デモ"].waitForExistence(timeout: 3))

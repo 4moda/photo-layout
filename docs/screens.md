@@ -79,8 +79,8 @@ fastlane snapshot の出力ファイルは安全なASCII名の
 | S01-F07 | 新規作成: 横 16:9 | 空スライドで S02 へ | `S01-F07-create-landscape-16-9-canvas` |
 | S01-F08 | 新規作成: 横長 1.91:1（Instagram） | 空スライドで S02 へ | `S01-F08-create-landscape-1-91-1-canvas` |
 | S01-F09 | セルをタップ | S02 スライド編集へ遷移 | （各デモを開いて撮影） |
-| S01-F10 | セルの⋯メニュー → 削除 | 確認ダイアログを表示（即削除はしない） | `S01-F10-project-cell-delete-menu` |
-| S01-F11 | 削除確認ダイアログ（タイトル＋ページ数を表示） → 「削除」を確定 | 一覧から除去。「キャンセル」なら一覧に残る | `S01-F11-project-cell-delete-confirm` |
+| S01-F10 | セルの⋯メニュー → 削除 | 確認シートを表示（即削除はしない） | `S01-F10-project-cell-delete-menu` |
+| S01-F11 | 削除確認シート（拡大サムネイル＋タイトル＋ページ数を表示） → 「削除」を確定 | 一覧から除去。「キャンセル」なら一覧に残る | `S01-F11-project-cell-delete-confirm` |
 
 ---
 
@@ -224,7 +224,7 @@ fastlane snapshot の出力ファイルは安全なASCII名の
 |---|---|---|
 | `testProjectListEmptyAndCreate` | `--reset-store` | S01(空)→S01-F03→S02(空/テンプレ)→S03 |
 | `testCanvasAspectsFromCreate` | `--reset-store` | S01-F04〜F08（用紙サイズ別の空キャンバス） |
-| `testProjectListPopulated` | `--reset-store --seed-demo` | S01(複数)、S01-F10(⋯削除メニュー)、S01-F11(削除確認ダイアログ) |
+| `testProjectListPopulated` | `--reset-store --seed-demo` | S01(複数)、S01-F10(⋯削除メニュー)、S01-F11(削除確認シート) |
 | `testDemoPhotoOperations` | `--reset-store --seed-demo` | S02(選択/枠比率/undo-redo/クロップ/枠/レイヤー)、S04 |
 | `testLayoutKinds` | `--reset-store --seed-demo` | S02(コラージュ/枠付き/パノラマ/X)、S03(比率/背景/ページ選択) |
 | `testDarkModeSpotCheck` | `--reset-store --seed-demo`（ダーク固定） | S01/S02/S03/S04 各1枚の最小巡回（`-dark`サフィックス） |

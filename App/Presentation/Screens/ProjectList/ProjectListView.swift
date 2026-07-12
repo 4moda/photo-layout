@@ -158,14 +158,50 @@ private struct ProjectCell: View {
         }
         // 注: ここで .accessibilityIdentifier を付けると子（NavigationLink）へ伝播して
         // タイトルidentifierを上書きしてしまうため付けない（UIテストはタイトルでタップする）
-        .confirmationDialog(
-            "\(displayTitle)を削除しますか？（\(project.pages.count)ページ）",
-            isPresented: $showingDeleteConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("削除", role: .destructive, action: onDelete)
-            Button("キャンセル", role: .cancel) {}
+        .sheet(isPresented: $showingDeleteConfirmation) {
+            deleteConfirmationSheet
         }
+    }
+
+    /// 削除確認。ユーザはタイトル（「枠付き（黒背景）」等の説明的な文字列）ではなく
+    /// サムネイル写真でレイアウトを認知しているため、`confirmationDialog`（テキストのみ）ではなく
+    /// 拡大サムネイルを添えた確認シートにする。タイトル・ページ数のテキストはVoiceOver向けに残す。
+    private var deleteConfirmationSheet: some View {
+        VStack(spacing: 20) {
+            thumbnail
+                .frame(width: 200, height: 200)
+                .accessibilityIdentifier("projectList.deleteConfirm.thumbnail")
+
+            VStack(spacing: 6) {
+                Text("このレイアウトを削除しますか？")
+                    .font(.headline)
+                Text("\(displayTitle)・\(project.pages.count)ページの内容が完全に削除されます")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, 24)
+
+            VStack(spacing: 12) {
+                Button(role: .destructive) {
+                    showingDeleteConfirmation = false
+                    onDelete()
+                } label: {
+                    Text("削除").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+
+                Button("キャンセル") {
+                    showingDeleteConfirmation = false
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding(.horizontal, 24)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 32)
+        .presentationDetents([.medium])
     }
 
     private var thumbnail: some View {
