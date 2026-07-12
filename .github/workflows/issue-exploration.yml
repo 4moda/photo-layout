@@ -48,6 +48,7 @@ jobs:
         env:
           FOCUS: ${{ inputs.focus }}
         run: |
+          # shellcheck disable=SC2016  # プロンプト文中の `${RUNNER_TEMP}` 等はリテラル表示が目的で展開させない
           {
             echo 'AGENT_PROMPT<<GF_PROMPT_EOF'
             echo "あなたは photo-layout（${GITHUB_REPOSITORY}）の課題探索エージェント。"
