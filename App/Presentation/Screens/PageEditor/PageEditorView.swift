@@ -778,6 +778,18 @@ struct PageEditorView: View {
         ("16:9 横", 16.0 / 9.0)
     ]
 
+    private static let frameAspectTolerance: Double = 1e-6
+
+    /// 枠比率シートのスウォッチが現在値かどうか（`pixelAspect == nil` は「元画像」＝どのプリセットとも
+    /// 一致しない場合を表す）。写真のネイティブ比がたまたまプリセットと一致する場合はプリセット側を優先する
+    private func isCurrentFrameAspect(_ pixelAspect: Double?) -> Bool {
+        guard let current = viewModel.currentFramePixelAspect else { return false }
+        if let pixelAspect {
+            return abs(pixelAspect - current) < Self.frameAspectTolerance
+        }
+        return !Self.frameAspectChoices.contains { abs($0.pixelAspect - current) < Self.frameAspectTolerance }
+    }
+
     /// 写真選択中のメニュー（枠比率 / クロップ / 削除）。
     /// 前面/背面はページ選択の「レイヤー」に集約、差し替えは廃止。移動/拡縮はドラッグ。
     private var photoControls: some View {
@@ -886,6 +898,10 @@ struct PageEditorView: View {
                         } label: {
                             VStack(spacing: 6) {
                                 FrameSwatch(frame: choice.frame)
+                                    .selectionHighlight(
+                                        viewModel.currentFrameOverride == choice.frame,
+                                        in: RoundedRectangle(cornerRadius: 6)
+                                    )
                                 Text(choice.label).font(.caption2).foregroundStyle(.secondary)
                                     .lineLimit(1).minimumScaleFactor(0.7)
                             }
@@ -968,6 +984,10 @@ struct PageEditorView: View {
                         } label: {
                             VStack(spacing: 6) {
                                 TemplateThumbnail(template: template)
+                                    .selectionHighlight(
+                                        template.id == viewModel.currentTemplateID,
+                                        in: RoundedRectangle(cornerRadius: 6)
+                                    )
                                 Text(template.name)
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
@@ -1002,6 +1022,10 @@ struct PageEditorView: View {
                     } label: {
                         VStack(spacing: 6) {
                             AspectRatioSwatch(aspect: nil)
+                                .selectionHighlight(
+                                    isCurrentFrameAspect(nil),
+                                    in: RoundedRectangle(cornerRadius: 6)
+                                )
                             Text("元画像")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
@@ -1017,6 +1041,10 @@ struct PageEditorView: View {
                         } label: {
                             VStack(spacing: 6) {
                                 AspectRatioSwatch(aspect: choice.pixelAspect)
+                                    .selectionHighlight(
+                                        isCurrentFrameAspect(choice.pixelAspect),
+                                        in: RoundedRectangle(cornerRadius: 6)
+                                    )
                                 Text(choice.label)
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)

@@ -59,6 +59,33 @@ final class PageEditorViewModel {
         Array(project.placements(onPage: currentPageIndex).reversed())
     }
 
+    // MARK: - 選択中の値（選択UIの現在値ハイライト用）
+
+    private var selectedPlacement: PlacementEntity? {
+        guard let id = selectedPlacementID else { return nil }
+        return project.placements.first { $0.id == id }
+    }
+
+    /// 選択中の写真の現在の枠の実ピクセルアスペクト（未選択ならnil）。
+    /// destRectはページ配置領域の正規化座標なので、page.contentAspectを掛けて実ピクセルアスペクトに戻す
+    /// （ExportPageUseCaseの書き出し時計算と同じ式）。
+    var currentFramePixelAspect: Double? {
+        guard let placement = selectedPlacement, let page = project.page(at: placement.pageIndex) else { return nil }
+        return placement.destRect.aspectRatio * page.contentAspect
+    }
+
+    /// 選択中の写真の現在の枠（縁）。`nil` は「なし」を表す（未選択の場合もnil）
+    var currentFrameOverride: PhotoFrameStyle? { selectedPlacement?.frameOverride }
+
+    /// 現在ページに敷かれているテンプレートのid（型枠未適用、またはどのテンプレートとも一致しなければnil）
+    var currentTemplateID: String? {
+        guard let slots = page?.slots else { return nil }
+        return availableTemplates.first { template in
+            template.slots.count == slots.count
+                && zip(template.slots, slots).allSatisfy { $0.isApproximatelyEqual(to: $1) }
+        }?.id
+    }
+
     func onAppear() async {
         await refreshImages()
     }
