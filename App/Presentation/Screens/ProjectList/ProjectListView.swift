@@ -127,6 +127,11 @@ private struct ProjectCell: View {
     /// 1ページ目の配置ID→サムネイル画像（ViewModelのキャッシュから供給）
     let thumbnailImages: [UUID: UIImage]
     let onDelete: () -> Void
+    @State private var showingDeleteConfirmation = false
+
+    private var displayTitle: String {
+        project.title ?? "無題のレイアウト"
+    }
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -134,10 +139,12 @@ private struct ProjectCell: View {
                 thumbnail
             }
             .buttonStyle(.plain)
-            .accessibilityIdentifier(project.title ?? "無題のレイアウト")
+            .accessibilityIdentifier(displayTitle)
 
             Menu {
-                Button(role: .destructive, action: onDelete) {
+                Button(role: .destructive) {
+                    showingDeleteConfirmation = true
+                } label: {
                     Label("削除", systemImage: "trash")
                 }
             } label: {
@@ -151,6 +158,55 @@ private struct ProjectCell: View {
         }
         // 注: ここで .accessibilityIdentifier を付けると子（NavigationLink）へ伝播して
         // タイトルidentifierを上書きしてしまうため付けない（UIテストはタイトルでタップする）
+        .sheet(isPresented: $showingDeleteConfirmation) {
+            deleteConfirmationSheet
+        }
+    }
+
+    /// 削除確認。ユーザはタイトル（「枠付き（黒背景）」等の説明的な文字列）ではなく
+    /// サムネイル写真でレイアウトを認知しているため、`confirmationDialog`（テキストのみ）ではなく
+    /// 拡大サムネイルを添えた確認シートにする。タイトル・ページ数のテキストはVoiceOver向けに残す。
+    private var deleteConfirmationSheet: some View {
+        VStack {
+            Spacer(minLength: 24)
+
+            VStack(spacing: 20) {
+                thumbnail
+                    .frame(width: 200, height: 200)
+                    .accessibilityIdentifier("projectList.deleteConfirm.thumbnail")
+
+                VStack(spacing: 6) {
+                    Text("このレイアウトを削除しますか？")
+                        .font(.headline)
+                    Text("\(displayTitle)・\(project.pages.count)ページの内容が完全に削除されます")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.horizontal, 24)
+
+                VStack(spacing: 12) {
+                    Button(role: .destructive) {
+                        showingDeleteConfirmation = false
+                        onDelete()
+                    } label: {
+                        Text("削除").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    Button {
+                        showingDeleteConfirmation = false
+                    } label: {
+                        Text("キャンセル").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .padding(.horizontal, 24)
+            }
+
+            Spacer(minLength: 24)
+        }
+        .presentationDetents([.medium])
     }
 
     private var thumbnail: some View {
