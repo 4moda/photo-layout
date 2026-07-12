@@ -86,6 +86,7 @@
 - **実CI検証で判明した問題と修正**（Secrets登録後の初回実機デプロイで発覚）:
   - matrixの全leg（機種×テーマ）がconcurrency cancel等で空振りすると`screenshots`ディレクトリが作られず、`cloudflare/pages-action`のwranglerが存在しないディレクトリを`scandir`してcrashしていた。`screenshots`配下に最低1枚のpngがあるかを事前チェックし、無ければデプロイをスキップするよう修正。
   - `cloudflare/pages-action`の`outputs.alias`は、direct uploadデプロイでは期待していたブランチエイリアス（`pr-<番号>.<project>.pages.dev`、安定URL）ではなく、デプロイ個別のハッシュURL（pushのたびに変わる）を返すことがあると判明。PRコメントに載せるURLはactionの出力に頼らず`https://pr-<PR番号>.photolayout-screenshots.pages.dev`を自前で組み立てる形にした（ブランチエイリアス自体は実在し安定して同じ内容を指すことをcurlで確認済み）。
+  - `screenshots-preview-cleanup.yml`の削除ループが、ページ走査中にその場で`DELETE`していたため一部デプロイを削除し損ねていた（[#41](https://github.com/4moda/photo-layout/issues/41)）。あるページで削除すると、Cloudflare側の残存一覧では後続要素が前方へ繰り上がり、次に要求する`page+1`はその繰り上がり後の一覧を返すため、繰り上がった分の要素が一度もどのページ取得にも現れず削除されない。全ページを削除なしで走査してid一覧を収集し終えてから、まとめて削除する二段階へ分離して修正。
 
 ### trunk ベース開発（2026-07-08 改定）
 

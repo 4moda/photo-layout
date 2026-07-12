@@ -39,6 +39,11 @@ jobs:
       # branch=pr-<番号> に紐づく全デプロイを列挙して削除する。
       # Cloudflare Pages API はbranchでの絞り込みクエリを提供しないため、
       # 一覧をページングしつつ deployment_trigger.metadata.branch で自前フィルタする。
+      #
+      # 収集（全ページ走査）と削除を分離すること: ページ走査中にDELETEすると、
+      # Cloudflare側の残存一覧では削除された要素の後続が前方に繰り上がる。その
+      # 状態で次のpageを要求すると、本来そのpageの先頭にあった要素が読み飛ばされ、
+      # 一度も一覧に現れず削除されないまま残ってしまう（#41）。
       - name: Delete preview deployments for this PR
         if: steps.cf_check.outputs.configured == 'true'
         env:
@@ -49,22 +54,28 @@ jobs:
         run: |
           set -euo pipefail
           base="https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/pages/projects/$PROJECT_NAME/deployments"
+
+          # 1. 収集フェーズ: 削除を一切行わずに全ページを走査し、一致するidを集める。
           page=1
-          deleted=0
+          ids=""
           while :; do
             response=$(curl -sS -f -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$base?page=$page&per_page=25")
-            ids=$(echo "$response" | jq -r --arg branch "$BRANCH" \
+            page_ids=$(echo "$response" | jq -r --arg branch "$BRANCH" \
               '.result[] | select(.deployment_trigger.metadata.branch == $branch) | .id')
-            for id in $ids; do
-              echo "Deleting deployment $id (branch=$BRANCH)"
-              curl -sS -f -X DELETE -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-                "$base/$id?force=true" >/dev/null
-              deleted=$((deleted + 1))
-            done
+            ids="$ids"$'\n'"$page_ids"
             total_pages=$(echo "$response" | jq -r '.result_info.total_pages // 1')
             if [ "$page" -ge "$total_pages" ]; then
               break
             fi
             page=$((page + 1))
+          done
+
+          # 2. 削除フェーズ: 収集し終えたidに対してのみDELETEする。
+          deleted=0
+          for id in $ids; do
+            echo "Deleting deployment $id (branch=$BRANCH)"
+            curl -sS -f -X DELETE -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "$base/$id?force=true" >/dev/null
+            deleted=$((deleted + 1))
           done
           echo "Deleted $deleted deployment(s) for branch $BRANCH."
