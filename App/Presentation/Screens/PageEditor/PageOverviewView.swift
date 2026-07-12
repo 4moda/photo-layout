@@ -196,9 +196,18 @@ struct PageOverviewView: View {
             HStack(spacing: 12) {
                 Menu {
                     ForEach(Self.aspectChoices, id: \.label) { choice in
-                        Button(choice.label) {
+                        Button {
                             viewModel.overviewSetAspect(choice.aspect)
+                        } label: {
+                            Label {
+                                Text(choice.label)
+                            } icon: {
+                                AspectRatioSwatch(aspect: choice.aspect.ratio)
+                                    .frame(width: 22, height: 22)
+                            }
                         }
+                        // ラベルに形プレビューを添えたためテキストのみの暗黙識別子に頼らず明示する
+                        .accessibilityIdentifier(choice.label)
                     }
                 } label: {
                     controlLabel("比率", systemImage: "aspectratio")
@@ -207,9 +216,14 @@ struct PageOverviewView: View {
 
                 Menu {
                     ForEach(Self.backgroundColors, id: \.label) { choice in
-                        Button(choice.label) {
+                        Button {
                             viewModel.overviewSetBackgroundColor(choice.color)
+                        } label: {
+                            BackgroundColorSwatch(color: choice.color)
                         }
+                        // 色名テキストを表示しないため、a11y識別子/ラベルは明示的に付与する
+                        .accessibilityIdentifier(choice.label)
+                        .accessibilityLabel(choice.label)
                     }
                 } label: {
                     controlLabel("背景", systemImage: "square.dashed")
@@ -241,5 +255,17 @@ struct PageOverviewView: View {
         .foregroundStyle(tint)
         .frame(width: 62)
         .padding(.vertical, 6)
+    }
+}
+
+/// 背景色メニューの1項目。色名は出さず、該当色で塗った丸のみで選ばせる。
+private struct BackgroundColorSwatch: View {
+    let color: LayoutColor
+
+    var body: some View {
+        Circle()
+            .fill(Color(red: color.red, green: color.green, blue: color.blue, opacity: color.alpha))
+            .frame(width: 22, height: 22)
+            .overlay(Circle().stroke(Color.gray.opacity(0.35), lineWidth: 0.75))
     }
 }

@@ -1095,33 +1095,3 @@ private struct FrameSwatch: View {
         Color(red: c.red, green: c.green, blue: c.blue, opacity: c.alpha)
     }
 }
-
-private struct AspectRatioSwatch: View {
-    let aspect: Double?
-
-    var body: some View {
-        GeometryReader { g in
-            let ratio = CGFloat(max(aspect ?? 1, 0.01))
-            let maxWidth = g.size.width * 0.78
-            let maxHeight = g.size.height * 0.78
-            let fittedWidth = min(maxWidth, maxHeight * ratio)
-            let fittedHeight = fittedWidth / ratio
-
-            ZStack {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color(.systemGray5))
-                RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(Color(.systemGray4), lineWidth: 0.5)
-
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(Color.accentColor.opacity(0.22))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 5)
-                            .strokeBorder(Color.accentColor, lineWidth: 1)
-                    )
-                    .frame(width: fittedWidth, height: fittedHeight)
-            }
-        }
-        .aspectRatio(1, contentMode: .fit)
-    }
-}

@@ -68,8 +68,15 @@ struct ProjectListView: View {
         Menu {
             Section("用紙サイズを選んで新規作成") {
                 ForEach(Self.canvasChoices, id: \.id) { choice in
-                    Button(choice.label) {
+                    Button {
                         createAndOpen(aspect: choice.aspect, title: nil)
+                    } label: {
+                        Label {
+                            Text(choice.label)
+                        } icon: {
+                            AspectRatioSwatch(aspect: choice.aspect.ratio)
+                                .frame(width: 22, height: 22)
+                        }
                     }
                     .accessibilityIdentifier("projectList.new_\(choice.id)")
                 }

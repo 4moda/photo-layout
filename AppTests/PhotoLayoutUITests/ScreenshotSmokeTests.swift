@@ -227,6 +227,9 @@ final class ScreenshotSmokeTests: XCTestCase {
 
     /// S03 俯瞰のメニュー系（比率・背景・ページ選択メニュー）を撮る。
     /// 比率/背景は popover。撮ったらナビバーをタップして閉じ、次を開く。
+    /// 比率メニューの各項目は形プレビュー(`AspectRatioSwatch`)+テキスト、背景メニューの各項目は
+    /// 色丸アイコンのみ（色名テキストは非表示）。"1:1"/"黒" はどちらも明示的な
+    /// accessibilityIdentifier（背景側は可視テキストを伴わない）でルックアップする。
     @MainActor
     private func captureOverviewMenus(_ app: XCUIApplication) {
         let nav = app.navigationBars["スライド"]
