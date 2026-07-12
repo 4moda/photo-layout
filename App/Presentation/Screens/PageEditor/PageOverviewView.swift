@@ -28,6 +28,14 @@ struct PageOverviewView: View {
         ("16:9 横", AspectRatio(width: 16, height: 9))
     ]
 
+    private static let aspectTolerance: Double = 1e-6
+
+    /// 現在のページアスペクトと比率シートの選択肢が一致するか（幅:高さの表現差を無視し実際の比で比較）
+    private func isCurrentAspect(_ aspect: AspectRatio) -> Bool {
+        guard let current = viewModel.page?.aspect else { return false }
+        return abs(current.ratio - aspect.ratio) < Self.aspectTolerance
+    }
+
     /// プロジェクト共通の背景色（俯瞰・新規作成で設定）
     private static let backgroundColors: [(label: String, color: LayoutColor)] = [
         ("白", .white),
@@ -276,6 +284,10 @@ struct PageOverviewView: View {
                         } label: {
                             VStack(spacing: 6) {
                                 AspectRatioSwatch(aspect: choice.aspect.ratio)
+                                    .selectionHighlight(
+                                        isCurrentAspect(choice.aspect),
+                                        in: RoundedRectangle(cornerRadius: 6)
+                                    )
                                 Text(choice.label)
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
@@ -311,6 +323,7 @@ struct PageOverviewView: View {
                             activePicker = nil
                         } label: {
                             BackgroundColorSwatch(color: choice.color, diameter: 52)
+                                .selectionHighlight(viewModel.page?.background.color == choice.color, in: Circle())
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier(choice.label)
