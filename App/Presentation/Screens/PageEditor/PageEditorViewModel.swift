@@ -273,6 +273,13 @@ final class PageEditorViewModel {
         await persist(refreshImages: false)
     }
 
+    /// レイヤー順シートのドラッグ並べ替え。`fromOffsets`/`toOffset`は表示順（前面が先）。
+    func movePlacements(fromOffsets: IndexSet, toOffset: Int) async {
+        record()
+        project.movePlacements(onPage: currentPageIndex, fromOffsets: fromOffsets, toOffset: toOffset)
+        await persist(refreshImages: false)
+    }
+
     /// ダブルタップ: クロップモードの入/切
     func toggleCropMode(_ placementID: UUID) {
         selectedPlacementID = placementID

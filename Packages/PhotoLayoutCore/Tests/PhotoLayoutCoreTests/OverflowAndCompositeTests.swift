@@ -234,6 +234,61 @@ struct LayerOrderTests {
     }
 }
 
+@Suite("レイヤー順シートのドラッグ並べ替え（movePlacements）")
+struct MovePlacementsTests {
+    /// page0にback→front順でback/middle/frontの3枚、page1に1枚を置く。
+    private func makeProject() -> ProjectEntity {
+        var project = ProjectEntity(pages: [
+            PageEntity(index: 0, aspect: AspectRatio(width: 1, height: 1)),
+            PageEntity(index: 1, aspect: AspectRatio(width: 1, height: 1))
+        ])
+        let photo = PhotoRef(fileName: "a.jpg", pixelWidth: 100, pixelHeight: 100)
+        project.placements = [
+            PlacementEntity(sortIndex: 0, pageIndex: 0, photo: photo, destRect: .unit),
+            PlacementEntity(sortIndex: 1, pageIndex: 0, photo: photo, destRect: .unit),
+            PlacementEntity(sortIndex: 2, pageIndex: 0, photo: photo, destRect: .unit),
+            PlacementEntity(sortIndex: 3, pageIndex: 1, photo: photo, destRect: .unit)
+        ]
+        return project
+    }
+
+    @Test("末尾行（最背面）を先頭（最前面）へドラッグすると重なり順に反映され、sortIndexが0からの連番になる")
+    func moveBackToFront() {
+        var project = makeProject()
+        let backID = project.placements(onPage: 0)[0].id
+        let middleID = project.placements(onPage: 0)[1].id
+        let frontID = project.placements(onPage: 0)[2].id
+        // 表示順（前面が先）: [frontID, middleID, backID] のオフセット2（backID）を先頭（0）へ
+        project.movePlacements(onPage: 0, fromOffsets: IndexSet(integer: 2), toOffset: 0)
+        let frontFirstIDs = project.placements(onPage: 0).reversed().map(\.id)
+        #expect(Array(frontFirstIDs) == [backID, frontID, middleID])
+        #expect(project.placements(onPage: 0).map(\.sortIndex) == [0, 1, 2])
+    }
+
+    @Test("先頭行（最前面）を末尾へドラッグすると重なり順が入れ替わる")
+    func moveFrontToBack() {
+        var project = makeProject()
+        let backID = project.placements(onPage: 0)[0].id
+        let middleID = project.placements(onPage: 0)[1].id
+        let frontID = project.placements(onPage: 0)[2].id
+        // 表示順（前面が先）: [frontID, middleID, backID] のオフセット0（frontID）を末尾（3）へ
+        project.movePlacements(onPage: 0, fromOffsets: IndexSet(integer: 0), toOffset: 3)
+        let frontFirstIDs = project.placements(onPage: 0).reversed().map(\.id)
+        #expect(Array(frontFirstIDs) == [middleID, backID, frontID])
+        #expect(project.placements(onPage: 0).map(\.sortIndex) == [0, 1, 2])
+    }
+
+    @Test("他ページの配置には影響しない")
+    func doesNotAffectOtherPages() {
+        var project = makeProject()
+        let otherPagePlacement = project.placements(onPage: 1)[0]
+        project.movePlacements(onPage: 0, fromOffsets: IndexSet(integer: 0), toOffset: 2)
+        let after = project.placements(onPage: 1)[0]
+        #expect(after.id == otherPagePlacement.id)
+        #expect(after.sortIndex == otherPagePlacement.sortIndex)
+    }
+}
+
 @Suite("ページの挿入・並び替え")
 struct PageInsertMoveTests {
     private func makeProject() -> ProjectEntity {
