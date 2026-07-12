@@ -74,6 +74,19 @@ extension ProjectEntity {
         placements[indexB].sortIndex = temp
     }
 
+    /// 重なり順: レイヤー順シートのドラッグ並べ替え。`.onMove` が渡す表示順（前面が先）の
+    /// fromOffsets/toOffsetを重なり順（sortIndex、背面が先）に変換して反映し、
+    /// 対象ページの配置のsortIndexを0からの連番に振り直す。
+    public mutating func movePlacements(onPage pageIndex: Int, fromOffsets: IndexSet, toOffset: Int) {
+        var frontFirstIDs = placements(onPage: pageIndex).reversed().map(\.id)
+        frontFirstIDs.movingElements(fromOffsets: fromOffsets, toOffset: toOffset)
+        for (newIndex, placementID) in frontFirstIDs.reversed().enumerated() {
+            if let index = placements.firstIndex(where: { $0.id == placementID }) {
+                placements[index].sortIndex = newIndex
+            }
+        }
+    }
+
     /// テンプレート（スロット型枠）をページに敷く。スロット先行モデル:
     /// - ページに `slots` を保持させ、写真が無くても「空スロット」が存在できるようにする
     /// - 既存の写真は sortIndex 順にスロット0,1,2… へ当てはめ、スロット数を超えた分は外す
@@ -327,5 +340,18 @@ extension ProjectEntity {
                 placeMatted(placementID: placement.id, coverage: min(coverage, 1.0))
             }
         }
+    }
+}
+
+/// SwiftUIの `RangeReplaceableCollection.move(fromOffsets:toOffset:)` はApple framework側の拡張で
+/// Apple framework非依存のCoreからは使えないため、`List.onMove` と同じ意味論を素のSwiftで再実装する。
+private extension Array {
+    mutating func movingElements(fromOffsets source: IndexSet, toOffset destination: Int) {
+        let itemsToMove = source.map { self[$0] }
+        for offset in source.sorted(by: >) {
+            remove(at: offset)
+        }
+        let itemsBeforeDestination = source.filter { $0 < destination }.count
+        insert(contentsOf: itemsToMove, at: destination - itemsBeforeDestination)
     }
 }
