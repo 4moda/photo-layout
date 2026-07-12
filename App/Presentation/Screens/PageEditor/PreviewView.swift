@@ -48,6 +48,14 @@ struct PreviewView: View {
             } message: {
                 Text(viewModel.exportMessage ?? "")
             }
+            .sheet(isPresented: Binding(
+                get: { viewModel.shareItems != nil },
+                set: { if !$0 { viewModel.shareItems = nil } }
+            )) {
+                if let items = viewModel.shareItems {
+                    ActivityView(activityItems: items)
+                }
+            }
         }
     }
 
@@ -70,8 +78,25 @@ struct PreviewView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .disabled(viewModel.isExporting || !viewModel.hasPhoto)
+            .disabled(viewModel.isExporting || viewModel.isPreparingShare || !viewModel.hasPhoto)
             .accessibilityIdentifier("preview.save")
+
+            Button {
+                Task { await viewModel.prepareShare() }
+            } label: {
+                Group {
+                    if viewModel.isPreparingShare {
+                        ProgressView()
+                    } else {
+                        Label("共有", systemImage: "square.and.arrow.up")
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            .disabled(viewModel.isExporting || viewModel.isPreparingShare || !viewModel.hasPhoto)
+            .accessibilityIdentifier("preview.share")
         }
         .padding()
         .background(.bar)

@@ -12,6 +12,12 @@ final class PageEditorViewModel {
     var exportMessage: String?
     var errorMessage: String?
 
+    // MARK: - 共有シート
+
+    var isPreparingShare = false
+    /// non-nil = 共有シートを表示中（一時ファイルURL群）
+    var shareItems: [URL]?
+
     // MARK: - 編集状態（ジェスチャ）
 
     var currentPageIndex = 0
@@ -32,19 +38,22 @@ final class PageEditorViewModel {
     private let addPhoto: AddPhotoUseCase
     private let exportPage: ExportPageUseCase
     private let imageProvider: any PreviewImageProviding
+    private let shareFileWriter: any ShareFileWriting
 
     init(
         project: ProjectEntity,
         saveProject: SaveProjectUseCase,
         addPhoto: AddPhotoUseCase,
         exportPage: ExportPageUseCase,
-        imageProvider: any PreviewImageProviding
+        imageProvider: any PreviewImageProviding,
+        shareFileWriter: any ShareFileWriting
     ) {
         self.project = project
         self.saveProject = saveProject
         self.addPhoto = addPhoto
         self.exportPage = exportPage
         self.imageProvider = imageProvider
+        self.shareFileWriter = shareFileWriter
     }
 
     var page: PageEntity? { project.page(at: currentPageIndex) }
@@ -428,6 +437,26 @@ final class PageEditorViewModel {
             }
         } catch {
             exportMessage = "書き出しに失敗しました: \(error.localizedDescription)"
+        }
+    }
+
+    /// 共有ボタン: 書き出しと同じレンダリング経路（ExportPageUseCase）を再利用し、
+    /// カメラロールへは保存せず一時ファイルとして共有シートへ渡す。
+    /// 単一スライドは1枚、複数スライドはorderedPagesの投稿順で全ページ分をまとめて渡す。
+    func prepareShare() async {
+        guard hasPhoto, !isExporting, !isPreparingShare else { return }
+        isPreparingShare = true
+        defer { isPreparingShare = false }
+        do {
+            let dataList: [Data]
+            if pageCount > 1 {
+                dataList = try await exportPage.renderAllImageData(project: project)
+            } else {
+                dataList = [try await exportPage.renderImageData(project: project, pageIndex: currentPageIndex)]
+            }
+            shareItems = try await shareFileWriter.writeTemporaryFiles(dataList, format: .defaultJPEG)
+        } catch {
+            exportMessage = "共有用の画像を準備できませんでした: \(error.localizedDescription)"
         }
     }
 
