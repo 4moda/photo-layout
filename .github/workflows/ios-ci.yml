@@ -247,6 +247,7 @@ jobs:
       # レビュー用プレビュー。PRごとに branch=pr-<番号> で同一Pagesプロジェクト内へデプロイし、
       # 常に https://pr-<番号>.<project>.pages.dev が最新を指す（push毎に上書き）。
       - name: Deploy screenshots to Cloudflare Pages (PR preview)
+        id: deploy
         if: github.event_name == 'pull_request' && steps.cf_check.outputs.configured == 'true'
         uses: cloudflare/pages-action@v1
         with:
@@ -256,3 +257,32 @@ jobs:
           directory: screenshots
           branch: pr-${{ github.event.pull_request.number }}
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+
+      # cloudflare/pages-actionはGitHub Deployment（PRタイムラインの小さな行）は作るが
+      # 本文コメントは投稿しないため、見落とし防止に明示コメントする。同じPRへの再pushでは
+      # 新規コメントを増やさず、マーカーで既存コメントを見つけて上書きする。
+      - name: Comment preview URL on PR
+        if: github.event_name == 'pull_request' && steps.cf_check.outputs.configured == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PREVIEW_URL: ${{ steps.deploy.outputs.alias }}
+        run: |
+          set -euo pipefail
+          marker="<!-- screenshots-preview-comment -->"
+          body="$marker
+          ## 📸 スクショプレビュー
+
+          $PREVIEW_URL
+
+          画面ID・機能ID・言語・端末・テーマ（ライト/ダーク）で絞り込めます。Cloudflare Access配下で保護されています。このPRへの以降のpushでも同じURLが最新を指します。"
+
+          existing_id=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
+            --jq "[.[] | select(.body | startswith(\"$marker\"))][0].id // empty")
+
+          if [ -n "$existing_id" ]; then
+            gh api "repos/$REPO/issues/comments/$existing_id" -X PATCH -f body="$body" >/dev/null
+          else
+            gh api "repos/$REPO/issues/$PR_NUMBER/comments" -X POST -f body="$body" >/dev/null
+          fi
