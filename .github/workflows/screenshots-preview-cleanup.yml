@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  deployments: write
 
 concurrency:
   group: screenshots-preview-cleanup-${{ github.event.pull_request.number }}
@@ -79,3 +80,46 @@ jobs:
             deleted=$((deleted + 1))
           done
           echo "Deleted $deleted deployment(s) for branch $BRANCH."
+
+      # cloudflare/pages-action（ios-ci.yml側）にgitHubTokenを渡しているため、Cloudflareの
+      # デプロイとは別に、GitHub純正のDeploymentsオブジェクト（PRタイムラインの小さな行、
+      # repos/.../deployments）もpushのたびに作られる。これは上のCloudflare REST API削除
+      # では一切消えないため、GitHub Deployments APIで独立して片付ける。
+      #
+      # GitHub Deployments APIは ?ref=<branch> のサーバー側フィルタに対応しているが、
+      # 削除で一覧件数が変わる以上ページング中の削除は同種の読み飛ばしを起こしうるため、
+      # 上のCloudflare側と同じく収集→削除の二段階にする。GitHubの制約で、statusが
+      # inactive/error/failureのいずれかでないとdeploymentを削除できないため、削除前に
+      # inactiveステータスを作成する。
+      - name: Delete GitHub Deployments for this PR
+        if: steps.cf_check.outputs.configured == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+
+          # 1. 収集フェーズ: 削除を一切行わずに全ページを走査し、idを集める。
+          page=1
+          ids=""
+          while :; do
+            response=$(gh api "repos/$REPO/deployments?ref=$REF&per_page=100&page=$page")
+            page_ids=$(echo "$response" | jq -r '.[].id')
+            ids="$ids"$'\n'"$page_ids"
+            count=$(echo "$response" | jq 'length')
+            if [ "$count" -lt 100 ]; then
+              break
+            fi
+            page=$((page + 1))
+          done
+
+          # 2. 削除フェーズ: 収集し終えたidに対してのみinactive化→DELETEする。
+          deleted=0
+          for id in $ids; do
+            echo "Deactivating and deleting GitHub deployment $id (ref=$REF)"
+            gh api -X POST "repos/$REPO/deployments/$id/statuses" -f state=inactive >/dev/null
+            gh api -X DELETE "repos/$REPO/deployments/$id" >/dev/null
+            deleted=$((deleted + 1))
+          done
+          echo "Deleted $deleted GitHub deployment(s) for ref $REF."
