@@ -917,35 +917,40 @@ struct PageEditorView: View {
         .presentationDetents([.medium])
     }
 
-    /// レイヤー順（重なり）の並べ替えシート: 現在スライドの写真を前面順で並べ、上下で入替。
+    /// レイヤー順（重なり）の並べ替えシート: 現在スライドの写真を前面順で並べ、ドラッグまたは上下ボタンで入替。
     private var layerSheet: some View {
-        NavigationStack {
+        let frontFirst = viewModel.currentPagePlacementsFrontFirst
+        return NavigationStack {
             List {
-                ForEach(viewModel.currentPagePlacementsFrontFirst) { placement in
+                ForEach(Array(frontFirst.enumerated()), id: \.element.id) { index, placement in
                     HStack(spacing: 12) {
                         if let img = viewModel.previewImages[placement.id] {
                             Image(uiImage: img).resizable().scaledToFill()
-                                .frame(width: 44, height: 44)
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .frame(width: 64, height: 64)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
                         } else {
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(Color.gray.opacity(0.2)).frame(width: 44, height: 44)
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color.gray.opacity(0.2)).frame(width: 64, height: 64)
                         }
-                        Text("写真").foregroundStyle(.secondary)
                         Spacer()
                         Button { Task { await viewModel.bringForward(placementID: placement.id) } } label: {
                             Image(systemName: "chevron.up")
                         }
                         .buttonStyle(.borderless)
+                        .disabled(index == 0)
                         Button { Task { await viewModel.sendBackward(placementID: placement.id) } } label: {
                             Image(systemName: "chevron.down")
                         }
                         .buttonStyle(.borderless)
+                        .disabled(index == frontFirst.count - 1)
                     }
+                }
+                .onMove { offsets, destination in
+                    Task { await viewModel.movePlacements(fromOffsets: offsets, toOffset: destination) }
                 }
             }
             .overlay {
-                if viewModel.currentPagePlacementsFrontFirst.isEmpty {
+                if frontFirst.isEmpty {
                     Text("このスライドに写真はありません").foregroundStyle(.secondary)
                 }
             }
