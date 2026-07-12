@@ -50,6 +50,16 @@
 - **理由**: ページに写真が乗ると「ページ選択」ができず操作が不明瞭になった。状態を減らし、文字説明の要らない直感的UIにする（ユーザー判断）。
 - **帰結**: 背景色は写真選択と無関係な「プロジェクト共通設定」へ退避（俯瞰・新規作成）。並べ替え・複製は俯瞰へ集約。
 
+### CIスクショ撮影の機種matrix化（2026-07-12）
+
+`ios-ci.yml` の `fastlane snapshot` ステップを、機種ごとに独立したGitHub Actions matrixジョブ（`screenshots`）へ分割。`build-test` ジョブが1回だけ行う `build-for-testing` の成果物（`DerivedData/Build/Products`）を tar化して `actions/upload-artifact` 経由で共有し、machineジョブ側は `xcodegen generate`（再コンパイルなし）だけ行って再利用する。各ジョブは自分の機種の `screenshots-<slug>` artifactを出力し、最後に `screenshots-index` ジョブ（ubuntu-latest）が全artifactを1つの `screenshots` ディレクトリへマージして `build_screenshot_index.py` を1回実行、既存と同じ単一の `screenshots` artifact名で再アップロードする。
+
+- **理由**: 機種を増やすたびに撮影が逐次に伸びる構成だった（[#31](https://github.com/4moda/photo-layout/issues/31)、[#27](https://github.com/4moda/photo-layout/issues/27) でのオーナー指摘）。Swiftの再コンパイルはmatrixレグごとに数分かかるため、成果物を artifact 経由で共有して「ビルドは1回・撮影だけ並列」にした（各matrixレグでの再ビルドは不採用）。
+- **artifact共有の実装判断**: GitHub標準のzip実装は実行ビット・シンボリックリンクの保持に不安があるため、`tar czf` で自前アーカイブしてから1ファイルとしてアップロード／ダウンロード時に展開する。共有するのは `DerivedData/Build/Products`（`.app`/`.xctest`/`.xctestrun`）のみで、容量の大きい `Build/Intermediates.noindex` は含めない。
+- **Snapfile**: `devices([...])` を固定配列からやめ、`ENV["SNAPSHOT_DEVICES"]`（カンマ区切り）で絞り込む形にした。未設定時（ローカル実行）は全機種を逐次撮影する既存動作を維持。
+- **既知のトレードオフ**: fastlane標準の `screenshots.html`（機種横断の素朴な一覧）は各matrixレグが機種単体分しか生成しないため、`merge-multiple` でのマージ時にどちらか一方の内容で上書きされる。実際に運用しているのは `build_screenshot_index.py` が生成する `index.html`（画面ID/機能ID/言語/端末で絞り込み可能）であり、これはマージ後に全機種分のデータで再生成するため影響なし。
+- **拡張性**: 将来テーマ軸（ライト/ダーク）を追加する際は `matrix.device` を `matrix.device × matrix.theme` に拡張する想定（[#27](https://github.com/4moda/photo-layout/issues/27) で追加予定の別Issue）。
+
 ### trunk ベース開発（2026-07-08 改定）
 
 Issue/PR 単位をやめ、動く段階まで仕上げて main へ直接コミット。詳細は [../CLAUDE.md](../CLAUDE.md)。
