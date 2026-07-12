@@ -199,13 +199,20 @@ jobs:
           if-no-files-found: ignore
           retention-days: 1
 
-  # 全機種分のscreenshots-*artifactを1つに統合し、既存と同じ単一の`screenshots`artifactにする
-  # （消費側の運用・index.htmlの絞り込みを崩さない）。Xcode不要なのでubuntu-latestで十分。
+  # 全機種×テーマ分のscreenshots-*artifactを1つにマージしてindex.htmlを生成する。
+  # PRではその場でCloudflare Pagesへプレビューデプロイし、GitHub Actionsの成果物としては
+  # 一切残さない（レビュアーがartifactをダウンロード・展開する手間をなくすのが目的。#32）。
+  # Xcode不要なのでubuntu-latestで十分。
   screenshots-index:
-    name: Merge screenshots & build index
+    name: Merge screenshots & deploy preview
     needs: screenshots
     if: always()
     runs-on: ubuntu-latest
+    # cloudflare/pages-actionがデプロイステータス・PRコメントを書き込むために必要。
+    permissions:
+      contents: read
+      pull-requests: write
+      deployments: write
     steps:
       - uses: actions/checkout@v4
 
@@ -216,13 +223,36 @@ jobs:
           path: screenshots
           merge-multiple: true
 
-      # 画面ID/機能ID/言語/端末で絞り込める一覧 index.html を生成（fastlane出力の見せ方を補強）。
+      # 画面ID/機能ID/言語/端末/テーマで絞り込める一覧 index.html を生成（fastlane出力の見せ方を補強）。
       - name: Build filterable screenshot index
         run: python3 AppTests/PhotoLayoutUITests/tools/build_screenshot_index.py screenshots
 
-      - name: Upload screenshots
-        uses: actions/upload-artifact@v4
+      # Cloudflareのアカウント・Pagesプロジェクト・Zero Trust Accessポリシー（GitHub OAuth SSO）は
+      # 人間が事前に用意する前提（CIでは完結しない）。Secrets未設定の間は静かにスキップし、
+      # 通常のPR（Cloudflare未設定のPR）を赤くしない。設定後に本物のエラー（トークン誤りなど）が
+      # 出た場合はこのステップ自体が失敗して知らせる。
+      - name: Check Cloudflare secrets
+        id: cf_check
+        env:
+          CF_TOKEN_SET: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+          CF_ACCOUNT_SET: ${{ secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+        run: |
+          if [ "$CF_TOKEN_SET" = "true" ] && [ "$CF_ACCOUNT_SET" = "true" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CLOUDFLARE_API_TOKEN/CLOUDFLARE_ACCOUNT_ID が未設定のため、スクショのCloudflare Pagesプレビューをスキップします。"
+          fi
+
+      # レビュー用プレビュー。PRごとに branch=pr-<番号> で同一Pagesプロジェクト内へデプロイし、
+      # 常に https://pr-<番号>.<project>.pages.dev が最新を指す（push毎に上書き）。
+      - name: Deploy screenshots to Cloudflare Pages (PR preview)
+        if: github.event_name == 'pull_request' && steps.cf_check.outputs.configured == 'true'
+        uses: cloudflare/pages-action@v1
         with:
-          name: screenshots
-          path: screenshots
-          if-no-files-found: ignore
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: photolayout-screenshots
+          directory: screenshots
+          branch: pr-${{ github.event.pull_request.number }}
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}

@@ -72,6 +72,17 @@
   - S02-j（書き出し中スピナー）: `isExporting` は `PreviewView`（`.fullScreenCover`）経由でしかtrueにならず、S02編集画面のツールバーは書き出し中は画面に出ないため現在のナビゲーションでは到達不能と判明。相当する状態（S04-cのPreviewView保存ボタンのスピナー）も含め今回は見送り。
   - S02-h（スナップガイド表示中）: ドラッグ中の一瞬だけ表示され指を離すと同期的に消えるため、標準のXCUITest APIでは撮れない。バックグラウンドスレッドからの撮影など実装コスト・タイミング調整のCI往復が見合わないため見送り。
 
+### CIスクショをGitHub Actions artifactからCloudflare PagesのPRプレビューへ完全移行（2026-07-12）
+
+`ios-ci.yml` の `screenshots-index` ジョブから `actions/upload-artifact` によるスクショartifactアップロードを廃止し、代わりに同ジョブ内でマージ済みディレクトリをそのまま `cloudflare/pages-action@v1` でCloudflare Pagesへデプロイする（PRイベント時のみ）。PRクローズ（マージ含む）時は別ワークフロー `screenshots-preview-cleanup.yml` がそのPR用デプロイをCloudflare REST APIで削除する。
+
+- **理由**（[#32](https://github.com/4moda/photo-layout/issues/32)）: レビュアーがartifactを手動ダウンロード・展開してindex.htmlを開く手間をなくす。オーナー承認: (1) Cloudflareアカウントは既存・Pagesプロジェクトは今後作成、Secretsは登録済み前提で実装してよい、(2) 保護方式はCloudflare Access（Zero Trust）+ GitHub OAuth SSO、(3) 削除トリガーはPRクローズ時、(4) 既存artifactアップロードは廃止し完全移行。
+- **デプロイ先を`screenshots-index`ジョブ内に統合**（Appetizeのような別workflow+`workflow_run`構成は不採用）: Appetizeは毎回Xcodeビルドが要る＋mainプッシュ後のみ実行なので別ワークフローで自然だが、こちらは`screenshots-index`ジョブの時点で静的ファイルが既にディスク上に揃っており、`workflow_run`で受け渡すには結局artifactを一度アップロードする必要が生じ「成果物を一切残さない」という受け入れ条件と矛盾する。ジョブ内で直接デプロイすれば、そもそもartifactを作らずに済む。
+- **PRごとのURL**: 同一Cloudflare Pagesプロジェクト（`photolayout-screenshots`）内で `branch=pr-<PR番号>` を指定してデプロイし、`https://pr-<番号>.photolayout-screenshots.pages.dev` が常に最新を指す（pushのたびに上書き）。Zero Trust Accessは `*.photolayout-screenshots.pages.dev` に対して一度だけ設定すれば、PRごとに新規Access設定は不要（人間が事前に1回だけダッシュボードで設定する前提。CIでは完結しない）。
+- **Secrets未設定時の挙動**: Appetizeの前例（`APPETIZE_API_TOKEN`未設定ならジョブを失敗させる）とは異なり、こちらは`screenshots-index`が全PRで毎回走るジョブのため、未設定のまま即失敗にすると人間がCloudflareを用意するまで全PRのCIが赤くなってしまう。そのため「Secretsが空なら`::notice::`を出してデプロイ・削除ステップだけを静かにスキップ」する設計にした。Secrets設定後に発生する本物のエラー（トークン誤りなど）はステップ自体が失敗するため見逃さない。
+- **削除の実装**: `cloudflare/pages-action`にはデプロイ削除機能が無いため、`screenshots-preview-cleanup.yml`でCloudflare REST API（`GET .../deployments`一覧を`deployment_trigger.metadata.branch`で自前フィルタ→`DELETE .../deployments/{id}?force=true`）を直接叩く。
+- **未確定事項**: Cloudflareアカウントでのプロジェクト作成・Zero Trust Access設定・`CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` Secretsの登録は人間側の作業として残っている。設定が完了するまでデプロイ・削除は静かにスキップされる。
+
 ### trunk ベース開発（2026-07-08 改定）
 
 Issue/PR 単位をやめ、動く段階まで仕上げて main へ直接コミット。詳細は [../CLAUDE.md](../CLAUDE.md)。
