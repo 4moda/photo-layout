@@ -123,13 +123,12 @@ jobs:
           name: PhotoLayout-unsigned-ipa
           path: PhotoLayout-unsigned.ipa
 
-  # 機種ごとに独立したジョブでfastlane snapshotを実行する（並列化）。
-  # build-testでビルド済みのBuild/Productsを artifact 経由で使い回し、機種ごとの再ビルドはしない
-  # （Swift再コンパイルは数分かかるが、ビルド成果物は機種に依存しないため）。
-  # 将来テーマ軸（ライト/ダーク）を追加する際は、この matrix.device を
-  # matrix.device × matrix.theme に拡張する想定（軸を機種決め打ちにしない）。
+  # 機種×テーマ（ライト/ダーク）ごとに独立したジョブでfastlane snapshotを実行する（並列化）。
+  # build-testでビルド済みのBuild/Productsを artifact 経由で使い回し、機種・テーマごとの
+  # 再ビルドはしない（Swift再コンパイルは数分かかるが、ビルド成果物はどちらにも依存しないため）。
+  # GitHub Actionsのmatrixは複数軸を書くと自動でクロス積になる（2機種×2テーマ=4並列ジョブ）。
   screenshots:
-    name: Screenshots (${{ matrix.device.label }})
+    name: Screenshots (${{ matrix.device.label }} / ${{ matrix.theme.name }})
     needs: build-test
     runs-on: macos-15
     timeout-minutes: 30
@@ -143,10 +142,21 @@ jobs:
           - name: iPhone SE (3rd generation)
             label: iPhone SE 3rd gen
             slug: iphone-se-3rd-gen
+        theme:
+          # light: ダークモード用の1メソッド（testDarkModeSpotCheck）だけ除外して残り全部を撮る。
+          - name: light
+            onlyTesting: ""
+            skipTesting: PhotoLayoutUITests/ScreenshotSmokeTests/testDarkModeSpotCheck
+          # dark: 逆にそのメソッドだけを撮る（他の軽量な巡回テストは走らせない）。
+          - name: dark
+            onlyTesting: PhotoLayoutUITests/ScreenshotSmokeTests/testDarkModeSpotCheck
+            skipTesting: ""
     env:
       # DEVELOPER_DIRはworkflow直下のenv(Xcode 16.4固定)をそのまま継承する。
-      # Snapfile側でこの環境変数を読み、1機種だけに絞り込んで撮影する。
+      # Snapfile側でこれらの環境変数を読み、このジョブが担当する機種・テストだけに絞り込む。
       SNAPSHOT_DEVICES: ${{ matrix.device.name }}
+      SNAPSHOT_ONLY_TESTING: ${{ matrix.theme.onlyTesting }}
+      SNAPSHOT_SKIP_TESTING: ${{ matrix.theme.skipTesting }}
     steps:
       - uses: actions/checkout@v4
 
@@ -180,11 +190,11 @@ jobs:
           FASTLANE_HIDE_CHANGELOG: "1"
         run: fastlane snapshot
 
-      - name: Upload screenshots (${{ matrix.device.slug }})
+      - name: Upload screenshots (${{ matrix.device.slug }} / ${{ matrix.theme.name }})
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: screenshots-${{ matrix.device.slug }}
+          name: screenshots-${{ matrix.device.slug }}-${{ matrix.theme.name }}
           path: AppTests/PhotoLayoutUITests/fastlane/screenshots
           if-no-files-found: ignore
           retention-days: 1

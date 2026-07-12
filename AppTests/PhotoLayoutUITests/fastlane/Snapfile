@@ -19,8 +19,20 @@ scheme("PhotoLayout")
 derived_data_path("../../DerivedData")
 test_without_building(true)
 
-# UIテストのみ撮影対象（ユニットテストは別ステップで実行）
-only_testing(["PhotoLayoutUITests"])
+# UIテストのみ撮影対象（ユニットテストは別ステップで実行）。
+# CIは機種matrixに加えテーマ（ライト/ダーク）でも独立したジョブに分け並列撮影する。
+# SNAPSHOT_ONLY_TESTING / SNAPSHOT_SKIP_TESTING（いずれもカンマ区切り、空文字は未指定扱い）で
+# 各ジョブが担当するテストメソッドだけに絞り込む。未設定時（ローカル実行）は全メソッドを撮影する。
+def env_list(key)
+  value = ENV[key]
+  return nil if value.nil? || value.strip.empty?
+  value.split(",")
+end
+
+only_testing(env_list("SNAPSHOT_ONLY_TESTING") || ["PhotoLayoutUITests"])
+if (skip = env_list("SNAPSHOT_SKIP_TESTING"))
+  skip_testing(skip)
+end
 
 # 出力はこのツール群と同じ場所（AppTests/PhotoLayoutUITests/fastlane/screenshots）
 output_directory("./fastlane/screenshots")

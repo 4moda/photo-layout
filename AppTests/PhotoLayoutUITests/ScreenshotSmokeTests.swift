@@ -12,8 +12,13 @@ import XCTest
 final class ScreenshotSmokeTests: XCTestCase {
 
     /// 決定論的な状態で起動するアプリ。`seed=false` なら何も無い空状態から始まる。
+    /// `dark=true` はシミュレータの外観をダークに切り替えてから起動する
+    /// （テスト側だけで完結し、App層には手を入れない）。
     @MainActor
-    private func makeApp(seed: Bool) -> XCUIApplication {
+    private func makeApp(seed: Bool, dark: Bool = false) -> XCUIApplication {
+        if dark {
+            XCUIDevice.shared.appearance = .dark
+        }
         let app = XCUIApplication()
         app.launchArguments = ["--reset-store"] + (seed ? ["--seed-demo"] : [])
         setupSnapshot(app)
@@ -161,6 +166,11 @@ final class ScreenshotSmokeTests: XCTestCase {
             }
         }
 
+        // S02-i: 直前の枠比率変更でundo履歴が積まれ、undoが活性・redoが非活性になる。
+        if app.buttons["pageEditor.undo"].waitForExistence(timeout: 3) {
+            snapshot("S02-undo-redo-active")
+        }
+
         if app.buttons["pageEditor.cropButton"].waitForExistence(timeout: 3) {
             app.buttons["pageEditor.cropButton"].tap()
             if app.buttons["pageEditor.cropDone"].waitForExistence(timeout: 3) {
@@ -212,6 +222,45 @@ final class ScreenshotSmokeTests: XCTestCase {
         openDemo(app, "X投稿（3枚）")
         sleep(2)
         snapshot("S02-x-timeline-composite")
+    }
+
+    // MARK: - ダークモード最小巡回（S01〜S04 各最低1枚）
+    // 全機能IDの網羅はライトモード側に任せ、既存のナビゲーションヘルパー（openDemo等）を
+    // 再利用して画面ごとの見え方の代表点だけを確認する。CIはこのメソッドだけを
+    // 独立したmatrixジョブ（機種×テーマ）で並列実行する（ios-ci.yml + fastlane/Snapfile の
+    // SNAPSHOT_ONLY_TESTING/SNAPSHOT_SKIP_TESTING）。スクショ名の `-dark` サフィックスで
+    // テーマを区別する（tools/build_screenshot_index.py がこの命名規約でテーマ列を判定する）。
+
+    @MainActor
+    func testDarkModeSpotCheck() throws {
+        let app = makeApp(seed: true, dark: true)
+        app.launch()
+
+        XCTAssertTrue(app.buttons["デモ"].waitForExistence(timeout: 15))
+        sleep(1)
+        snapshot("S01-F01-project-list-populated-dark")
+
+        openDemo(app, "デモ")
+        snapshot("S02-single-photo-natural-placement-dark")
+
+        if app.buttons["pageEditor.overview"].waitForExistence(timeout: 3) {
+            app.buttons["pageEditor.overview"].tap()
+            if app.buttons["overview.done"].waitForExistence(timeout: 5) {
+                sleep(1)
+                snapshot("S03-slide-overview-dark")
+                app.buttons["overview.done"].tap()
+            }
+        }
+
+        let export = app.buttons["pageEditor.export"]
+        if export.waitForExistence(timeout: 5), export.isEnabled {
+            export.tap()
+            if app.buttons["preview.save"].waitForExistence(timeout: 5) {
+                sleep(1)
+                snapshot("S04-export-preview-dark")
+            }
+            tapClose(app)
+        }
     }
 
     // MARK: - helpers
