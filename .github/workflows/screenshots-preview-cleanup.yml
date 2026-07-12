@@ -1,0 +1,70 @@
+name: screenshots-preview-cleanup
+
+# PRがクローズ（マージ含む）されたら、そのPRのCloudflare Pagesスクショプレビュー
+# （branch=pr-<PR番号>のデプロイ）を削除する。デプロイ側は ios-ci.yml の
+# screenshots-index ジョブ（#31, #32）。
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: screenshots-preview-cleanup-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  cleanup:
+    name: Delete Cloudflare Pages preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Cloudflareアカウント・Pagesプロジェクト・Zero Trust Accessポリシーは人間が事前に
+      # 用意する前提（CIでは完結しない）。Secrets未設定の間は静かにスキップする
+      # （ios-ci.yml側でデプロイ自体も行っていないため、削除する対象がそもそも無い）。
+      - name: Check Cloudflare secrets
+        id: cf_check
+        env:
+          CF_TOKEN_SET: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+          CF_ACCOUNT_SET: ${{ secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+        run: |
+          if [ "$CF_TOKEN_SET" = "true" ] && [ "$CF_ACCOUNT_SET" = "true" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CLOUDFLARE_API_TOKEN/CLOUDFLARE_ACCOUNT_ID が未設定のため、プレビュー削除をスキップします。"
+          fi
+
+      # branch=pr-<番号> に紐づく全デプロイを列挙して削除する。
+      # Cloudflare Pages API はbranchでの絞り込みクエリを提供しないため、
+      # 一覧をページングしつつ deployment_trigger.metadata.branch で自前フィルタする。
+      - name: Delete preview deployments for this PR
+        if: steps.cf_check.outputs.configured == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PROJECT_NAME: photolayout-screenshots
+          BRANCH: pr-${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          base="https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/pages/projects/$PROJECT_NAME/deployments"
+          page=1
+          deleted=0
+          while :; do
+            response=$(curl -sS -f -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$base?page=$page&per_page=25")
+            ids=$(echo "$response" | jq -r --arg branch "$BRANCH" \
+              '.result[] | select(.deployment_trigger.metadata.branch == $branch) | .id')
+            for id in $ids; do
+              echo "Deleting deployment $id (branch=$BRANCH)"
+              curl -sS -f -X DELETE -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                "$base/$id?force=true" >/dev/null
+              deleted=$((deleted + 1))
+            done
+            total_pages=$(echo "$response" | jq -r '.result_info.total_pages // 1')
+            if [ "$page" -ge "$total_pages" ]; then
+              break
+            fi
+            page=$((page + 1))
+          done
+          echo "Deleted $deleted deployment(s) for branch $BRANCH."
