@@ -227,6 +227,19 @@ jobs:
       - name: Build filterable screenshot index
         run: python3 AppTests/PhotoLayoutUITests/tools/build_screenshot_index.py screenshots
 
+      # matrixレグが1つも成功しなかった（concurrency cancel等で全滅した）場合はscreenshotsが
+      # 作られない。存在チェックを挟まないとwranglerが存在しないディレクトリをscandirして
+      # crashするため、ここで検知してデプロイをスキップする。
+      - name: Check screenshots exist
+        id: screenshots_check
+        run: |
+          if [ -d screenshots ] && find screenshots -name '*.png' -print -quit | grep -q .; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::screenshotsディレクトリが空か存在しません（matrixレグが全滅した可能性）。Cloudflare Pagesプレビューをスキップします。"
+          fi
+
       # Cloudflareのアカウント・Pagesプロジェクト・Zero Trust Accessポリシー（GitHub OAuth SSO）は
       # 人間が事前に用意する前提（CIでは完結しない）。Secrets未設定の間は静かにスキップし、
       # 通常のPR（Cloudflare未設定のPR）を赤くしない。設定後に本物のエラー（トークン誤りなど）が
@@ -248,7 +261,10 @@ jobs:
       # 常に https://pr-<番号>.<project>.pages.dev が最新を指す（push毎に上書き）。
       - name: Deploy screenshots to Cloudflare Pages (PR preview)
         id: deploy
-        if: github.event_name == 'pull_request' && steps.cf_check.outputs.configured == 'true'
+        if: |
+          github.event_name == 'pull_request' &&
+          steps.cf_check.outputs.configured == 'true' &&
+          steps.screenshots_check.outputs.present == 'true'
         uses: cloudflare/pages-action@v1
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -261,13 +277,18 @@ jobs:
       # cloudflare/pages-actionはGitHub Deployment（PRタイムラインの小さな行）は作るが
       # 本文コメントは投稿しないため、見落とし防止に明示コメントする。同じPRへの再pushでは
       # 新規コメントを増やさず、マーカーで既存コメントを見つけて上書きする。
+      # URLは steps.deploy.outputs.alias を使わず自前で組み立てる: 実機確認したところ
+      # direct upload デプロイでは alias がブランチエイリアス（安定URL）ではなく
+      # デプロイ個別のハッシュURLを返すことがあり、pushのたびにURLが変わってしまうため。
+      # ブランチエイリアス自体（https://pr-<番号>.<project>.pages.dev）は実在し安定して
+      # 同じデプロイ内容を指すことをcurlで確認済み。
       - name: Comment preview URL on PR
-        if: github.event_name == 'pull_request' && steps.cf_check.outputs.configured == 'true'
+        if: steps.deploy.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          PREVIEW_URL: ${{ steps.deploy.outputs.alias }}
+          PREVIEW_URL: https://pr-${{ github.event.pull_request.number }}.photolayout-screenshots.pages.dev
         run: |
           set -euo pipefail
           marker="<!-- screenshots-preview-comment -->"
