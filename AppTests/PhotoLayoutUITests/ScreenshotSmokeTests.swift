@@ -225,21 +225,19 @@ final class ScreenshotSmokeTests: XCTestCase {
         sleep(2)
     }
 
-    /// S03 俯瞰のメニュー系（比率・背景・ページ選択メニュー）を撮る。
-    /// 比率/背景は popover。撮ったらナビバーをタップして閉じ、次を開く。
-    /// 比率メニューの各項目は形プレビュー(`AspectRatioSwatch`)+テキスト、背景メニューの各項目は
+    /// S03 俯瞰のピッカー系（比率・背景・ページ選択メニュー）を撮る。
+    /// 比率/背景は枠比率シート（S02-F09）と同じグリッド形式の独立シート。撮ったら「閉じる」で閉じ、次を開く。
+    /// 比率シートの各項目は形プレビュー(`AspectRatioSwatch`)+テキスト、背景シートの各項目は
     /// 色丸アイコンのみ（色名テキストは非表示）。"1:1"/"黒" はどちらも明示的な
     /// accessibilityIdentifier（背景側は可視テキストを伴わない）でルックアップする。
     @MainActor
     private func captureOverviewMenus(_ app: XCUIApplication) {
-        let nav = app.navigationBars["スライド"]
-
         if app.buttons["overview.ratio"].waitForExistence(timeout: 3) {
             app.buttons["overview.ratio"].tap()
             if app.buttons["1:1"].waitForExistence(timeout: 3) {
                 snapshot("S03-F11-carousel-ratio-menu")
             }
-            if nav.exists { nav.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+            tapClose(app)
         }
 
         if app.buttons["overview.background"].waitForExistence(timeout: 3) {
@@ -247,7 +245,7 @@ final class ScreenshotSmokeTests: XCTestCase {
             if app.buttons["黒"].waitForExistence(timeout: 3) {
                 snapshot("S03-F12-project-background-menu")
             }
-            if nav.exists { nav.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+            tapClose(app)
         }
 
         // ページ選択時のフローティングメニュー（複製/削除 = S03-F06〜F09）

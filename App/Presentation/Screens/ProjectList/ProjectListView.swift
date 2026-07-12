@@ -7,6 +7,7 @@ import PhotoLayoutCore
 struct ProjectListView: View {
     @State private var viewModel: ProjectListViewModel
     @State private var path: [ProjectEntity] = []
+    @State private var showingNewProjectSheet = false
 
     init(viewModel: ProjectListViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -44,8 +45,16 @@ struct ProjectListView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    newProjectMenu
+                    Button {
+                        showingNewProjectSheet = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityIdentifier("projectList.add")
                 }
+            }
+            .sheet(isPresented: $showingNewProjectSheet) {
+                newProjectSheet
             }
             // 編集画面から戻ったときにも最新を読み直す（.taskは初回のみのため）
             .onAppear {
@@ -64,27 +73,39 @@ struct ProjectListView: View {
         ("landscape191", "横長 1.91:1（Instagram）", AspectRatio(width: 1.91, height: 1))
     ]
 
-    private var newProjectMenu: some View {
-        Menu {
-            Section("用紙サイズを選んで新規作成") {
-                ForEach(Self.canvasChoices, id: \.id) { choice in
-                    Button {
-                        createAndOpen(aspect: choice.aspect, title: nil)
-                    } label: {
-                        Label {
-                            Text(choice.label)
-                        } icon: {
-                            AspectRatioSwatch(aspect: choice.aspect.ratio)
-                                .frame(width: 22, height: 22)
+    /// 用紙サイズ選択シート。`PageEditorView` の枠比率シート（S02-F09）と同じグリッド形式で、
+    /// 比率をドロップダウンではなく形プレビューで見せる。
+    private var newProjectSheet: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 3), spacing: 16) {
+                    ForEach(Self.canvasChoices, id: \.id) { choice in
+                        Button {
+                            showingNewProjectSheet = false
+                            createAndOpen(aspect: choice.aspect, title: nil)
+                        } label: {
+                            VStack(spacing: 6) {
+                                AspectRatioSwatch(aspect: choice.aspect.ratio)
+                                Text(choice.label)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("projectList.new_\(choice.id)")
                     }
-                    .accessibilityIdentifier("projectList.new_\(choice.id)")
+                }
+                .padding(20)
+            }
+            .navigationTitle("用紙サイズを選んで新規作成")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") { showingNewProjectSheet = false }
                 }
             }
-        } label: {
-            Image(systemName: "plus")
         }
-        .accessibilityIdentifier("projectList.add")
+        .presentationDetents([.medium, .large])
     }
 
     private func createAndOpen(aspect: AspectRatio, title: String?) {

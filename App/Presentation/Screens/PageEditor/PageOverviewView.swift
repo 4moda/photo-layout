@@ -7,6 +7,15 @@ import PhotoLayoutCore
 struct PageOverviewView: View {
     @Bindable var viewModel: PageEditorViewModel
     @State private var selectedPageIndex: Int?
+    @State private var activePicker: OverviewPicker?
+
+    /// 比率・背景色ピッカーの種類。Menuのドロップダウンでは項目の形/色が実機で正しく描画されない
+    /// ことが分かったため、`PageEditorView` の枠比率シート（S02-F09）と同様のグリッドシートに統一している。
+    private enum OverviewPicker: String, Identifiable {
+        case ratio
+        case background
+        var id: String { rawValue }
+    }
 
     /// サムネイルの高さ。ページのアスペクトに応じて幅が決まる（2〜3ページ分が見える目安）
     private let thumbnailHeight: CGFloat = 200
@@ -66,6 +75,12 @@ struct PageOverviewView: View {
                         Task { await viewModel.confirmOverview() }
                     }
                     .accessibilityIdentifier("overview.done")
+                }
+            }
+            .sheet(item: $activePicker) { picker in
+                switch picker {
+                case .ratio: ratioPickerSheet
+                case .background: backgroundColorPickerSheet
                 }
             }
         }
@@ -194,37 +209,15 @@ struct PageOverviewView: View {
             .padding(.bottom, 20)
         } else {
             HStack(spacing: 12) {
-                Menu {
-                    ForEach(Self.aspectChoices, id: \.label) { choice in
-                        Button {
-                            viewModel.overviewSetAspect(choice.aspect)
-                        } label: {
-                            Label {
-                                Text(choice.label)
-                            } icon: {
-                                AspectRatioSwatch(aspect: choice.aspect.ratio)
-                                    .frame(width: 22, height: 22)
-                            }
-                        }
-                        // ラベルに形プレビューを添えたためテキストのみの暗黙識別子に頼らず明示する
-                        .accessibilityIdentifier(choice.label)
-                    }
+                Button {
+                    activePicker = .ratio
                 } label: {
                     controlLabel("比率", systemImage: "aspectratio")
                 }
                 .accessibilityIdentifier("overview.ratio")
 
-                Menu {
-                    ForEach(Self.backgroundColors, id: \.label) { choice in
-                        Button {
-                            viewModel.overviewSetBackgroundColor(choice.color)
-                        } label: {
-                            BackgroundColorSwatch(color: choice.color)
-                        }
-                        // 色名テキストを表示しないため、a11y識別子/ラベルは明示的に付与する
-                        .accessibilityIdentifier(choice.label)
-                        .accessibilityLabel(choice.label)
-                    }
+                Button {
+                    activePicker = .background
                 } label: {
                     controlLabel("背景", systemImage: "square.dashed")
                 }
@@ -256,16 +249,84 @@ struct PageOverviewView: View {
         .frame(width: 62)
         .padding(.vertical, 6)
     }
+
+    // MARK: - ピッカーシート（S02-F09の枠比率シートと同じグリッド形式）
+
+    private var ratioPickerSheet: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 3), spacing: 16) {
+                    ForEach(Self.aspectChoices, id: \.label) { choice in
+                        Button {
+                            viewModel.overviewSetAspect(choice.aspect)
+                            activePicker = nil
+                        } label: {
+                            VStack(spacing: 6) {
+                                AspectRatioSwatch(aspect: choice.aspect.ratio)
+                                Text(choice.label)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier(choice.label)
+                    }
+                }
+                .padding(20)
+            }
+            .navigationTitle("比率")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("閉じる") { activePicker = nil }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
+    /// 背景色ピッカー。色名テキストは出さず、丸スウォッチのグリッドから選ばせる。
+    /// Menuのドロップダウン項目では塗り色が実機で描画されなかったため、枠比率シートと同じ
+    /// 独立シートに切り替えた。将来カスタムカラー等を足す場合もこのグリッドに項目を追加するだけでよい。
+    private var backgroundColorPickerSheet: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 20), count: 4), spacing: 20) {
+                    ForEach(Self.backgroundColors, id: \.label) { choice in
+                        Button {
+                            viewModel.overviewSetBackgroundColor(choice.color)
+                            activePicker = nil
+                        } label: {
+                            BackgroundColorSwatch(color: choice.color, diameter: 52)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier(choice.label)
+                        .accessibilityLabel(choice.label)
+                    }
+                }
+                .padding(20)
+            }
+            .navigationTitle("背景色")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("閉じる") { activePicker = nil }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
 }
 
-/// 背景色メニューの1項目。色名は出さず、該当色で塗った丸のみで選ばせる。
+/// 背景色ピッカーの1項目。色名は出さず、該当色で塗った丸のみで選ばせる。
 private struct BackgroundColorSwatch: View {
     let color: LayoutColor
+    let diameter: CGFloat
 
     var body: some View {
         Circle()
             .fill(Color(red: color.red, green: color.green, blue: color.blue, opacity: color.alpha))
-            .frame(width: 22, height: 22)
+            .frame(width: diameter, height: diameter)
             .overlay(Circle().stroke(Color.gray.opacity(0.35), lineWidth: 0.75))
     }
 }
