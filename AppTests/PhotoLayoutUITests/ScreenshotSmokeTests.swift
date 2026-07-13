@@ -37,9 +37,13 @@ final class ScreenshotSmokeTests: XCTestCase {
         let addButton = app.buttons["projectList.add"]
         XCTAssertTrue(addButton.waitForExistence(timeout: 5))
         addButton.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let newDesignMenuItem = app.buttons["新規デザインを作成"]
+        XCTAssertTrue(newDesignMenuItem.waitForExistence(timeout: 5))
+        snapshot("S01-F03-project-list-add-menu")
+        newDesignMenuItem.tap()
         let squareButton = app.buttons["projectList.new_square"]
         XCTAssertTrue(squareButton.waitForExistence(timeout: 5))
-        snapshot("S01-F03-project-list-paper-size-menu")
+        snapshot("S01-F22-project-list-paper-size-menu")
         squareButton.tap()
 
         XCTAssertTrue(app.buttons["pageEditor.export"].waitForExistence(timeout: 10))
@@ -112,11 +116,14 @@ final class ScreenshotSmokeTests: XCTestCase {
         sleep(1)
         snapshot("S01-F12-project-list-recent-folder-toggle")
 
-        // S01-F15: 下部フローティングのフォルダ追加ボタン→名前入力→作成。
+        // S01-F15: ＋の作成メニュー→「フォルダを作成」→名前入力→作成。
         // 再起動なしで「Folder」モードの一覧に反映されることを確認する（受け入れ条件）。
-        let addFolderButton = app.buttons["projectList.addFolder"]
-        XCTAssertTrue(addFolderButton.waitForExistence(timeout: 5))
-        addFolderButton.tap()
+        let addButtonInFolderMode = app.buttons["projectList.add"]
+        XCTAssertTrue(addButtonInFolderMode.waitForExistence(timeout: 5))
+        addButtonInFolderMode.tap()
+        let newFolderMenuItem = app.buttons["フォルダを作成"]
+        XCTAssertTrue(newFolderMenuItem.waitForExistence(timeout: 5))
+        newFolderMenuItem.tap()
         let folderNameField = app.textFields["projectList.newFolder.field"]
         XCTAssertTrue(folderNameField.waitForExistence(timeout: 5))
         snapshot("S01-F15-folder-create-sheet")
@@ -224,6 +231,9 @@ final class ScreenshotSmokeTests: XCTestCase {
             let add = app.buttons["projectList.add"]
             XCTAssertTrue(add.waitForExistence(timeout: 5))
             add.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            let newDesignMenuItem = app.buttons["新規デザインを作成"]
+            XCTAssertTrue(newDesignMenuItem.waitForExistence(timeout: 5))
+            newDesignMenuItem.tap()
             let choice = app.buttons[size.id]
             XCTAssertTrue(choice.waitForExistence(timeout: 5), "\(size.id) が無い")
             choice.tap()
