@@ -99,7 +99,7 @@ final class ScreenshotSmokeTests: XCTestCase {
         captureFolderMode(app)
     }
 
-    // MARK: - S01 Recent/Folder切替・フォルダ作成/一覧/詳細/名称変更/削除（S01-F12〜F18）
+    // MARK: - S01 Recent/Folder切替・フォルダ作成/一覧/詳細/名称変更/削除・フォルダ内新規作成（S01-F12〜F19）
 
     /// デモ投入時に「お気に入り」フォルダへパノラマデモを1件分類済み（Folderモードが空にならないようにするため）。
     @MainActor
@@ -132,6 +132,22 @@ final class ScreenshotSmokeTests: XCTestCase {
         XCTAssertTrue(app.otherElements["projectList.folderDetail.empty"].waitForExistence(timeout: 5))
         sleep(1)
         snapshot("S01-F16-folder-detail-empty-state")
+
+        // S01-F19: フォルダ詳細の下部フローティング＋ → 用紙サイズ選択 → 作成すると、
+        // 作成したプロジェクトは最初からこのフォルダに属した状態でフォルダ詳細に表示される。
+        let folderAddButton = app.buttons["projectList.folderDetail.add"]
+        XCTAssertTrue(folderAddButton.waitForExistence(timeout: 5))
+        folderAddButton.tap()
+        let folderSquareButton = app.buttons["projectList.new_square"]
+        XCTAssertTrue(folderSquareButton.waitForExistence(timeout: 5))
+        snapshot("S01-F19-folder-detail-paper-size-menu")
+        folderSquareButton.tap()
+        XCTAssertTrue(app.buttons["pageEditor.export"].waitForExistence(timeout: 10))
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.otherElements["projectList.folderDetail.list"].waitForExistence(timeout: 5))
+        sleep(1)
+        snapshot("S01-F19-folder-detail-after-create")
+
         back(app)
         folderModeButton.tap()
 

@@ -17,6 +17,7 @@ final class ProjectListViewModel {
     private let createFolderUseCase: CreateFolderUseCase
     private let renameFolderUseCase: RenameFolderUseCase
     private let deleteFolderUseCase: DeleteFolderUseCase
+    private let moveProjectToFolderUseCase: MoveProjectToFolderUseCase
     /// 一覧サムネイル用の小さいデコード（256px上限）を注入する
     private let thumbnailProvider: any PreviewImageProviding
     /// projectID → (更新日時, 1ページ目の配置画像)。updatedAtが変わったら作り直す
@@ -33,6 +34,7 @@ final class ProjectListViewModel {
         createFolder: CreateFolderUseCase,
         renameFolder: RenameFolderUseCase,
         deleteFolder: DeleteFolderUseCase,
+        moveProjectToFolder: MoveProjectToFolderUseCase,
         thumbnailProvider: any PreviewImageProviding,
         seedDemo: (() async -> Void)? = nil
     ) {
@@ -43,6 +45,7 @@ final class ProjectListViewModel {
         self.createFolderUseCase = createFolder
         self.renameFolderUseCase = renameFolder
         self.deleteFolderUseCase = deleteFolder
+        self.moveProjectToFolderUseCase = moveProjectToFolder
         self.thumbnailProvider = thumbnailProvider
         self.seedDemo = seedDemo
     }
@@ -92,9 +95,13 @@ final class ProjectListViewModel {
     /// エディタ内で追加する（一覧では写真選択を誘導しない）。枠付けもレイアウトも同じ
     /// 汎用プロジェクト — 1枚＋余白なら枠付け、複数枚＋テンプレートならレイアウトになる。
     /// 成功時は作成したプロジェクトを返す（呼び出し側でエディタへ遷移する）。
-    func create(aspect: AspectRatio, title: String?) async -> ProjectEntity? {
+    /// `folderID` を渡すと、作成直後にそのフォルダへ分類する（フォルダ詳細からの新規作成用）。
+    func create(aspect: AspectRatio, title: String?, folderID: UUID? = nil) async -> ProjectEntity? {
         do {
-            let project = try await createProject.execute(title: title, aspect: aspect)
+            var project = try await createProject.execute(title: title, aspect: aspect)
+            if let folderID {
+                project = try await moveProjectToFolderUseCase.execute(projectID: project.id, folderID: folderID)
+            }
             projects = try await listProjects.execute()
             return project
         } catch {

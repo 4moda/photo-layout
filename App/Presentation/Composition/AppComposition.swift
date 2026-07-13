@@ -50,6 +50,7 @@ enum AppComposition {
             createFolder: CreateFolderUseCase(repository: folderRepo),
             renameFolder: RenameFolderUseCase(repository: folderRepo),
             deleteFolder: DeleteFolderUseCase(folderRepository: folderRepo, projectRepository: repo),
+            moveProjectToFolder: MoveProjectToFolderUseCase(projectRepository: repo),
             thumbnailProvider: PreviewImageProvider(decoder: decoder, maxPixelSize: 256),
             seedDemo: seeder.map { s in { await s.seedIfNeeded() } }
         )
