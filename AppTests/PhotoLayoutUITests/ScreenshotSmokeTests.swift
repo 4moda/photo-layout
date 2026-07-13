@@ -169,9 +169,9 @@ final class ScreenshotSmokeTests: XCTestCase {
 
         if app.buttons["pageEditor.frameAspectMenu"].waitForExistence(timeout: 3) {
             app.buttons["pageEditor.frameAspectMenu"].tap()
-            if app.buttons["4:5 縦（Instagram）"].waitForExistence(timeout: 3) {
+            if app.buttons["4:5"].waitForExistence(timeout: 3) {
                 snapshot("S02-F09-frame-aspect-menu")
-                app.buttons["4:5 縦（Instagram）"].tap()
+                app.buttons["4:5"].tap()
                 sleep(1)
             }
         }

@@ -22,11 +22,11 @@ enum AspectRatioOption: String, CaseIterable {
 
     var label: String {
         switch self {
-        case .portrait34: return "3:4 縦（X 1枚）"
-        case .portrait45: return "4:5 縦（Instagram）"
+        case .portrait34: return "3:4"
+        case .portrait45: return "4:5"
         case .square: return "1:1"
-        case .landscape169: return "16:9 横"
-        case .landscape191: return "1.91:1 横（Instagram）"
+        case .landscape169: return "16:9"
+        case .landscape191: return "1.91:1"
         }
     }
 
