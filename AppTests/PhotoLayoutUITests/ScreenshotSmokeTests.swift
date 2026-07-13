@@ -217,17 +217,17 @@ final class ScreenshotSmokeTests: XCTestCase {
         snapshot("S02-panorama-three-slides")
 
         // S04-a: 複数スライド時のドットインジケーターを確認するため、3スライド構成でも撮る。
-        // 初期スクロール位置ではカード2枚目以降が保存・共有バーの下に隠れて
-        // ドット位置の違いが見えないため、スクロールした状態も別途撮る。
+        // カルーセル（TabView(.page)）の1枚目を撮った後、左スワイプで2枚目に切り替えて
+        // ドットの強調位置が連動して変わることを確認する。
         let panoramaExport = app.buttons["pageEditor.export"]
         if panoramaExport.waitForExistence(timeout: 3), panoramaExport.isEnabled {
             panoramaExport.tap()
             if app.buttons["preview.save"].waitForExistence(timeout: 5) {
                 sleep(1)
                 snapshot("S04-export-preview-multi-page")
-                app.swipeUp()
+                app.swipeLeft()
                 sleep(1)
-                snapshot("S04-export-preview-multi-page-scrolled")
+                snapshot("S04-export-preview-multi-page-swiped")
             }
             tapClose(app)
         }

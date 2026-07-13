@@ -2,41 +2,43 @@ import SwiftUI
 import PhotoLayoutCore
 
 /// 書き出しプレビュー画面。右上の保存ボタンで遷移し、各スライドの仕上がりを確認してから保存する。
+/// 複数スライドは左右スワイプのカルーセル（`TabView(.page)`）で1枚ずつ表示する。
 struct PreviewView: View {
     @Bindable var viewModel: PageEditorViewModel
     @Environment(\.dismiss) private var dismiss
+    @State private var currentPage = 0
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 20) {
-                    ForEach(Array(viewModel.project.orderedPages.enumerated()), id: \.element.id) { index, page in
-                        let placements = SpreadGeometry.visiblePlacements(
-                            onPage: page.index, project: viewModel.project)
+            TabView(selection: $currentPage) {
+                ForEach(Array(viewModel.project.orderedPages.enumerated()), id: \.element.id) { index, page in
+                    let placements = SpreadGeometry.visiblePlacements(
+                        onPage: page.index, project: viewModel.project)
 
-                        VStack(spacing: 6) {
-                            CanvasRenderView(
-                                page: page,
-                                placements: placements,
-                                defaultFrame: viewModel.project.defaultPhotoFrame,
-                                images: viewModel.previewImages
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(.systemGray4), lineWidth: 0.5))
-                            .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+                    VStack(spacing: 6) {
+                        CanvasRenderView(
+                            page: page,
+                            placements: placements,
+                            defaultFrame: viewModel.project.defaultPhotoFrame,
+                            images: viewModel.previewImages
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(.systemGray4), lineWidth: 0.5))
+                        .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
 
-                            if viewModel.pageCount > 1 {
-                                PageDotsIndicator(pageCount: viewModel.pageCount, currentIndex: index)
-                            }
-
-                            let size = ExportSizeCalculator.pageSize(page: page, placements: placements)
-                            Text("(\(Int(size.width)) × \(Int(size.height)) px)")
-                                .font(.caption2).foregroundStyle(.secondary)
+                        if viewModel.pageCount > 1 {
+                            PageDotsIndicator(pageCount: viewModel.pageCount, currentIndex: currentPage)
                         }
+
+                        let size = ExportSizeCalculator.pageSize(page: page, placements: placements)
+                        Text("(\(Int(size.width)) × \(Int(size.height)) px)")
+                            .font(.caption2).foregroundStyle(.secondary)
                     }
+                    .padding()
+                    .tag(index)
                 }
-                .padding()
             }
+            .tabViewStyle(.page(indexDisplayMode: .never))
             .navigationTitle("プレビュー")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -128,7 +130,8 @@ struct PreviewView: View {
     }
 }
 
-/// Instagramの投稿ページネーションを模した、カード自身の位置を示す静的なドットインジケーター。
+/// Instagramの投稿ページネーションを模した、現在表示中のページ位置を示すドットインジケーター。
+/// カルーセルのスワイプ位置（`currentPage`）に連動する。
 private struct PageDotsIndicator: View {
     let pageCount: Int
     let currentIndex: Int
