@@ -8,6 +8,8 @@ public struct ProjectEntity: Hashable, Codable, Sendable, Identifiable {
     public var pages: [PageEntity]
     public var placements: [PlacementEntity]
     public var defaultPhotoFrame: PhotoFrameStyle
+    /// 所属フォルダ。nil = 未分類（既存データ・入れ子非対応の前提）
+    public var folderID: UUID?
     public var createdAt: Date
     public var updatedAt: Date
 
@@ -18,6 +20,7 @@ public struct ProjectEntity: Hashable, Codable, Sendable, Identifiable {
         pages: [PageEntity] = [],
         placements: [PlacementEntity] = [],
         defaultPhotoFrame: PhotoFrameStyle = .none,
+        folderID: UUID? = nil,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -27,6 +30,7 @@ public struct ProjectEntity: Hashable, Codable, Sendable, Identifiable {
         self.pages = pages
         self.placements = placements
         self.defaultPhotoFrame = defaultPhotoFrame
+        self.folderID = folderID
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

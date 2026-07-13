@@ -38,8 +38,13 @@ ProjectEntity              # 下書き1件。pages と placements を持つ（pl
 │   ├── cropRotation       # クロップ窓内でサンプリングする画素の回転角度（度数法、既定0）。destRectは回転しない
 │   ├── frameOverride?     # 写真ごとの枠（色・太さ・角丸）
 │   └── isLocked           # ロック中はジオメトリ操作（移動/拡縮/クロップ突入）と削除を禁止（既定false）。
-│                          # 重なり順変更・枠スタイル変更は対象外（許可し続ける）
-└── defaultPhotoFrame
+├── defaultPhotoFrame
+└── folderID?              # 所属フォルダ（nil=未分類）。FolderEntityへの単純参照、埋め込みではない
+
+FolderEntity                # プロジェクトのグルーピング（v1: 入れ子なし、1プロジェクトは高々1フォルダ）
+├── name
+├── createdAt
+└── updatedAt
 ```
 
 ### 自由変形モデル（fill/fit の永続モードは廃止）
@@ -108,9 +113,10 @@ ProjectEntity              # 下書き1件。pages と placements を持つ（pl
 
 ## 永続化（SwiftData）
 
-Domain の純粋 struct（`ProjectEntity` 他）と Infrastructure の `@Model`（`ProjectModel`/`PageModel`/`PlacementModel`）を分離し、`SwiftDataProjectRepository` が双方向マッピングを担う。UseCases/Presentation は常に Entity だけを見る。
+Domain の純粋 struct（`ProjectEntity` 他）と Infrastructure の `@Model`（`ProjectModel`/`PageModel`/`PlacementModel`/`FolderModel`）を分離し、`SwiftDataProjectRepository`/`SwiftDataFolderRepository` が双方向マッピングを担う。UseCases/Presentation は常に Entity だけを見る。
 
 - スタイル等の複合値は JSON Data で格納（SwiftData の Codable 実装差異に依存しない）
 - save は upsert（既存id は子ごと削除して再挿入）。未insert モデルへのリレーション代入クラッシュを避けるため、親を insert してから子配列を代入する
 - 並び順は `index`（ページ）/`sortIndex`（配置）フィールドで明示管理（SwiftData の配列順序に依存しない）
-- モデルに列を足すときは既定値付きプロパティで軽量マイグレーション（例: `pageIndex`、`isLocked`）
+- モデルに列を足すときは既定値付きプロパティで軽量マイグレーション（例: `pageIndex`、`isLocked`、`ProjectModel.folderID`）
+- `FolderModel` は `ProjectModel` から `folderID: UUID?` で単純参照される（SwiftDataの`@Relationship`は使わない。フォルダ削除時の挙動をUseCase側で明示的に選べるようにするため）

@@ -1128,12 +1128,12 @@ struct PageEditorView: View {
         .accessibilityIdentifier("pageEditor.templateMenu")
     }
 
-    /// 型枠の形をマス目でビジュアライズしたピッカー（4列グリッド）。
+    /// 型枠の形をマス目でビジュアライズしたピッカー（5列グリッド）。
     /// 選ぶと現在スライドに型枠を敷き、空スロットに写真を当てはめる（スロット先行）。
     private var templatePickerSheet: some View {
         NavigationStack {
             ScrollView {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 4), spacing: 16) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 5), spacing: 16) {
                     ForEach(viewModel.availableTemplates) { template in
                         Button {
                             activeSheet = nil
@@ -1156,7 +1156,7 @@ struct PageEditorView: View {
                         .accessibilityIdentifier(template.name)
                     }
                 }
-                .padding(20)
+                .padding(16)
             }
             .navigationTitle("スライド \(viewModel.currentPageIndex + 1) のレイアウト")
             .navigationBarTitleDisplayMode(.inline)
