@@ -105,7 +105,10 @@ struct ProjectListView: View {
     private var newProjectSheet: some View {
         NavigationStack {
             ScrollView {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 3), spacing: 16) {
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: 16, alignment: .top), count: 3),
+                    spacing: 16
+                ) {
                     ForEach(Self.canvasChoices, id: \.id) { choice in
                         Button {
                             showingNewProjectSheet = false
@@ -116,6 +119,8 @@ struct ProjectListView: View {
                                 Text(choice.label)
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.7)
                             }
                         }
                         .buttonStyle(.plain)

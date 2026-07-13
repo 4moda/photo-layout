@@ -1070,7 +1070,10 @@ struct PageEditorView: View {
     private var frameAspectPickerSheet: some View {
         NavigationStack {
             ScrollView {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 3), spacing: 16) {
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: 16, alignment: .top), count: 3),
+                    spacing: 16
+                ) {
                     Button {
                         activeSheet = nil
                         Task { await viewModel.applyPhotoNativeAspect() }
@@ -1084,6 +1087,8 @@ struct PageEditorView: View {
                             Text("元画像")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
                         }
                     }
                     .buttonStyle(.plain)
@@ -1103,6 +1108,8 @@ struct PageEditorView: View {
                                 Text(choice.label)
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.7)
                             }
                         }
                         .buttonStyle(.plain)
