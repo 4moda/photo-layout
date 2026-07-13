@@ -54,7 +54,8 @@ enum AppComposition {
                 renderer: CoreGraphicsExportRenderer(decoder: decoder),
                 librarySaver: PHPhotoLibrarySaveAdapter()
             ),
-            imageProvider: PreviewImageProvider(decoder: decoder)
+            imageProvider: PreviewImageProvider(decoder: decoder),
+            shareFileWriter: TemporaryShareFileWriter()
         )
         return PageEditorView(viewModel: viewModel)
     }
