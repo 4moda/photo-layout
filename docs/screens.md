@@ -202,7 +202,7 @@ fastlane snapshot の出力ファイルは安全なASCII名の
 
 | 状態ID | 状態 | 撮 |
 |---|---|---|
-| S04-a | 単一/複数スライドの仕上がり一覧＋保存・共有バー | `S04-export-preview` |
+| S04-a | 単一/複数スライドの仕上がり一覧＋保存・共有バー | `S04-export-preview`（単一）／`S04-export-preview-multi-page`（複数、ドットインジケーター確認用） |
 | S04-c | 書き出し中（保存ボタンがスピナー） | |
 | S04-d | 書き出し結果アラート | |
 
@@ -227,7 +227,7 @@ fastlane snapshot の出力ファイルは安全なASCII名の
 | `testCanvasAspectsFromCreate` | `--reset-store` | S01-F04〜F08（用紙サイズ別の空キャンバス） |
 | `testProjectListPopulated` | `--reset-store --seed-demo` | S01(複数)、S01-F10(⋯削除メニュー)、S01-F11(削除確認シート) |
 | `testDemoPhotoOperations` | `--reset-store --seed-demo` | S02(選択/枠比率/undo-redo/クロップ/枠/レイヤー)、S04 |
-| `testLayoutKinds` | `--reset-store --seed-demo` | S02(コラージュ/枠付き/パノラマ/X)、S03(比率/背景/ページ選択) |
+| `testLayoutKinds` | `--reset-store --seed-demo` | S02(コラージュ/枠付き/パノラマ/X)、S03(比率/背景/ページ選択)、S04(複数ページ) |
 | `testDarkModeSpotCheck` | `--reset-store --seed-demo`（ダーク固定） | S01/S02/S03/S04 各1枚の最小巡回（`-dark`サフィックス） |
 
 ### カバレッジ凡例と方針

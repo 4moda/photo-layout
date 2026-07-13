@@ -218,6 +218,18 @@ final class ScreenshotSmokeTests: XCTestCase {
 
         openDemo(app, "パノラマ（3連）")
         snapshot("S02-panorama-three-slides")
+
+        // S04-a: 複数スライド時のドットインジケーターを確認するため、3スライド構成でも撮る。
+        let panoramaExport = app.buttons["pageEditor.export"]
+        if panoramaExport.waitForExistence(timeout: 3), panoramaExport.isEnabled {
+            panoramaExport.tap()
+            if app.buttons["preview.save"].waitForExistence(timeout: 5) {
+                sleep(1)
+                snapshot("S04-export-preview-multi-page")
+            }
+            tapClose(app)
+        }
+
         if app.buttons["pageEditor.overview"].waitForExistence(timeout: 3) {
             app.buttons["pageEditor.overview"].tap()
             if app.buttons["overview.done"].waitForExistence(timeout: 5) {
