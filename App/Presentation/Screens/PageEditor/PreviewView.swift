@@ -11,11 +11,13 @@ struct PreviewView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     ForEach(Array(viewModel.project.orderedPages.enumerated()), id: \.element.id) { index, page in
+                        let placements = SpreadGeometry.visiblePlacements(
+                            onPage: page.index, project: viewModel.project)
+
                         VStack(spacing: 6) {
                             CanvasRenderView(
                                 page: page,
-                                placements: SpreadGeometry.visiblePlacements(
-                                    onPage: page.index, project: viewModel.project),
+                                placements: placements,
                                 defaultFrame: viewModel.project.defaultPhotoFrame,
                                 images: viewModel.previewImages
                             )
@@ -24,9 +26,12 @@ struct PreviewView: View {
                             .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
 
                             if viewModel.pageCount > 1 {
-                                Text("\(index + 1) / \(viewModel.pageCount)")
-                                    .font(.caption).foregroundStyle(.secondary)
+                                PageDotsIndicator(pageCount: viewModel.pageCount, currentIndex: index)
                             }
+
+                            let size = ExportSizeCalculator.pageSize(page: page, placements: placements)
+                            Text("(\(Int(size.width)) × \(Int(size.height)) px)")
+                                .font(.caption2).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -120,5 +125,21 @@ struct PreviewView: View {
         .frame(minWidth: 72)
         .padding(.vertical, 6)
         .contentShape(Rectangle())
+    }
+}
+
+/// Instagramの投稿ページネーションを模した、カード自身の位置を示す静的なドットインジケーター。
+private struct PageDotsIndicator: View {
+    let pageCount: Int
+    let currentIndex: Int
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<pageCount, id: \.self) { index in
+                Circle()
+                    .fill(index == currentIndex ? Color.primary : Color.secondary.opacity(0.35))
+                    .frame(width: index == currentIndex ? 7 : 5, height: index == currentIndex ? 7 : 5)
+            }
+        }
     }
 }
