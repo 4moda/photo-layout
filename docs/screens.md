@@ -195,13 +195,13 @@ fastlane snapshot の出力ファイルは安全なASCII名の
 
 ## S04 書き出しプレビュー (`PreviewView`)
 
-右上の書き出しボタンで遷移。各スライドの仕上がりを縦スクロールで確認して保存・共有する。
+右上の書き出しボタンで遷移。複数スライドは左右スワイプのカルーセル（`TabView(.page)`）で1枚ずつ仕上がりを確認して保存・共有する。
 
 ### 状態
 
 | 状態ID | 状態 | 撮 |
 |---|---|---|
-| S04-a | 単一/複数スライドの仕上がり一覧＋保存・共有バー | `S04-export-preview` |
+| S04-a | 単一/複数スライドの仕上がり（1ページ全画面）＋保存・共有バー | `S04-export-preview`（単一）／`S04-export-preview-multi-page`（複数、カルーセル1枚目・ドットインジケーター1個目強調）／`S04-export-preview-multi-page-swiped`（同、左スワイプ後の2枚目。ドットの強調位置が1枚目と異なることを確認用） |
 | S04-c | 書き出し中（保存ボタンがスピナー） | |
 | S04-d | 書き出し結果アラート | |
 
@@ -211,6 +211,7 @@ fastlane snapshot の出力ファイルは安全なASCII名の
 |---|---|---|---|
 | S04-F01 | 閉じる | S02 へ戻る | |
 | S04-F02 | カメラロールに保存（全Nスライド） | 各スライドをPNG書き出し・写真ライブラリへ | |
+| S04-F03 | 左右スワイプ（複数スライド時） | カルーセルのページを切り替え、ドットインジケーターの強調位置がスワイプ先のページに連動する | （S04-aで撮） |
 | S04-F04 | 書き出し結果アラート | 成功/失敗メッセージ | |
 | S04-F05 | 共有（`UIActivityViewController`） | 単一スライドは1枚、複数スライドは投稿順（orderedPages）で全Nスライドをまとめてシステム共有シートへ渡す。カメラロールへは保存しない | |
 
@@ -226,7 +227,7 @@ fastlane snapshot の出力ファイルは安全なASCII名の
 | `testCanvasAspectsFromCreate` | `--reset-store` | S01-F04〜F08（用紙サイズ別の空キャンバス） |
 | `testProjectListPopulated` | `--reset-store --seed-demo` | S01(複数)、S01-F10(⋯削除メニュー)、S01-F11(削除確認シート) |
 | `testDemoPhotoOperations` | `--reset-store --seed-demo` | S02(選択/枠比率/undo-redo/クロップ/枠/レイヤー)、S04 |
-| `testLayoutKinds` | `--reset-store --seed-demo` | S02(コラージュ/枠付き/パノラマ/X)、S03(比率/背景/ページ選択) |
+| `testLayoutKinds` | `--reset-store --seed-demo` | S02(コラージュ/枠付き/パノラマ/X)、S03(比率/背景/ページ選択)、S04(複数ページ) |
 | `testDarkModeSpotCheck` | `--reset-store --seed-demo`（ダーク固定） | S01/S02/S03/S04 各1枚の最小巡回（`-dark`サフィックス） |
 
 ### カバレッジ凡例と方針
