@@ -12,13 +12,10 @@ import XCTest
 final class ScreenshotSmokeTests: XCTestCase {
 
     /// 決定論的な状態で起動するアプリ。`seed=false` なら何も無い空状態から始まる。
-    /// `dark=true` はシミュレータの外観をダークに切り替えてから起動する
-    /// （テスト側だけで完結し、App層には手を入れない）。
+    /// シミュレータの外観（ライト/ダーク）はfastlane snapshotのdark_modeオプション
+    /// （Snapfile）がテストプロセス外で切り替える。App層には手を入れない。
     @MainActor
-    private func makeApp(seed: Bool, dark: Bool = false) -> XCUIApplication {
-        if dark {
-            XCUIDevice.shared.appearance = .dark
-        }
+    private func makeApp(seed: Bool) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--reset-store"] + (seed ? ["--seed-demo"] : [])
         setupSnapshot(app)
@@ -238,12 +235,12 @@ final class ScreenshotSmokeTests: XCTestCase {
     // 全機能IDの網羅はライトモード側に任せ、既存のナビゲーションヘルパー（openDemo等）を
     // 再利用して画面ごとの見え方の代表点だけを確認する。CIはこのメソッドだけを
     // 独立したmatrixジョブ（機種×テーマ）で並列実行する（ios-ci.yml + fastlane/Snapfile の
-    // SNAPSHOT_ONLY_TESTING/SNAPSHOT_SKIP_TESTING）。スクショ名の `-dark` サフィックスで
-    // テーマを区別する（tools/build_screenshot_index.py がこの命名規約でテーマ列を判定する）。
+    // SNAPSHOT_ONLY_TESTING/SNAPSHOT_SKIP_TESTING/SNAPSHOT_DARK_MODE）。スクショ名の `-dark`
+    // サフィックスでテーマを区別する（tools/build_screenshot_index.py がこの命名規約でテーマ列を判定する）。
 
     @MainActor
     func testDarkModeSpotCheck() throws {
-        let app = makeApp(seed: true, dark: true)
+        let app = makeApp(seed: true)
         app.launch()
 
         XCTAssertTrue(app.buttons["デモ"].waitForExistence(timeout: 15))
