@@ -99,6 +99,13 @@ S01（プロジェクト一覧）のナビゲーションバー右上＋ボタ�
 - **S02側に常時表示ヒント（＋アイコン＋「写真を追加」を空キャンバス中央に表示）を追加する案は不採用**: オーナーから「UIをごちゃごちゃさせたくない」「機能を理解済みのユーザーには冗長」という懸念が示されたため（[issue-comment](https://github.com/4moda/photo-layout/issues/47#issuecomment-4953537212)）。S01側で当初提案されていた `ContentUnavailableView` への「新しいレイアウトを作成」アクションボタン追加案も同じ理由で不採用とし、代わりに下部フローティングメニューへの統一を採った。
 - **帰結**: 空状態の説明文（`ContentUnavailableView` の `description`）から、右上を指す表現を残さない。
 
+### S01下部メニューを2ボタン横並びパネルから単独＋FABへ統合（2026-07-13、[#82](https://github.com/4moda/photo-layout/issues/82)）
+
+S01（プロジェクト一覧）の下部フローティングメニュー（[#47](https://github.com/4moda/photo-layout/issues/47)で導入した、新規作成＋フォルダ作成の丸ボタン2つを`.ultraThinMaterial`パネルに収めた形）を廃止し、単独の丸＋FABを右下に単体配置する形へ統合した。＋FABをタップすると「新規デザインを作成」「フォルダを作成」の2択メニュー（`Menu`）を表示し、それぞれ既存の用紙サイズ選択シート・フォルダ名入力シートへつなぐ（両シート自体のフロー・見た目は変更しない）。フォルダ詳細画面（`FolderDetailView`）の＋ボタン（フォルダ作成の選択肢を持たない、プロジェクト作成専用）は対象外・現状維持。
+
+- **理由**: 2つの丸ボタンが常時横並びで表示され続けるのはUIとして煩雑という指摘。フォルダ作成はプロジェクト作成ほど頻度の高い操作ではなく、常設の専用ボタンを持たせるほどではないため、＋ボタン配下のメニュー項目に格下げした。
+- **帰結**: `projectList.addFolder`のアクセシビリティ識別子は廃止（UIテストは＋FAB→メニュー項目のラベルテキストでたどる）。`projectList.add`は＋FAB自身の識別子として存続。
+
 ### main push時にもCloudflare Pagesスクショプレビューを更新（2026-07-13、[#79](https://github.com/4moda/photo-layout/issues/79)）
 
 `ios-ci.yml` の `screenshots-index` ジョブに、`push`（main）イベント用のCloudflare Pagesデプロイステップ「Deploy screenshots to Cloudflare Pages (main preview)」を追加した。既存のPRプレビュー用ステップと同じPagesプロジェクト（`photolayout-screenshots`）・同じ`cf_check`/`screenshots_check`スキップ分岐を流用し、`branch: main-latest`で常に`https://main-latest.photolayout-screenshots.pages.dev`へ上書きデプロイする。
@@ -128,6 +135,7 @@ Issue/PR 単位をやめ、動く段階まで仕上げて main へ直接コミ�
 | テスト内 `XCUIDevice.shared.appearance = .dark`（`makeApp(dark:)`） | fastlane snapshotの `dark_mode` Snapfileオプション（`SNAPSHOT_DARK_MODE`） | `xcodebuild test-without-building` 経由のCI実行では反映されず、dark legのスクショが実際にはライト外観のまま撮れていた（[#43](https://github.com/4moda/photo-layout/issues/43)） |
 | 一覧のレイアウト名表示 | サムネイルのみ（SCRL 風グリッド） | 名前より中身（1ページ目プレビュー）で識別するほうが速い |
 | ダウンロード即保存 | プレビュー画面（`PreviewView`）を挟む | 書き出し前に全スライドの仕上がりを確認できるようにする |
+| S01下部の新規作成＋フォルダ作成ボタンを横並びで常設した`.ultraThinMaterial`パネル（`projectList.addFolder`） | 単独の丸＋FAB＋タップで開く2択メニュー | 常時2ボタンが横並びで見えるのは煩雑という指摘（[#82](https://github.com/4moda/photo-layout/issues/82)）。フォルダ作成は頻度が低くメニュー項目で十分 |
 
 ## 経緯（Issue）
 

@@ -40,7 +40,7 @@ struct ProjectListView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            ZStack(alignment: .bottom) {
+            ZStack(alignment: .bottomTrailing) {
                 VStack(spacing: 0) {
                     modePicker
 
@@ -53,7 +53,7 @@ struct ProjectListView: View {
                     .frame(maxHeight: .infinity)
                 }
 
-                bottomFloatingMenu
+                addMenuButton
             }
             .navigationTitle("PhotoLayout")
             .navigationBarTitleDisplayMode(.inline)
@@ -186,63 +186,35 @@ struct ProjectListView: View {
         }
     }
 
-    /// 下部フローティングメニュー。`PageEditorView` の `slideControls` と同じ見た目
-    /// （`.ultraThinMaterial` の角丸カード＋中央の丸型アクセントカラー＋ボタン）で、
-    /// S02（スライド編集）と同じ位置・スタイルに統一する（一覧が空でも常時表示）。
-    private var bottomFloatingMenu: some View {
-        HStack(spacing: 16) {
-            newFolderButton
-            newProjectButton
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8)
-        )
-        .shadow(color: .black.opacity(0.14), radius: 16, y: 8)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 8)
-    }
-
-    private var newProjectButton: some View {
-        Button {
-            showingNewProjectSheet = true
+    /// 単独の丸＋FAB。Xアプリの投稿ボタンのように背景パネルを持たず右下に単体配置する
+    /// （2ボタン横並びの`.ultraThinMaterial`パネルは#82で廃止）。タップすると
+    /// 「新規デザインを作成」「フォルダを作成」の2択メニューを表示し、両シート自体の
+    /// フロー・見た目は変えず入り口だけを統合する。
+    private var addMenuButton: some View {
+        Menu {
+            Button {
+                showingNewProjectSheet = true
+            } label: {
+                Label("新規デザインを作成", systemImage: "square.and.pencil")
+            }
+            Button {
+                newFolderName = ""
+                showingNewFolderSheet = true
+            } label: {
+                Label("フォルダを作成", systemImage: "folder.badge.plus")
+            }
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 22, weight: .bold))
                 .foregroundStyle(.white)
-                .frame(width: 52, height: 52)
-                .background(
-                    Circle()
-                        .fill(Color.accentColor)
-                )
+                .frame(width: 56, height: 56)
+                .background(Circle().fill(Color.accentColor))
                 .shadow(color: Color.accentColor.opacity(0.28), radius: 12, y: 4)
                 .contentShape(Circle())
         }
-        .buttonStyle(.plain)
         .accessibilityIdentifier("projectList.add")
-    }
-
-    private var newFolderButton: some View {
-        Button {
-            newFolderName = ""
-            showingNewFolderSheet = true
-        } label: {
-            Image(systemName: "folder.badge.plus")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 52, height: 52)
-                .background(
-                    Circle()
-                        .fill(Color.secondary)
-                )
-                .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("projectList.addFolder")
+        .padding(.horizontal, 20)
+        .padding(.bottom, 12)
     }
 
     /// フォルダ作成: 名前入力のみのシンプルなシート。
