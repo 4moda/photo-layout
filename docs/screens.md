@@ -204,7 +204,7 @@ fastlane snapshot の出力ファイルは安全なASCII名の
 
 | 状態ID | 状態 | 撮 |
 |---|---|---|
-| S04-a | 単一/複数スライドの仕上がり一覧＋保存・共有バー | `S04-export-preview`（単一）／`S04-export-preview-multi-page`（複数、ドットインジケーター確認用） |
+| S04-a | 単一/複数スライドの仕上がり一覧＋保存・共有バー | `S04-export-preview`（単一）／`S04-export-preview-multi-page`（複数、1枚目のドットインジケーター確認用。初期スクロール位置のため2枚目以降は保存・共有バーの下に隠れる）／`S04-export-preview-multi-page-scrolled`（同、スクロール後。2枚目のドット位置が1枚目と異なることを確認用） |
 | S04-c | 書き出し中（保存ボタンがスピナー） | |
 | S04-d | 書き出し結果アラート | |
 
