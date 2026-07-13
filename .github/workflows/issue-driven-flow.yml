@@ -34,6 +34,12 @@ jobs:
       max_turns: 150
     secrets:
       claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # GITHUB_TOKEN structurally cannot push changes under
+      # .github/workflows/, no matter what `permissions:` it's granted (see
+      # issue #43), and PRs it opens don't trigger other workflows (CI never
+      # ran on Crafter PRs). A repo-scoped PAT with the `workflow` OAuth
+      # scope fixes both; falls back to GITHUB_TOKEN when unset.
+      bot_token: ${{ secrets.GF_BOT_TOKEN }}
 
   sync-pr:
     if: >-
