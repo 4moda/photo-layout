@@ -36,6 +36,7 @@ final class SwiftDataProjectRepository: ProjectRepository {
             title: project.title,
             presetData: try project.platformPreset.map { try encoder.encode($0) },
             defaultFrameData: try encoder.encode(project.defaultPhotoFrame),
+            folderID: project.folderID,
             createdAt: project.createdAt,
             updatedAt: project.updatedAt
         )
@@ -104,6 +105,7 @@ final class SwiftDataProjectRepository: ProjectRepository {
                     )
                 },
             defaultPhotoFrame: try decoder.decode(PhotoFrameStyle.self, from: model.defaultFrameData),
+            folderID: model.folderID,
             createdAt: model.createdAt,
             updatedAt: model.updatedAt
         )

@@ -12,7 +12,7 @@ enum AppComposition {
         let inMemory = CommandLine.arguments.contains("--reset-store")
         let config = ModelConfiguration(isStoredInMemoryOnly: inMemory)
         return try! ModelContainer(
-            for: ProjectModel.self, PageModel.self, PlacementModel.self,
+            for: ProjectModel.self, PageModel.self, PlacementModel.self, FolderModel.self,
             configurations: config
         )
     }()

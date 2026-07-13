@@ -9,6 +9,8 @@ final class ProjectModel {
     var title: String?
     var presetData: Data?
     var defaultFrameData: Data
+    // 所属フォルダのid。未分類はnil。既存ストアからの軽量マイグレーションのためnil既定
+    var folderID: UUID?
     var createdAt: Date
     var updatedAt: Date
 
@@ -23,6 +25,7 @@ final class ProjectModel {
         title: String?,
         presetData: Data?,
         defaultFrameData: Data,
+        folderID: UUID? = nil,
         createdAt: Date,
         updatedAt: Date
     ) {
@@ -30,6 +33,7 @@ final class ProjectModel {
         self.title = title
         self.presetData = presetData
         self.defaultFrameData = defaultFrameData
+        self.folderID = folderID
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

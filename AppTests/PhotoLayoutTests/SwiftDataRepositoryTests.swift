@@ -62,6 +62,24 @@ final class SwiftDataRepositoryTests: XCTestCase {
         XCTAssertEqual(fetched, project)
     }
 
+    func testFolderIDRoundTrip() async throws {
+        var project = makeSampleProject()
+        project.folderID = UUID()
+        try await repository.save(project)
+
+        let fetched = try await repository.fetch(id: project.id)
+        XCTAssertEqual(fetched?.folderID, project.folderID)
+    }
+
+    func testFolderIDDefaultsToNil() async throws {
+        let project = makeSampleProject()
+        XCTAssertNil(project.folderID)
+        try await repository.save(project)
+
+        let fetched = try await repository.fetch(id: project.id)
+        XCTAssertNil(fetched?.folderID)
+    }
+
     func testUpsertReplacesExisting() async throws {
         var project = makeSampleProject()
         try await repository.save(project)
