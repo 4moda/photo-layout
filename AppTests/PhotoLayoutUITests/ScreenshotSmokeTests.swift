@@ -178,16 +178,17 @@ final class ScreenshotSmokeTests: XCTestCase {
             snapshot("S02-undo-redo-active")
         }
 
-        if app.buttons["pageEditor.cropButton"].waitForExistence(timeout: 3) {
-            app.buttons["pageEditor.cropButton"].tap()
-            if app.otherElements["pageEditor.cropOverlay"].waitForExistence(timeout: 3) {
-                sleep(1)
-                snapshot("S02-F10-crop-mode")
-                // 枠外（キャンバス隅の暗い地）をタップしてクロップモードを抜ける（フッターの完了ボタンは廃止済み）
-                canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: 0.03)).tap()
-                sleep(1)
-            }
-        }
+        XCTAssertTrue(app.buttons["pageEditor.cropButton"].waitForExistence(timeout: 3), "クロップボタンが無い")
+        app.buttons["pageEditor.cropButton"].tap()
+        XCTAssertTrue(app.otherElements["pageEditor.cropOverlay"].waitForExistence(timeout: 3), "クロップオーバーレイが表示されない")
+        // 元画像のうちクロップ枠外の部分が確実に残るようズームインしてからスクショする。
+        // 既定のクロップがたまたま元画像全体を覆っていると、枠外を暗くする効果がスクショで分からないため。
+        canvas.pinch(withScale: 1.6, velocity: 1.0)
+        sleep(1)
+        snapshot("S02-F10-crop-mode")
+        // 枠外（キャンバス隅の暗い地）をタップしてクロップモードを抜ける（フッターの完了ボタンは廃止済み）
+        canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: 0.03)).tap()
+        sleep(1)
 
         if app.buttons["pageEditor.frameButton"].waitForExistence(timeout: 3) {
             app.buttons["pageEditor.frameButton"].tap()
