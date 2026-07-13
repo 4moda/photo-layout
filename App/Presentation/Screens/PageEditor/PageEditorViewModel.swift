@@ -258,6 +258,15 @@ final class PageEditorViewModel {
         await persist(refreshImages: false)
     }
 
+    /// 配置を複製する（写真選択メニュー・レイヤーシート両方から呼ぶ）。複製後の配置を選択状態にする
+    func duplicatePlacement(placementID: UUID) async {
+        guard project.placements.contains(where: { $0.id == placementID }) else { return }
+        record()
+        let newID = project.duplicatePlacement(placementID: placementID)
+        selectedPlacementID = newID
+        await persist()
+    }
+
     // MARK: - ジェスチャ（PlacementGesture/SnapEngineの純粋計算をproject状態へ適用する）
 
     /// 指定点（配置領域の正規化座標）にある最前面の配置を返す。
