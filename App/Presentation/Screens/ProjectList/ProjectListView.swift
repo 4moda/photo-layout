@@ -65,13 +65,8 @@ struct ProjectListView: View {
 
     /// 新規作成は「用紙サイズ（キャンバスのアスペクト）」だけ選ぶ。SNS別のモードは持たず、
     /// ラベルは用途のヒントに留める。枠付けもレイアウトも同じ汎用プロジェクトで行う。
-    private static let canvasChoices: [(id: String, label: String, aspect: AspectRatio)] = [
-        ("square", "正方形 1:1", AspectRatio(width: 1, height: 1)),
-        ("portrait45", "縦長 4:5（Instagram）", AspectRatio(width: 4, height: 5)),
-        ("portrait34", "縦 3:4（X 1枚）", AspectRatio(width: 3, height: 4)),
-        ("landscape169", "横 16:9", AspectRatio(width: 16, height: 9)),
-        ("landscape191", "横長 1.91:1（Instagram）", AspectRatio(width: 1.91, height: 1))
-    ]
+    private static let canvasChoices: [(id: String, label: String, aspect: AspectRatio)] =
+        AspectRatioOption.orderedAll.map { ($0.rawValue, $0.label, $0.aspect) }
 
     /// 用紙サイズ選択シート。`PageEditorView` の枠比率シート（S02-F09）と同じグリッド形式で、
     /// 比率をドロップダウンではなく形プレビューで見せる。
