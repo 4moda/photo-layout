@@ -148,6 +148,26 @@ final class ScreenshotSmokeTests: XCTestCase {
         sleep(1)
         snapshot("S01-F19-folder-detail-after-create")
 
+        // S01-F20/F21: このフォルダにはいま作成したプロジェクトしかいないため⋯メニューを
+        // 一意に特定できる。「フォルダへ移動」→「フォルダなし」を選ぶと未分類に戻り、
+        // このフォルダ詳細（Travel）から消えて空状態に戻ることを確認する（受け入れ条件）。
+        let travelProjectMenu = app.buttons["projectList.menu"].firstMatch
+        if travelProjectMenu.waitForExistence(timeout: 3) {
+            travelProjectMenu.tap()
+            if app.buttons["フォルダへ移動"].waitForExistence(timeout: 3) {
+                app.buttons["フォルダへ移動"].tap()
+                let noneRow = app.buttons["projectList.moveToFolder.none"]
+                if noneRow.waitForExistence(timeout: 3) {
+                    sleep(1)
+                    snapshot("S01-F20-project-cell-move-to-folder-menu")
+                    noneRow.tap()
+                    XCTAssertTrue(app.otherElements["projectList.folderDetail.empty"].waitForExistence(timeout: 5))
+                    sleep(1)
+                    snapshot("S01-F21-project-cell-moved-to-none")
+                }
+            }
+        }
+
         back(app)
         folderModeButton.tap()
 
