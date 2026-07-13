@@ -20,6 +20,7 @@ private enum ProjectListMode: String {
 private enum ProjectListRoute: Hashable {
     case project(ProjectEntity)
     case folder(FolderEntity)
+    case settings
 }
 
 /// 下書き一覧。行タップでページ編集へ遷移する。
@@ -55,12 +56,22 @@ struct ProjectListView: View {
                 bottomFloatingMenu
             }
             .navigationTitle("PhotoLayout")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink(value: ProjectListRoute.settings) {
+                        Image(systemName: "gearshape")
+                    }
+                    .accessibilityIdentifier("projectList.settings")
+                }
+            }
             .navigationDestination(for: ProjectListRoute.self) { route in
                 switch route {
                 case .project(let project):
                     AppComposition.makePageEditor(project: project)
                 case .folder(let folder):
                     FolderDetailView(folder: folder, viewModel: viewModel, path: $path)
+                case .settings:
+                    SettingsView()
                 }
             }
             .sheet(isPresented: $showingNewProjectSheet) {
