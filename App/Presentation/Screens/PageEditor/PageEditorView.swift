@@ -771,12 +771,10 @@ struct PageEditorView: View {
     }
 
     /// 枠アスペクトのプリセット（写真は歪まずクロップ窓が変わる）
-    private static let frameAspectChoices: [(label: String, pixelAspect: Double)] = [
-        ("1:1", 1.0),
-        ("4:5 縦", 4.0 / 5.0),
-        ("3:4 縦", 3.0 / 4.0),
-        ("16:9 横", 16.0 / 9.0)
-    ]
+    private static let frameAspectChoices: [(label: String, pixelAspect: Double)] =
+        AspectRatioOption.orderedAll
+            .filter { $0 != .landscape191 }
+            .map { ($0.label, $0.aspect.ratio) }
 
     private static let frameAspectTolerance: Double = 1e-6
 

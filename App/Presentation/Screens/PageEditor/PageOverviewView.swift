@@ -20,13 +20,8 @@ struct PageOverviewView: View {
     /// サムネイルの高さ。ページのアスペクトに応じて幅が決まる（2〜3ページ分が見える目安）
     private let thumbnailHeight: CGFloat = 200
 
-    private static let aspectChoices: [(label: String, aspect: AspectRatio)] = [
-        ("3:4 縦 (X 1枚)", AspectRatio(width: 3, height: 4)),
-        ("4:5 縦 (Instagram)", AspectRatio(width: 4, height: 5)),
-        ("1:1", AspectRatio(width: 1, height: 1)),
-        ("1.91:1 横 (Instagram)", AspectRatio(width: 1.91, height: 1)),
-        ("16:9 横", AspectRatio(width: 16, height: 9))
-    ]
+    private static let aspectChoices: [(label: String, aspect: AspectRatio)] =
+        AspectRatioOption.orderedAll.map { ($0.label, $0.aspect) }
 
     private static let aspectTolerance: Double = 1e-6
 
