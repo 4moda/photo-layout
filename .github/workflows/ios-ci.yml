@@ -267,7 +267,7 @@ jobs:
       # レビュー用プレビュー。PRごとに branch=pr-<番号> で同一Pagesプロジェクト内へデプロイし、
       # 常に https://pr-<番号>.<project>.pages.dev が最新を指す（push毎に上書き）。
       - name: Deploy screenshots to Cloudflare Pages (PR preview)
-        id: deploy
+        id: deploy_pr
         if: |
           github.event_name == 'pull_request' &&
           steps.cf_check.outputs.configured == 'true' &&
@@ -281,16 +281,38 @@ jobs:
           branch: pr-${{ github.event.pull_request.number }}
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
 
+      # main更新時の恒久プレビュー（#79）。branchには文字通り "main" を指定しない: Cloudflare
+      # Pagesプロジェクトのproduction branch（既定main）と一致するデプロイはProductionデプロイ
+      # として扱われ、Zero Trust Accessのワイルドカードポリシー（*.photolayout-screenshots.pages.dev）
+      # が保護しないapexドメイン（https://photolayout-screenshots.pages.dev）が公開されてしまうため、
+      # production branchと衝突しない固定の識別用ブランチ名 main-latest を使いPreviewデプロイに固定する。
+      # PRに紐づかないためコメント投稿は行わない（cleanupワークフローの対象からも意図的に除外）。
+      - name: Deploy screenshots to Cloudflare Pages (main preview)
+        id: deploy_push
+        if: |
+          github.event_name == 'push' &&
+          steps.cf_check.outputs.configured == 'true' &&
+          steps.screenshots_check.outputs.present == 'true'
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: photolayout-screenshots
+          directory: screenshots
+          branch: main-latest
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+
       # cloudflare/pages-actionはGitHub Deployment（PRタイムラインの小さな行）は作るが
       # 本文コメントは投稿しないため、見落とし防止に明示コメントする。同じPRへの再pushでは
       # 新規コメントを増やさず、マーカーで既存コメントを見つけて上書きする。
-      # URLは steps.deploy.outputs.alias を使わず自前で組み立てる: 実機確認したところ
+      # URLは steps.deploy_pr.outputs.alias を使わず自前で組み立てる: 実機確認したところ
       # direct upload デプロイでは alias がブランチエイリアス（安定URL）ではなく
       # デプロイ個別のハッシュURLを返すことがあり、pushのたびにURLが変わってしまうため。
       # ブランチエイリアス自体（https://pr-<番号>.<project>.pages.dev）は実在し安定して
-      # 同じデプロイ内容を指すことをcurlで確認済み。
+      # 同じデプロイ内容を指すことをcurlで確認済み。PRコンテキストが無いpushイベントでは
+      # そもそも投稿先PRが存在しないため、このステップはpull_requestイベント時のみ動く。
       - name: Comment preview URL on PR
-        if: steps.deploy.outcome == 'success'
+        if: steps.deploy_pr.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
