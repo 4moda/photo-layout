@@ -9,6 +9,9 @@ struct DemoProjectSeeder {
     let createXPost: CreateXPostUseCase
     let listProjects: ListProjectsUseCase
     let saveProject: SaveProjectUseCase
+    let listFolders: ListFoldersUseCase
+    let createFolder: CreateFolderUseCase
+    let moveProjectToFolder: MoveProjectToFolderUseCase
 
     func seedIfNeeded() async {
         do {
@@ -68,6 +71,14 @@ struct DemoProjectSeeder {
                         placementID: id)
                 }
                 _ = try await saveProject.execute(project)
+            }
+            // Folderモード確認用: 「お気に入り」フォルダにパノラマデモを分類しておく
+            let existingFolders = try await listFolders.execute()
+            if !existingFolders.contains(where: { $0.name == "お気に入り" }) {
+                let folder = try await createFolder.execute(name: "お気に入り")
+                if let panorama = try await listProjects.execute().first(where: { $0.title == "パノラマ（3連）" }) {
+                    _ = try await moveProjectToFolder.execute(projectID: panorama.id, folderID: folder.id)
+                }
             }
         } catch {
             // デモシードの失敗はアプリ動作に影響させない
