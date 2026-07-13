@@ -21,6 +21,36 @@ struct LayoutTemplateTests {
         #expect(overlap.width <= 0 || overlap.height <= 0)
     }
 
+    private func expectSlotsFitAndDontOverlap(_ template: LayoutTemplate) {
+        for slot in template.slots {
+            #expect(LayoutRect.unit.contains(slot))
+        }
+        for i in 0..<template.slots.count {
+            for j in (i + 1)..<template.slots.count {
+                let overlap = template.slots[i].intersection(template.slots[j])
+                #expect(overlap.width <= 0 || overlap.height <= 0)
+            }
+        }
+    }
+
+    @Test("2枚の追加バリエーション(左大右小)は単位正方形に収まり重ならない")
+    func twoUpBigSmallSlotsAreValid() {
+        let template = LayoutTemplateTable.twoUp().first { $0.id == "two-big-small" }!
+        expectSlotsFitAndDontOverlap(template)
+    }
+
+    @Test("3枚の追加バリエーション(上大＋下2)は単位正方形に収まり重ならない")
+    func threeUpTopBigSlotsAreValid() {
+        let template = LayoutTemplateTable.threeUp().first { $0.id == "three-top-big" }!
+        expectSlotsFitAndDontOverlap(template)
+    }
+
+    @Test("4枚の追加バリエーション(縦4列)は単位正方形に収まり重ならない")
+    func fourUpColumnsSlotsAreValid() {
+        let template = LayoutTemplateTable.fourUp().first { $0.id == "four-columns" }!
+        expectSlotsFitAndDontOverlap(template)
+    }
+
     @Test("Xタイムラインテンプレートは推奨アスペクトを持つ")
     func xTemplateHasRecommendedAspect() {
         let template = LayoutTemplateTable.xTimeline(photoCount: 3)
