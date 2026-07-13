@@ -141,9 +141,12 @@ struct ProjectListView: View {
                 ScrollView {
                     LazyVGrid(columns: gridColumns, spacing: 12) {
                         ForEach(viewModel.folders) { folder in
+                            let folderProjects = viewModel.projects(inFolder: folder.id)
                             FolderCell(
                                 folder: folder,
-                                projectCount: viewModel.projects(inFolder: folder.id).count,
+                                previewProject: folderProjects.first,
+                                previewImages: folderProjects.first.map { viewModel.thumbnailImages(for: $0) } ?? [:],
+                                projectCount: folderProjects.count,
                                 onRename: { newName in
                                     Task { await viewModel.renameFolder(id: folder.id, name: newName) }
                                 },
@@ -475,6 +478,10 @@ private struct ProjectCell: View {
 /// （`ProjectCell`の⋯メニュー→確認シートと同じパターン）。
 private struct FolderCell: View {
     let folder: FolderEntity
+    /// フォルダ内で最新更新のプロジェクト（`projects`は更新日時降順のためfirstで求まる）。
+    /// サムネイルをフォルダに収めて可視化するために使う。nilなら未分類0件のフォルダ。
+    let previewProject: ProjectEntity?
+    let previewImages: [UUID: UIImage]
     let projectCount: Int
     let onRename: (String) -> Void
     let onDelete: () -> Void
@@ -521,26 +528,76 @@ private struct FolderCell: View {
 
     private var card: some View {
         VStack(spacing: 6) {
-            ZStack {
-                Color(.secondarySystemBackground)
-                Image(systemName: "folder.fill")
-                    .font(.system(size: 36))
-                    .foregroundStyle(Color.accentColor)
-            }
-            .aspectRatio(1, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color(.systemGray5), lineWidth: 0.5)
-            )
+            thumbnail
 
             Text(folder.name)
                 .font(.caption)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-            Text("\(projectCount)件")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// フォルダ内最新プロジェクトの1ページ目サムネイルをフォルダに収めて可視化する
+    /// （空フォルダはフォルダアイコンのまま）。件数バッジは`ProjectCell`のページ数バッジと
+    /// 同じ見た目・位置にして一覧内での視覚言語を揃える。
+    private var thumbnail: some View {
+        ZStack {
+            Color(.secondarySystemBackground)
+            if let previewProject, let page = previewProject.orderedPages.first {
+                CanvasRenderView(
+                    page: page,
+                    placements: SpreadGeometry.visiblePlacements(onPage: page.index, project: previewProject),
+                    defaultFrame: previewProject.defaultPhotoFrame,
+                    images: previewImages
+                )
+                .padding(10)
+                folderIconBadge
+            } else {
+                Image(systemName: "folder.fill")
+                    .font(.system(size: 36))
+                    .foregroundStyle(Color.accentColor)
+            }
+            if projectCount > 0 {
+                countBadge
+            }
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color(.systemGray5), lineWidth: 0.5)
+        )
+    }
+
+    /// サムネイルがプロジェクトの写真で埋まるため、フォルダであることを示す小バッジを左上に添える。
+    private var folderIconBadge: some View {
+        VStack {
+            HStack {
+                Image(systemName: "folder.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.white)
+                    .padding(5)
+                    .background(Circle().fill(.black.opacity(0.45)))
+                    .padding(6)
+                Spacer()
+            }
+            Spacer()
+        }
+    }
+
+    private var countBadge: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                Text("\(projectCount)件")
+                    .font(.caption2)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(.black.opacity(0.5)))
+                    .padding(6)
+            }
         }
     }
 
