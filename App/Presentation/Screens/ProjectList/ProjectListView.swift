@@ -56,6 +56,7 @@ struct ProjectListView: View {
                 bottomFloatingMenu
             }
             .navigationTitle("PhotoLayout")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink(value: ProjectListRoute.settings) {
