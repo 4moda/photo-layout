@@ -33,6 +33,8 @@ SCREEN_LABELS = {
     "S02": "スライド編集",
     "S03": "スライド俯瞰",
     "S04": "書き出しプレビュー",
+    "S05": "設定",
+    "S06": "利用規約",
 }
 
 LANG_DIR_RE = re.compile(r"^[a-z]{2}(-[A-Za-z]{2,4})?$")  # ja-JP, en-US など
@@ -68,6 +70,8 @@ SNAPSHOT_LABELS = {
     "S03-F11-carousel-ratio-menu": "比率メニュー（カルーセル全体の比率）",
     "S03-F12-project-background-menu": "背景メニュー（プロジェクト共通の背景色）",
     "S04-export-preview": "書き出しプレビュー画面",
+    "S05-settings-list": "設定一覧（利用規約リンク・バージョン表示）",
+    "S06-terms-of-service": "利用規約本文（スクロール表示）",
     "S02-undo-redo-active": "undo/redoの活性状態（直前の枠比率変更でundoが活性・redoが非活性）",
 }
 

@@ -31,6 +31,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.fourmoda.photolayout
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
     scheme:
       testTargets:
         - PhotoLayoutTests

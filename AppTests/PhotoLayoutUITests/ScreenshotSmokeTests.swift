@@ -367,6 +367,29 @@ final class ScreenshotSmokeTests: XCTestCase {
         snapshot("S02-x-timeline-composite")
     }
 
+    // MARK: - S05 設定 / S06 利用規約
+
+    @MainActor
+    func testSettingsAndTerms() throws {
+        let app = makeApp(seed: false)
+        app.launch()
+
+        XCTAssertTrue(app.navigationBars["PhotoLayout"].waitForExistence(timeout: 15))
+        let settingsButton = app.buttons["projectList.settings"]
+        XCTAssertTrue(settingsButton.waitForExistence(timeout: 5))
+        settingsButton.tap()
+
+        let termsRow = app.buttons["settings.terms"]
+        XCTAssertTrue(termsRow.waitForExistence(timeout: 5))
+        sleep(1)
+        snapshot("S05-settings-list")
+
+        termsRow.tap()
+        XCTAssertTrue(app.otherElements["termsOfService.scroll"].waitForExistence(timeout: 5))
+        sleep(1)
+        snapshot("S06-terms-of-service")
+    }
+
     // MARK: - ダークモード最小巡回（S01〜S04 各最低1枚）
     // 全機能IDの網羅はライトモード側に任せ、既存のナビゲーションヘルパー（openDemo等）を
     // 再利用して画面ごとの見え方の代表点だけを確認する。CIはこのメソッドだけを
