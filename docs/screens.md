@@ -68,11 +68,13 @@ fastlane snapshot の出力ファイルは安全なASCII名の
 
 ### 操作・機能
 
+下部フローティングメニュー（S02 `PageEditorView` の `slideControls` と同じ位置・見た目。一覧が空でも1件以上でも常時表示。ナビゲーションバー右上には＋を置かない）:
+
 | 機能ID | 操作 | 結果 | 撮 |
 |---|---|---|---|
 | S01-F01 | 起動・一覧表示 | サムネイルグリッド | ✓ |
-| S01-F02 | 空状態表示 | プレースホルダ＋作成導線 | ✓ |
-| S01-F03 | ＋メニューを開く | 用紙サイズ選択メニュー | `S01-F03-project-list-paper-size-menu` |
+| S01-F02 | 空状態表示 | プレースホルダ＋下部フローティング＋での作成導線 | ✓ |
+| S01-F03 | 下部フローティング＋を開く | 用紙サイズ選択メニュー | `S01-F03-project-list-paper-size-menu` |
 | S01-F04 | 新規作成: 正方形 1:1 | 空スライドで S02 へ | `S01-F04-create-square-canvas` |
 | S01-F05 | 新規作成: 縦 4:5（Instagram） | 空スライドで S02 へ | `S01-F05-create-portrait-4-5-canvas` |
 | S01-F06 | 新規作成: 縦 3:4（X 1枚） | 空スライドで S02 へ | `S01-F06-create-portrait-3-4-canvas` |

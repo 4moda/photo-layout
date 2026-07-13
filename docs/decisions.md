@@ -89,6 +89,14 @@
   - `screenshots-preview-cleanup.yml`の削除ループが、ページ走査中にその場で`DELETE`していたため一部デプロイを削除し損ねていた（[#41](https://github.com/4moda/photo-layout/issues/41)）。あるページで削除すると、Cloudflare側の残存一覧では後続要素が前方へ繰り上がり、次に要求する`page+1`はその繰り上がり後の一覧を返すため、繰り上がった分の要素が一度もどのページ取得にも現れず削除されない。全ページを削除なしで走査してid一覧を収集し終えてから、まとめて削除する二段階へ分離して修正。
   - `cloudflare/pages-action`に`gitHubToken`を渡しているため、Cloudflare側のPages Deploymentとは別に、GitHub純正のDeploymentsオブジェクト（`repos/.../deployments`、PRタイムラインの小さな行）もpushのたびに作られる。上記のCloudflare REST API削除では一切消えないため、`screenshots-preview-cleanup.yml`にGitHub Deployments API（`GET .../deployments?ref=<branch>`でサーバー側フィルタ→各idを`inactive`ステータス化してから`DELETE .../deployments/{id}`）で独立して片付けるステップを追加した。GitHubは削除対象のdeploymentがinactive/error/failureのいずれかでないと削除を拒否するため、削除前に必ずinactive化する。こちらもページング中の削除は同種の読み飛ばしを起こしうるため、Cloudflare側と同じく収集→削除の二段階にしている。
 
+### S01/S02の「最初の一歩」導線をS01側の下部フローティングメニュー統一で解決（2026-07-13、[#47](https://github.com/4moda/photo-layout/issues/47)）
+
+S01（プロジェクト一覧）のナビゲーションバー右上＋ボタン（`projectList.add`）を廃止し、S02（スライド編集）の下部コントロールバー（`slideControls`）と同じ見た目・位置の下部フローティングメニューに置き換えた（一覧が空でも1件以上でも常時表示）。S02（空スライドキャンバス）自体には手を入れない（現状維持）。
+
+- **理由**: S01は右上＋、S02はフッター中央⊕と、画面をまたいで「新規要素を追加する」操作パターンが異なり、学習し直しが必要だった。片方に合わせて統一すれば学習コストが下がる。
+- **S02側に常時表示ヒント（＋アイコン＋「写真を追加」を空キャンバス中央に表示）を追加する案は不採用**: オーナーから「UIをごちゃごちゃさせたくない」「機能を理解済みのユーザーには冗長」という懸念が示されたため（[issue-comment](https://github.com/4moda/photo-layout/issues/47#issuecomment-4953537212)）。S01側で当初提案されていた `ContentUnavailableView` への「新しいレイアウトを作成」アクションボタン追加案も同じ理由で不採用とし、代わりに下部フローティングメニューへの統一を採った。
+- **帰結**: 空状態の説明文（`ContentUnavailableView` の `description`）から、右上を指す表現を残さない。
+
 ### trunk ベース開発（2026-07-08 改定）
 
 Issue/PR 単位をやめ、動く段階まで仕上げて main へ直接コミット。詳細は [../CLAUDE.md](../CLAUDE.md)。
