@@ -75,6 +75,8 @@ final class PlacementModel {
     var destY: Double
     var destWidth: Double
     var destHeight: Double
+    // 既存ストアからの軽量マイグレーションのため既定値を持つ（0=回転なし）
+    var cropRotation: Double = 0
     var frameOverrideData: Data?
     var project: ProjectModel?
 
@@ -88,6 +90,7 @@ final class PlacementModel {
         photoPixelHeight: Int,
         cropX: Double, cropY: Double, cropWidth: Double, cropHeight: Double,
         destX: Double, destY: Double, destWidth: Double, destHeight: Double,
+        cropRotation: Double,
         frameOverrideData: Data?
     ) {
         self.id = id
@@ -105,6 +108,7 @@ final class PlacementModel {
         self.destY = destY
         self.destWidth = destWidth
         self.destHeight = destHeight
+        self.cropRotation = cropRotation
         self.frameOverrideData = frameOverrideData
     }
 }

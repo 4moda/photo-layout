@@ -15,40 +15,41 @@ struct OverflowRenderTests {
         return (page, placement)
     }
 
-    @Test("右へ20%はみ出した全面写真: 見える80%だけが描かれ、sourceも左80%に切られる")
+    @Test("右へ20%はみ出した全面写真: destはクロップ窓全体（未クリップ）、clipがページ内の見える80%")
     func overflowRightDrawsVisiblePart() {
         let (page, placement) = makeProject(destRect: LayoutRect(x: 0.2, y: 0, width: 1, height: 1))
         let plan = RenderPlanBuilder.build(
             page: page, placements: [placement], defaultFrame: .none,
             pagePixelSize: LayoutSize(width: 1000, height: 1000)
         )
-        guard case .drawImage(_, _, let source, let dest, _)? = plan.dropFirst().first else {
+        guard case .drawImage(_, _, let source, let dest, let clip, let rotation, _)? = plan.dropFirst().first else {
             Issue.record("drawImageコマンドがない")
             return
         }
-        // 描画先はページ内の見える部分（x: 200..1000）
-        #expect(dest.isApproximatelyEqual(to: LayoutRect(x: 200, y: 0, width: 800, height: 1000), tolerance: 1e-6))
-        // sourceは元画像の左80%
-        #expect(source.isApproximatelyEqual(to: LayoutRect(x: 0, y: 0, width: 0.8, height: 1), tolerance: 1e-9))
+        // destはクロップ窓をそのまま置いた（未クリップの）矩形。回転の軸はここの中心になる
+        #expect(dest.isApproximatelyEqual(to: LayoutRect(x: 200, y: 0, width: 1000, height: 1000), tolerance: 1e-6))
+        // sourceはクロップ窓全体（未クリップ）。可視範囲への絞り込みはレンダラ側がclipで行う
+        #expect(source.isApproximatelyEqual(to: LayoutRect(x: 0, y: 0, width: 1, height: 1), tolerance: 1e-9))
+        // 実際に見える範囲（ページ内の80%）
+        #expect(clip.isApproximatelyEqual(to: LayoutRect(x: 200, y: 0, width: 800, height: 1000), tolerance: 1e-6))
+        #expect(rotation == 0)
     }
 
-    @Test("拡大（destRect>領域）: 中央の見える部分がsourceの中央に対応する")
+    @Test("拡大（destRect>領域）: destはクロップ窓全体（未クリップ）、clipがページ内の見える範囲")
     func enlargedFullBleedActsAsCropZoom() {
         let (page, placement) = makeProject(destRect: LayoutRect(x: -0.25, y: -0.25, width: 1.5, height: 1.5))
         let plan = RenderPlanBuilder.build(
             page: page, placements: [placement], defaultFrame: .none,
             pagePixelSize: LayoutSize(width: 900, height: 900)
         )
-        guard case .drawImage(_, _, let source, let dest, _)? = plan.dropFirst().first else {
+        guard case .drawImage(_, _, let source, let dest, let clip, let rotation, _)? = plan.dropFirst().first else {
             Issue.record("drawImageコマンドがない")
             return
         }
-        #expect(dest.isApproximatelyEqual(to: LayoutRect(x: 0, y: 0, width: 900, height: 900), tolerance: 1e-6))
-        // 1.5倍に拡大 → 見えるのは中央 2/3
-        let third = 0.25 / 1.5
-        #expect(source.isApproximatelyEqual(
-            to: LayoutRect(x: third, y: third, width: 1 / 1.5, height: 1 / 1.5), tolerance: 1e-9
-        ))
+        #expect(dest.isApproximatelyEqual(to: LayoutRect(x: -225, y: -225, width: 1350, height: 1350), tolerance: 1e-6))
+        #expect(source.isApproximatelyEqual(to: LayoutRect(x: 0, y: 0, width: 1, height: 1), tolerance: 1e-9))
+        #expect(clip.isApproximatelyEqual(to: LayoutRect(x: 0, y: 0, width: 900, height: 900), tolerance: 1e-6))
+        #expect(rotation == 0)
     }
 
     @Test("完全に領域外の配置は描画コマンドを出さない")

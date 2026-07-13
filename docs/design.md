@@ -35,6 +35,7 @@ ProjectEntity              # 下書き1件。pages と placements を持つ（pl
 │   ├── photo: PhotoRef    # ローカルコピーのファイル名 + 元ピクセルサイズ
 │   ├── cropRect           # 元画像に対する正規化(0..1)。画像のどこを見せるか
 │   ├── destRect           # 所属ページの配置領域に対する正規化。写真の表示矩形（枠が付く対象）
+│   ├── cropRotation       # クロップ窓内でサンプリングする画素の回転角度（度数法、既定0）。destRectは回転しない
 │   └── frameOverride?     # 写真ごとの枠（色・太さ・角丸）
 └── defaultPhotoFrame
 ```
@@ -66,10 +67,10 @@ ProjectEntity              # 下書き1件。pages と placements を持つ（pl
 | 型 | 役割 |
 |---|---|
 | `RenderPlanBuilder` | ページ→`[DrawCommand]`。プレビューも書き出しも唯一これを解釈 |
-| `DrawCommand` | fillRect / drawImage(sourceRect,destRect) / strokeBorder。px単位の描画命令 |
+| `DrawCommand` | fillRect / drawImage(sourceRect,destRect,clipRect,rotationDegrees) / strokeBorder。px単位の描画命令。sourceRect/destRectはクロップ窓全体（未クリップ）、clipRectが実際に見える範囲 |
 | `PageGeometry` | contentRect（余白差引）と destRect→px矩形。描画とジェスチャで共有 |
 | `SpreadGeometry` | ページ隙間なし連結座標。原点/矩形/ページ⇄スプレッド変換・スプレッドX→ページindex |
-| `PlacementGesture` | ジェスチャ→ジオメトリ純粋計算。move / scale / scaleAnchored(対角固定) / stretchEdge(枠比率) / panCrop / zoomCrop |
+| `PlacementGesture` | ジェスチャ→ジオメトリ純粋計算。move / scale / scaleAnchored(対角固定) / stretchEdge(枠比率) / panCrop / zoomCrop / cropRotationFromDrag(回転バー) |
 | `SnapEngine` | 移動中の辺・中心スナップ＋ガイド線 |
 | `CropMath.subCrop` | クロップを目標pxアスペクトへ中央絞り込み（不変条件の要） |
 | `ExportSizeCalculator` | 出力pxサイズ決定（元解像度ベース・長辺4096クランプ・偶数丸め） |
@@ -89,13 +90,13 @@ ProjectEntity              # 下書き1件。pages と placements を持つ（pl
 全画面の状態・操作の網羅カタログ（画面ID/機能ID）は [screens.md](screens.md)。
 
 - **シームレスキャンバス**: 全ページを隙間ゼロで横連結表示。横パンで移動、写真非選択時のピンチでビューポート全体をズーム（`SpreadGeometry` 基準）。十分引くと俯瞰へ遷移
-- **フッターは2状態**（「写真を選んでいるか否か」だけで切替。"ページ選択"という状態は持たない＝写真が乗ったページを選べず操作が不明瞭になるため）:
+- **フッターは2状態＋クロップ中の専用バー**（「写真を選んでいるか否か」だけで切替。"ページ選択"という状態は持たない＝写真が乗ったページを選べず操作が不明瞭になるため）:
   - **スライド編集メニュー**（非選択・既定）: テンプレート / レイヤー順 / スライド俯瞰 ＋ 中央の ⊕写真追加
   - **写真メニュー**（写真選択中）: 枠比率 / クロップ / 枠（縁）プリセット / 削除
-  - **クロップ中**: 「クロップ完了」のみ
+  - **クロップ中**: 通常のフッターは出さず、代わりに画面下に回転ドラッグバーを表示（元画像オーバーレイ＋枠外タップで完了。詳細は次項）
 - **写真の初期配置は自然配置**: 追加した写真は元アスペクトのままページ中央付近に置く（fill/fit で強制しない）。複数枚は少しずつずらす（カスケード）
 - **テンプレート（スロット先行）**: スライドに型枠（スロット矩形）を敷き、空スロットをタップして写真を充填。プロジェクト配置モデルなので写真は隣スライドへ跨げる（`SpreadGeometry.visiblePlacements`）
-- **クロップモード**: ダブルタップで枠固定→中身をパン/ズーム、枠の外タップで完了
+- **クロップモード**: ダブルタップで枠固定→中身をパン/ズーム、枠の外タップで完了。画面下の水平ドラッグバーで、クロップ窓内でサンプリングする画素だけを回転できる（`PlacementEntity.cropRotation`、度数法・±45°クランプ）。枠（`destRect`）自体は回転せず出力アスペクトも歪まない — プレビュー（`CanvasRenderView`/クロップオーバーレイ）と書き出し（`CoreGraphicsExportRenderer`）はどちらも`destRect`中心を軸にCTM回転してから同じ`clipRect`で切り出すため、同一の見た目になる
 - **ハンドル**: 角＝対角固定のアスペクト固定拡縮、辺＝枠アスペクト変更（画像は歪まない）
 - **ダウンロード＝プレビュー経由**: 右上の保存ボタンから書き出しプレビュー画面（`PreviewView`）へ遷移し、仕上がりを確認してからカメラロール保存
 - **スライド俯瞰**（`PageOverviewView`）: 横並び一覧で 挿入 / 複製 / 並べ替え（ドラッグ＆ドロップ）/ 削除。ページ非選択時は**カルーセル全体の比率**と**プロジェクト共通の背景色**、ページ選択時は複製/削除のフローティングメニューを出す。左上キャンセル / 右上確定

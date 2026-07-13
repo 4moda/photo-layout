@@ -97,4 +97,37 @@ struct PlacementGestureTests {
         #expect(zoomedOut.minY >= 0)
         #expect(zoomedOut.maxY <= 1 + 1e-12)
     }
+
+    @Test("クロップ回転ドラッグ: バー幅いっぱいのドラッグで最大角度、±45度にクランプ")
+    func cropRotationFromDragMapsAndClamps() {
+        // バー幅300pt・最大45度 → バー幅の半分(150pt)動かすと最大角度(45度)に達する
+        let quarter = PlacementGesture.cropRotationFromDrag(
+            baseDegrees: 0, translationX: 150, barWidth: 300
+        )
+        #expect(abs(quarter - 45) < 1e-9)
+
+        // 逆方向も対称にクランプされる
+        let negative = PlacementGesture.cropRotationFromDrag(
+            baseDegrees: 0, translationX: -150, barWidth: 300
+        )
+        #expect(abs(negative - (-45)) < 1e-9)
+
+        // 範囲内では基準角度からの線形な加算
+        let mid = PlacementGesture.cropRotationFromDrag(
+            baseDegrees: 10, translationX: 30, barWidth: 300
+        )
+        #expect(abs(mid - 19) < 1e-9) // 10 + (30/300)*90
+
+        // 過大なドラッグでも±maxDegreesを超えない
+        let clamped = PlacementGesture.cropRotationFromDrag(
+            baseDegrees: 40, translationX: 1000, barWidth: 300
+        )
+        #expect(abs(clamped - 45) < 1e-9)
+
+        // バー幅0は基準角度をそのままクランプして返す（ゼロ除算を避ける）
+        let zeroWidth = PlacementGesture.cropRotationFromDrag(
+            baseDegrees: 60, translationX: 100, barWidth: 0
+        )
+        #expect(abs(zeroWidth - 45) < 1e-9)
+    }
 }

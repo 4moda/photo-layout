@@ -38,6 +38,7 @@ final class SwiftDataRepositoryTests: XCTestCase {
                     photo: PhotoRef(fileName: "a.jpg", pixelWidth: 4000, pixelHeight: 6000),
                     cropRect: LayoutRect(x: 0.1, y: 0.2, width: 0.5, height: 0.4),
                     destRect: LayoutRect(x: 0, y: 0, width: 1, height: 1),
+                    cropRotation: 12.5,
                     frameOverride: FramePreset.blackBackgroundWhiteBorder.photoFrame
                 ),
                 PlacementEntity(

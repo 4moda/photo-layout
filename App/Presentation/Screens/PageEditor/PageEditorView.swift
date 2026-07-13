@@ -35,6 +35,7 @@ struct PageEditorView: View {
     @State private var dragMode: SpreadDragMode?
     @State private var didInitialScroll = false
     private let controlsOverlayBaseHeight: CGFloat = 110
+    private let cropRotationBarHeight: CGFloat = 90
 
     private enum SpreadDragMode {
         case photo(id: UUID, isCrop: Bool, denom: CGSize)
@@ -69,6 +70,8 @@ struct PageEditorView: View {
             VStack(spacing: 10) {
                 if viewModel.cropModePlacementID == nil {
                     controls
+                } else {
+                    cropRotationBar
                 }
             }
             .padding(.bottom, 8)
@@ -253,11 +256,19 @@ struct PageEditorView: View {
                 width: fullWidth,
                 height: fullHeight
             )
+            // 回転の軸（枠=destRectの中心）を、フル画像フレーム内の相対位置（0..1）へ変換する。
+            // rotationEffectのanchorはposition()適用前のローカルフレーム基準の割合であるため、
+            // これによりCanvasRenderView/CoreGraphicsExportRendererと同じ回転軸で見た目が一致する
+            let rotationAnchor = UnitPoint(
+                x: (dest.midX - fullRect.minX) / fullRect.width,
+                y: (dest.midY - fullRect.minY) / fullRect.height
+            )
             ZStack(alignment: .topLeading) {
                 if let uiImage = viewModel.previewImages[cropID] {
                     Image(uiImage: uiImage)
                         .resizable()
                         .frame(width: fullRect.width, height: fullRect.height)
+                        .rotationEffect(.degrees(placement.cropRotation), anchor: rotationAnchor)
                         .position(x: fullRect.midX, y: fullRect.midY)
                 }
                 Path { path in
@@ -417,9 +428,10 @@ struct PageEditorView: View {
         panOffset = clampedPan(desired: centeredPan(geo: geo, zoom: zoom), geo: geo, zoom: zoom)
     }
 
-    /// クロップ中はフッターを表示しないため、その分キャンバスへ高さを回す
+    /// クロップ中はフッター（スライド/写真メニュー）の代わりに回転ドラッグバーだけを出すため、
+    /// その高さぶんだけキャンバスへ回す
     private func editorLayoutHeight(geo: GeometryProxy) -> CGFloat {
-        let reserved = viewModel.cropModePlacementID == nil ? controlsOverlayBaseHeight : 0
+        let reserved = viewModel.cropModePlacementID == nil ? controlsOverlayBaseHeight : cropRotationBarHeight
         return max(geo.size.height - reserved, 1)
     }
 
@@ -760,7 +772,8 @@ struct PageEditorView: View {
     // MARK: - コントロール（コンテキスト依存メニュー）
 
     /// 選択状態で出すメニューを切り替える（写真選択=写真メニュー / それ以外=スライド編集メニュー）。
-    /// クロップ中はフッター自体を出さない（`cropOverlay` が見た目を担い、枠外タップで完了する）
+    /// クロップ中はこのフッターの代わりに `cropRotationBar` を出す（`cropOverlay` が枠・スクリムの
+    /// 見た目を担い、枠外タップで完了する）
     @ViewBuilder
     private var controls: some View {
         Group {
@@ -780,6 +793,55 @@ struct PageEditorView: View {
         .shadow(color: .black.opacity(0.14), radius: 16, y: 8)
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
+    }
+
+    /// クロップ中の回転バー: 画面下の水平ドラッグでクロップ窓内の写真を回転する（枠自体は回転しない）。
+    /// Out of scope: これ以外の回転手段（キャンバス上の直接ジェスチャなど）は設けない
+    @ViewBuilder
+    private var cropRotationBar: some View {
+        if let cropID = viewModel.cropModePlacementID,
+           let placement = viewModel.project.placements.first(where: { $0.id == cropID }) {
+            VStack(spacing: 6) {
+                Text("\(Int(placement.cropRotation.rounded()))°")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.white)
+                GeometryReader { barGeo in
+                    ZStack {
+                        Capsule()
+                            .fill(Color.white.opacity(0.18))
+                            .frame(height: 6)
+                        Rectangle()
+                            .fill(Color.orange)
+                            .frame(width: 2, height: 20)
+                    }
+                    .frame(width: barGeo.size.width, height: barGeo.size.height)
+                    .contentShape(Rectangle())
+                    .gesture(cropRotationDragGesture(placementID: cropID, barWidth: barGeo.size.width))
+                }
+                .frame(height: 32)
+            }
+            .frame(maxWidth: 280)
+            .padding(.vertical, 10)
+            .padding(.horizontal, 20)
+            .background(.ultraThinMaterial, in: Capsule())
+            .padding(.bottom, 24)
+            .accessibilityIdentifier("pageEditor.cropRotationBar")
+        }
+    }
+
+    /// 回転バーの水平ドラッグ: 累積translationXをPlacementGesture.cropRotationFromDragへ渡す
+    private func cropRotationDragGesture(placementID: UUID, barWidth: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 1)
+            .onChanged { value in
+                viewModel.updateCropRotation(
+                    placementID: placementID,
+                    translationX: Double(value.translation.width),
+                    barWidth: Double(barWidth)
+                )
+            }
+            .onEnded { _ in
+                Task { await viewModel.endGesture() }
+            }
     }
 
     // MARK: - 下部ツールバーの共通部品（アイコン＋ラベル縦積み・横スクロールで崩れ防止）

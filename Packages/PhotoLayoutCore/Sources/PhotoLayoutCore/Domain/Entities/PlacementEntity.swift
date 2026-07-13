@@ -21,6 +21,9 @@ public struct PlacementEntity: Hashable, Codable, Sendable, Identifiable {
     /// 写真の表示矩形。スプレッド座標系（x=0..1が1ページ目、1..2が2ページ目…、y=0..1）。
     /// 枠（フレーム）はこの矩形に付く
     public var destRect: LayoutRect
+    /// クロップ窓内でサンプリングする画像の回転角度（度数法、時計回り、クロップ窓の中心軸）。
+    /// destRect（枠）自体は回転しない。デフォルト0＝回転なし（既存データの読み込み値）
+    public var cropRotation: Double
     /// nilならProject.defaultPhotoFrameを使う
     public var frameOverride: PhotoFrameStyle?
 
@@ -32,6 +35,7 @@ public struct PlacementEntity: Hashable, Codable, Sendable, Identifiable {
         photo: PhotoRef,
         cropRect: LayoutRect = .unit,
         destRect: LayoutRect,
+        cropRotation: Double = 0,
         frameOverride: PhotoFrameStyle? = nil
     ) {
         self.id = id
@@ -41,6 +45,7 @@ public struct PlacementEntity: Hashable, Codable, Sendable, Identifiable {
         self.photo = photo
         self.cropRect = cropRect
         self.destRect = destRect
+        self.cropRotation = cropRotation
         self.frameOverride = frameOverride
     }
 }

@@ -24,12 +24,13 @@ struct CanvasRenderView: View {
                 case .fillRect(let color, let rect):
                     context.fill(Path(cgRect(rect)), with: .color(swiftUIColor(color)))
 
-                case .drawImage(let placementID, _, let sourceRect, let destRect, let cornerRadiusPx):
+                case .drawImage(let placementID, _, let sourceRect, let destRect, let clipRect, let rotationDegrees, let cornerRadiusPx):
                     guard let uiImage = images[placementID] else { break }
-                    // sourceRect（元画像の正規化部分矩形）がdestRectへ写るよう、
-                    // フル画像をdestRectより大きい矩形へ描き、destRectでクリップする。
-                    // 書き出し側（ImageIODecoderのピクセルクロップ）と同じ写像の別実装。
+                    // sourceRect（元画像の正規化部分矩形・クロップ窓全体）がdestRectへ写るよう、
+                    // フル画像をdestRectより大きい矩形へ描き、clipRect（見える範囲）でクリップする。
+                    // 書き出し側（CoreGraphicsExportRenderer）と同じ写像の別実装。
                     let dest = cgRect(destRect)
+                    let clip = cgRect(clipRect)
                     let fullWidth = dest.width / sourceRect.width
                     let fullHeight = dest.height / sourceRect.height
                     let fullRect = CGRect(
@@ -39,7 +40,14 @@ struct CanvasRenderView: View {
                         height: fullHeight
                     )
                     var imageContext = context
-                    imageContext.clip(to: Path(roundedRect: dest, cornerRadius: cornerRadiusPx))
+                    imageContext.clip(to: Path(roundedRect: clip, cornerRadius: cornerRadiusPx))
+                    if rotationDegrees != 0 {
+                        // destRect（枠）自体は回転させず、その中心を軸にサンプリングする画素だけ回す
+                        let center = CGPoint(x: dest.midX, y: dest.midY)
+                        imageContext.translateBy(x: center.x, y: center.y)
+                        imageContext.rotate(by: .degrees(rotationDegrees))
+                        imageContext.translateBy(x: -center.x, y: -center.y)
+                    }
                     imageContext.draw(Image(uiImage: uiImage), in: fullRect)
 
                 case .strokeBorder(let color, let lineWidthPx, let cornerRadiusPx, let rect):

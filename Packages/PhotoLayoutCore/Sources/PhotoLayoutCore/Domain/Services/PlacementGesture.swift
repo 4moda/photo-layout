@@ -195,6 +195,20 @@ public enum PlacementGesture {
         return clampCropInsideSource(cropRect.scaled(by: scale))
     }
 
+    /// クロップモードの回転: 画面下の水平ドラッグバーの移動量から回転角度（度数法、時計回り）を計算する。
+    /// translationXはバー全体に対する累積ドラッグ量（pt）で、バー幅いっぱいのドラッグで
+    /// 最大角度の2倍（-maxDegrees〜+maxDegrees）動く。±maxDegreesにクランプし、傾け過ぎを防ぐ。
+    public static func cropRotationFromDrag(
+        baseDegrees: Double,
+        translationX: Double,
+        barWidth: Double,
+        maxDegrees: Double = 45
+    ) -> Double {
+        guard barWidth > 0 else { return min(max(baseDegrees, -maxDegrees), maxDegrees) }
+        let degrees = baseDegrees + (translationX / barWidth) * (maxDegrees * 2)
+        return min(max(degrees, -maxDegrees), maxDegrees)
+    }
+
     // MARK: - クランプ
 
     /// はみ出しは許可しつつ、配置領域(0..1)と最低限の重なりは維持する

@@ -27,18 +27,37 @@ final class CoreGraphicsExportRenderer: ImageExporting {
                     cg.setFillColor(uiColor(color).cgColor)
                     cg.fill(cgRect(rect))
 
-                case .drawImage(_, let photo, let sourceRect, let destRect, let cornerRadiusPx):
+                case .drawImage(_, let photo, let sourceRect, let destRect, let clipRect, let rotationDegrees, let cornerRadiusPx):
                     // 1枚ごとにデコード→描画→解放し、複数枚でもメモリを積み上げない
                     autoreleasepool {
-                        guard let cgImage = decoder.cgImage(
-                            photo: photo, sourceRect: sourceRect, maxPixelSize: nil
-                        ) else { return }
-                        cg.saveGState()
                         let dest = cgRect(destRect)
-                        if cornerRadiusPx > 0 {
-                            UIBezierPath(roundedRect: dest, cornerRadius: cornerRadiusPx).addClip()
+                        let clip = cgRect(clipRect)
+                        cg.saveGState()
+                        UIBezierPath(roundedRect: clip, cornerRadius: cornerRadiusPx).addClip()
+
+                        if rotationDegrees == 0 {
+                            // 回転なし: 従来どおり見える範囲だけをsourceRectから絞り込みデコードし、
+                            // clipへ直接描く（はみ出した分をデコード・描画しない効率経路）。
+                            // destRectはRenderPlanBuilderがwidth/height>0を保証済み
+                            let visibleSource = LayoutRect(
+                                x: sourceRect.x + (clipRect.x - destRect.x) / destRect.width * sourceRect.width,
+                                y: sourceRect.y + (clipRect.y - destRect.y) / destRect.height * sourceRect.height,
+                                width: clipRect.width / destRect.width * sourceRect.width,
+                                height: clipRect.height / destRect.height * sourceRect.height
+                            )
+                            if let cgImage = decoder.cgImage(photo: photo, sourceRect: visibleSource, maxPixelSize: nil) {
+                                UIImage(cgImage: cgImage).draw(in: clip)
+                            }
+                        } else {
+                            // 回転あり: クロップ窓全体をデコードし、destRectの中心を軸にCTMを回転させてから
+                            // 描く（destRect自体は回転しない・クリップ済みのclip内だけが実際に残る）
+                            if let cgImage = decoder.cgImage(photo: photo, sourceRect: sourceRect, maxPixelSize: nil) {
+                                cg.translateBy(x: dest.midX, y: dest.midY)
+                                cg.rotate(by: CGFloat(rotationDegrees * .pi / 180))
+                                cg.translateBy(x: -dest.midX, y: -dest.midY)
+                                UIImage(cgImage: cgImage).draw(in: dest)
+                            }
                         }
-                        UIImage(cgImage: cgImage).draw(in: dest)
                         cg.restoreGState()
                     }
 
