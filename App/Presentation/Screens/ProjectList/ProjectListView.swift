@@ -15,43 +15,39 @@ struct ProjectListView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            Group {
-                if viewModel.projects.isEmpty {
-                    ContentUnavailableView(
-                        "レイアウトがありません",
-                        systemImage: "rectangle.3.group",
-                        description: Text("＋で新しいレイアウトを作成")
-                    )
-                    .accessibilityIdentifier("projectList.empty")
-                } else {
-                    ScrollView {
-                        LazyVGrid(columns: Self.gridColumns, spacing: 12) {
-                            ForEach(viewModel.projects) { project in
-                                ProjectCell(
-                                    project: project,
-                                    thumbnailImages: viewModel.thumbnailImages(for: project),
-                                    onDelete: { Task { await viewModel.delete(id: project.id) } }
-                                )
+            ZStack(alignment: .bottom) {
+                Group {
+                    if viewModel.projects.isEmpty {
+                        ContentUnavailableView(
+                            "レイアウトがありません",
+                            systemImage: "rectangle.3.group",
+                            description: Text("＋で新しいレイアウトを作成")
+                        )
+                        .accessibilityIdentifier("projectList.empty")
+                    } else {
+                        ScrollView {
+                            LazyVGrid(columns: Self.gridColumns, spacing: 12) {
+                                ForEach(viewModel.projects) { project in
+                                    ProjectCell(
+                                        project: project,
+                                        thumbnailImages: viewModel.thumbnailImages(for: project),
+                                        onDelete: { Task { await viewModel.delete(id: project.id) } }
+                                    )
+                                }
                             }
+                            .padding(12)
+                            .padding(.bottom, 80)
                         }
-                        .padding(12)
+                        .accessibilityIdentifier("projectList.list")
                     }
-                    .accessibilityIdentifier("projectList.list")
                 }
+                .frame(maxHeight: .infinity)
+
+                bottomFloatingMenu
             }
             .navigationTitle("PhotoLayout")
             .navigationDestination(for: ProjectEntity.self) { project in
                 AppComposition.makePageEditor(project: project)
-            }
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showingNewProjectSheet = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .accessibilityIdentifier("projectList.add")
-                }
             }
             .sheet(isPresented: $showingNewProjectSheet) {
                 newProjectSheet
@@ -61,6 +57,42 @@ struct ProjectListView: View {
                 Task { await viewModel.load() }
             }
         }
+    }
+
+    /// 下部フローティングメニュー。`PageEditorView` の `slideControls` と同じ見た目
+    /// （`.ultraThinMaterial` の角丸カード＋中央の丸型アクセントカラー＋ボタン）で、
+    /// S02（スライド編集）と同じ位置・スタイルに統一する（一覧が空でも常時表示）。
+    private var bottomFloatingMenu: some View {
+        newProjectButton
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8)
+            )
+            .shadow(color: .black.opacity(0.14), radius: 16, y: 8)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+    }
+
+    private var newProjectButton: some View {
+        Button {
+            showingNewProjectSheet = true
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 52, height: 52)
+                .background(
+                    Circle()
+                        .fill(Color.accentColor)
+                )
+                .shadow(color: Color.accentColor.opacity(0.28), radius: 12, y: 4)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("projectList.add")
     }
 
     /// 新規作成は「用紙サイズ（キャンバスのアスペクト）」だけ選ぶ。SNS別のモードは持たず、
