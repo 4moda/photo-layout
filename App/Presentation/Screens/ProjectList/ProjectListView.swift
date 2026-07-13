@@ -4,6 +4,12 @@ import PhotoLayoutCore
 /// SCRL風のサムネイルグリッド（1行3枚前後）。ProjectCell/FolderCellで共有する。
 private let gridColumns = [GridItem(.adaptive(minimum: 108), spacing: 12)]
 
+/// 新規作成は「用紙サイズ（キャンバスのアスペクト）」だけ選ぶ。SNS別のモードは持たず、
+/// ラベルは用途のヒントに留める。枠付けもレイアウトも同じ汎用プロジェクトで行う。
+/// 「Recent」の新規作成とフォルダ詳細での新規作成の両方から使うため file scope に置く。
+private let canvasChoices: [(id: String, label: String, aspect: AspectRatio)] =
+    AspectRatioOption.orderedAll.map { ($0.rawValue, $0.label, $0.aspect) }
+
 /// S01の上部モード切替。「Recent」は既存の全プロジェクト一覧、「Folder」は作成済みフォルダの一覧。
 private enum ProjectListMode: String {
     case recent
@@ -54,11 +60,13 @@ struct ProjectListView: View {
                 case .project(let project):
                     AppComposition.makePageEditor(project: project)
                 case .folder(let folder):
-                    FolderDetailView(folder: folder, viewModel: viewModel)
+                    FolderDetailView(folder: folder, viewModel: viewModel, path: $path)
                 }
             }
             .sheet(isPresented: $showingNewProjectSheet) {
-                newProjectSheet
+                NewProjectAspectSheet { aspect in
+                    createAndOpen(aspect: aspect, title: nil)
+                }
             }
             .sheet(isPresented: $showingNewFolderSheet) {
                 newFolderSheet
@@ -249,24 +257,33 @@ struct ProjectListView: View {
         .presentationDetents([.medium])
     }
 
-    /// 新規作成は「用紙サイズ（キャンバスのアスペクト）」だけ選ぶ。SNS別のモードは持たず、
-    /// ラベルは用途のヒントに留める。枠付けもレイアウトも同じ汎用プロジェクトで行う。
-    private static let canvasChoices: [(id: String, label: String, aspect: AspectRatio)] =
-        AspectRatioOption.orderedAll.map { ($0.rawValue, $0.label, $0.aspect) }
+    private func createAndOpen(aspect: AspectRatio, title: String?) {
+        Task {
+            if let project = await viewModel.create(aspect: aspect, title: title) {
+                path.append(.project(project))
+            }
+        }
+    }
+}
 
-    /// 用紙サイズ選択シート。`PageEditorView` の枠比率シート（S02-F09）と同じグリッド形式で、
-    /// 比率をドロップダウンではなく形プレビューで見せる。
-    private var newProjectSheet: some View {
+/// 用紙サイズ選択シート。`PageEditorView` の枠比率シート（S02-F09）と同じグリッド形式で、
+/// 比率をドロップダウンではなく形プレビューで見せる。「Recent」の新規作成とフォルダ詳細
+/// （`FolderDetailView`）でのフォルダ内新規作成の両方から使う共通シート。
+private struct NewProjectAspectSheet: View {
+    let onSelect: (AspectRatio) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
         NavigationStack {
             ScrollView {
                 LazyVGrid(
                     columns: Array(repeating: GridItem(.flexible(), spacing: 16, alignment: .top), count: 3),
                     spacing: 16
                 ) {
-                    ForEach(Self.canvasChoices, id: \.id) { choice in
+                    ForEach(canvasChoices, id: \.id) { choice in
                         Button {
-                            showingNewProjectSheet = false
-                            createAndOpen(aspect: choice.aspect, title: nil)
+                            dismiss()
+                            onSelect(choice.aspect)
                         } label: {
                             VStack(spacing: 6) {
                                 AspectRatioSwatch(aspect: choice.aspect.ratio)
@@ -287,59 +304,99 @@ struct ProjectListView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") { showingNewProjectSheet = false }
+                    Button("キャンセル") { dismiss() }
                 }
             }
         }
         .presentationDetents([.medium, .large])
     }
-
-    private func createAndOpen(aspect: AspectRatio, title: String?) {
-        Task {
-            if let project = await viewModel.create(aspect: aspect, title: title) {
-                path.append(.project(project))
-            }
-        }
-    }
 }
 
 /// フォルダ詳細。そのフォルダの`folderID`を持つプロジェクトだけを既存の`ProjectCell`/グリッドで表示する。
+/// 下部フローティングの＋ボタンから、最初からこのフォルダに属する新規プロジェクトを作成できる
+/// （既存プロジェクトをフォルダへ移動する操作は別途スコープ外のまま。ここは新規作成時点での分類のみ）。
 private struct FolderDetailView: View {
     let folder: FolderEntity
     let viewModel: ProjectListViewModel
+    @Binding var path: [ProjectListRoute]
+    @State private var showingNewProjectSheet = false
 
     private var projects: [ProjectEntity] {
         viewModel.projects(inFolder: folder.id)
     }
 
     var body: some View {
-        Group {
-            if projects.isEmpty {
-                ContentUnavailableView(
-                    "このフォルダにはレイアウトがありません",
-                    systemImage: "folder",
-                    description: Text("プロジェクトをこのフォルダへ移動すると、ここに表示されます")
-                )
-                .accessibilityIdentifier("projectList.folderDetail.empty")
-            } else {
-                ScrollView {
-                    LazyVGrid(columns: gridColumns, spacing: 12) {
-                        ForEach(projects) { project in
-                            ProjectCell(
-                                project: project,
-                                thumbnailImages: viewModel.thumbnailImages(for: project),
-                                onDelete: { Task { await viewModel.delete(id: project.id) } }
-                            )
+        ZStack(alignment: .bottom) {
+            Group {
+                if projects.isEmpty {
+                    ContentUnavailableView(
+                        "このフォルダにはレイアウトがありません",
+                        systemImage: "folder",
+                        description: Text("＋でこのフォルダに新しいレイアウトを作成、またはプロジェクトをこのフォルダへ移動すると、ここに表示されます")
+                    )
+                    .accessibilityIdentifier("projectList.folderDetail.empty")
+                } else {
+                    ScrollView {
+                        LazyVGrid(columns: gridColumns, spacing: 12) {
+                            ForEach(projects) { project in
+                                ProjectCell(
+                                    project: project,
+                                    thumbnailImages: viewModel.thumbnailImages(for: project),
+                                    onDelete: { Task { await viewModel.delete(id: project.id) } }
+                                )
+                            }
                         }
+                        .padding(12)
+                        .padding(.bottom, 80)
                     }
-                    .padding(12)
-                    .padding(.bottom, 24)
+                    .accessibilityIdentifier("projectList.folderDetail.list")
                 }
-                .accessibilityIdentifier("projectList.folderDetail.list")
             }
+            .frame(maxHeight: .infinity)
+
+            newProjectButton
         }
         .navigationTitle(folder.name)
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showingNewProjectSheet) {
+            NewProjectAspectSheet { aspect in
+                createAndOpen(aspect: aspect)
+            }
+        }
+    }
+
+    /// `ProjectListView.bottomFloatingMenu`と同じ見た目・位置の＋のみの版。フォルダ作成ボタンは
+    /// ここでは不要（既にフォルダの中にいるため）。
+    private var newProjectButton: some View {
+        Button {
+            showingNewProjectSheet = true
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 52, height: 52)
+                .background(Circle().fill(Color.accentColor))
+                .shadow(color: Color.accentColor.opacity(0.28), radius: 12, y: 4)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .padding(10)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8)
+        )
+        .shadow(color: .black.opacity(0.14), radius: 16, y: 8)
+        .padding(.bottom, 8)
+        .accessibilityIdentifier("projectList.folderDetail.add")
+    }
+
+    private func createAndOpen(aspect: AspectRatio) {
+        Task {
+            if let project = await viewModel.create(aspect: aspect, title: nil, folderID: folder.id) {
+                path.append(.project(project))
+            }
+        }
     }
 }
 
