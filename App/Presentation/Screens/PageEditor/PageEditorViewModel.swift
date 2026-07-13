@@ -86,6 +86,9 @@ final class PageEditorViewModel {
     /// 選択中の写真の現在の枠（縁）。`nil` は「なし」を表す（未選択の場合もnil）
     var currentFrameOverride: PhotoFrameStyle? { selectedPlacement?.frameOverride }
 
+    /// 選択中の写真がロック中か（未選択ならfalse）
+    var isSelectedPhotoLocked: Bool { selectedPlacement?.isLocked ?? false }
+
     /// 現在ページに敷かれているテンプレートのid（型枠未適用、またはどのテンプレートとも一致しなければnil）
     var currentTemplateID: String? {
         guard let slots = page?.slots else { return nil }
@@ -247,6 +250,14 @@ final class PageEditorViewModel {
         await persist()
     }
 
+    /// ロック/解除を切り替える（写真選択メニュー・レイヤーシート両方から呼ぶ）
+    func toggleLock(placementID: UUID) async {
+        guard let placement = project.placements.first(where: { $0.id == placementID }) else { return }
+        record()
+        project.setPlacementLocked(!placement.isLocked, placementID: placementID)
+        await persist(refreshImages: false)
+    }
+
     // MARK: - ジェスチャ（PlacementGesture/SnapEngineの純粋計算をproject状態へ適用する）
 
     /// 指定点（配置領域の正規化座標）にある最前面の配置を返す。
@@ -307,9 +318,14 @@ final class PageEditorViewModel {
         await persist(refreshImages: false)
     }
 
-    /// ダブルタップ: クロップモードの入/切
+    /// ダブルタップ: クロップモードの入/切。ロック中の写真は選択のみ行い、クロップモードには入らない
     func toggleCropMode(_ placementID: UUID) {
         selectedPlacementID = placementID
+        guard let placement = project.placements.first(where: { $0.id == placementID }),
+              placement.allowsGeometryGesture else {
+            cropModePlacementID = nil
+            return
+        }
         cropModePlacementID = (cropModePlacementID == placementID) ? nil : placementID
     }
 
@@ -412,9 +428,13 @@ final class PageEditorViewModel {
         await persist(refreshImages: false)
     }
 
+    /// ジェスチャ対象のスナップショットを返す。ロック中の写真はジオメトリ操作を許可しないため
+    /// nilを返し、呼び出し側（PlacementGesture.*の各エントリポイント）はそのまま何もしない
     private func basePlacement(_ placementID: UUID) -> PlacementEntity? {
         if gestureBase == nil { gestureBase = project }
-        return gestureBase?.placements.first { $0.id == placementID }
+        guard let base = gestureBase?.placements.first(where: { $0.id == placementID }),
+              base.allowsGeometryGesture else { return nil }
+        return base
     }
 
     private func setDestRect(_ rect: LayoutRect, for placementID: UUID) {
