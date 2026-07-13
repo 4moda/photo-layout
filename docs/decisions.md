@@ -62,7 +62,9 @@
 
 ### CIスクショ撮影にテーマ軸（ライト/ダーク）を追加・machine×themeへmatrix拡張（2026-07-12）
 
-`ScreenshotSmokeTests.swift` にダークモード専用の1テストメソッド `testDarkModeSpotCheck`（S01〜S04を各1枚、`XCUIDevice.shared.appearance = .dark` でシミュレータの外観を切り替えて起動。App層には手を入れない）を追加。スクショ名は既存のライト版と同じベース名に `-dark` サフィックスを付けるだけ（例: `S01-F01-project-list-populated-dark`）で、`ja-JP/` フラットのまま既存の命名規約に乗せる。
+`ScreenshotSmokeTests.swift` にダークモード専用の1テストメソッド `testDarkModeSpotCheck`（S01〜S04を各1枚）を追加。スクショ名は既存のライト版と同じベース名に `-dark` サフィックスを付けるだけ（例: `S01-F01-project-list-populated-dark`）で、`ja-JP/` フラットのまま既存の命名規約に乗せる。
+
+> **訂正（2026-07-13、[#43](https://github.com/4moda/photo-layout/issues/43)）**: 当初はシミュレータの外観切り替えをテスト内 `XCUIDevice.shared.appearance = .dark`（`makeApp(dark:)`）で行っていたが、この方式は `xcodebuild test-without-building`（本リポジトリのCI構成）経由では反映されず、dark legのスクショが実際にはライト外観のまま撮れていた。fastlane snapshot自身の `dark_mode` Snapfileオプション（アプリ起動前にテストプロセス外でシミュレータのpreferenceファイルを書き換える、`test_without_building` の制限を受けない仕組み）に切り替え、`SNAPSHOT_DARK_MODE` 環境変数（`SNAPSHOT_DEVICES`等と同じ読み取りパターン）で `screenshots` ジョブの `matrix.theme` から渡す形にした。`makeApp` の `dark` パラメータと `XCUIDevice.shared.appearance` 呼び出しは削除（下記「廃止した設計」参照）。「テスト側だけで完結し、App層には手を入れない」という設計判断自体は維持している。
 
 - **並列化**: 当初は同じ `fastlane snapshot` 1回の実行にダークテストも含める案（ワークフロー変更なし）を検討したが、実行時間を鑑みてオーナーから「機種と同様に並列にしてほしい」という指示があり、`screenshots` ジョブの matrix を `device` だけから `device × theme` に拡張した（2機種×2テーマ=4並列ジョブ）。GitHub Actionsは複数のmatrix軸を書くと自動でクロス積になる。
 - **テストの絞り込み**: `Snapfile` に `SNAPSHOT_ONLY_TESTING` / `SNAPSHOT_SKIP_TESTING`（カンマ区切り、空文字は未指定扱い）を追加。light legは `testDarkModeSpotCheck` だけを `skip_testing` で除外して残り全部を撮り、dark legは逆に `only_testing` でそのメソッドだけに絞る。ビルド成果物（`build-products` artifact）はテーマに依存しないため、4 leg 全てが同じものを再利用する（再ビルドなし）。
@@ -115,6 +117,7 @@ Issue/PR 単位をやめ、動く段階まで仕上げて main へ直接コミ�
 | 3状態メニュー（写真/ページ/無選択を区別） | 2状態（写真選択か否か） | 写真が乗ったページは選択できず操作が不明瞭。状態を減らし直感性優先 |
 | 写真メニューの多項目（全面/マット等） | 枠比率 / クロップ / 枠 / 削除 に集約 | 文字説明が要るUIを避ける。前面/背面はレイヤー順シートへ、差し替えは廃止 |
 | ページ単位の背景設定UI | プロジェクト共通背景（俯瞰・新規作成） | 「枠＝写真単位」「背景＝プロジェクト単位」で責務分離。混在をやめる |
+| テスト内 `XCUIDevice.shared.appearance = .dark`（`makeApp(dark:)`） | fastlane snapshotの `dark_mode` Snapfileオプション（`SNAPSHOT_DARK_MODE`） | `xcodebuild test-without-building` 経由のCI実行では反映されず、dark legのスクショが実際にはライト外観のまま撮れていた（[#43](https://github.com/4moda/photo-layout/issues/43)） |
 | 一覧のレイアウト名表示 | サムネイルのみ（SCRL 風グリッド） | 名前より中身（1ページ目プレビュー）で識別するほうが速い |
 | ダウンロード即保存 | プレビュー画面（`PreviewView`）を挟む | 書き出し前に全スライドの仕上がりを確認できるようにする |
 

@@ -271,7 +271,10 @@ struct PageOverviewView: View {
     private var ratioPickerSheet: some View {
         NavigationStack {
             ScrollView {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 3), spacing: 16) {
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: 16, alignment: .top), count: 3),
+                    spacing: 16
+                ) {
                     ForEach(Self.aspectChoices, id: \.label) { choice in
                         Button {
                             viewModel.overviewSetAspect(choice.aspect)
@@ -286,6 +289,8 @@ struct PageOverviewView: View {
                                 Text(choice.label)
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.7)
                             }
                         }
                         .buttonStyle(.plain)

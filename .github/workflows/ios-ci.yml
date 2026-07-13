@@ -147,16 +147,21 @@ jobs:
           - name: light
             onlyTesting: ""
             skipTesting: PhotoLayoutUITests/ScreenshotSmokeTests/testDarkModeSpotCheck
+            darkMode: "false"
           # dark: 逆にそのメソッドだけを撮る（他の軽量な巡回テストは走らせない）。
+          # シミュレータの外観自体もfastlane snapshotのdark_modeオプションで切り替える
+          # （テストプロセス内からのXCUIDevice切り替えはtest_without_building経由では効かないため）。
           - name: dark
             onlyTesting: PhotoLayoutUITests/ScreenshotSmokeTests/testDarkModeSpotCheck
             skipTesting: ""
+            darkMode: "true"
     env:
       # DEVELOPER_DIRはworkflow直下のenv(Xcode 16.4固定)をそのまま継承する。
       # Snapfile側でこれらの環境変数を読み、このジョブが担当する機種・テストだけに絞り込む。
       SNAPSHOT_DEVICES: ${{ matrix.device.name }}
       SNAPSHOT_ONLY_TESTING: ${{ matrix.theme.onlyTesting }}
       SNAPSHOT_SKIP_TESTING: ${{ matrix.theme.skipTesting }}
+      SNAPSHOT_DARK_MODE: ${{ matrix.theme.darkMode }}
     steps:
       - uses: actions/checkout@v4
 

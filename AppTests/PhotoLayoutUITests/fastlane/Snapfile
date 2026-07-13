@@ -34,6 +34,12 @@ if (skip = env_list("SNAPSHOT_SKIP_TESTING"))
   skip_testing(skip)
 end
 
+# シミュレータの外観（ライト/ダーク）。テストプロセス内からの `XCUIDevice.shared.appearance`
+# 切り替えは `test_without_building` 経由のCI実行では効かないため、fastlane snapshot自身が
+# アプリ起動前にシミュレータのpreferenceファイルへ直接書き込む dark_mode オプションを使う。
+# SNAPSHOT_DARK_MODE（"true"のときのみダーク）。未設定時（ローカル実行）はライトのまま。
+dark_mode(ENV["SNAPSHOT_DARK_MODE"] == "true")
+
 # 出力はこのツール群と同じ場所（AppTests/PhotoLayoutUITests/fastlane/screenshots）
 output_directory("./fastlane/screenshots")
 clear_previous_screenshots(true)
