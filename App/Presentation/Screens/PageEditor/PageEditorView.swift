@@ -924,7 +924,7 @@ struct PageEditorView: View {
         return !Self.frameAspectChoices.contains { abs($0.pixelAspect - current) < Self.frameAspectTolerance }
     }
 
-    /// 写真選択中のメニュー（枠比率 / クロップ / 枠 / ロック切替 / 削除）。
+    /// 写真選択中のメニュー（枠比率 / クロップ / 枠 / ロック切替 / 複製 / 削除）。
     /// 前面/背面はページ選択の「レイヤー」に集約、差し替えは廃止。移動/拡縮はドラッグ。
     /// ロック中はクロップ・削除がdisabled（Coreの`removePlacement`/ジェスチャガードと二重に防御）。
     private var photoControls: some View {
@@ -955,6 +955,12 @@ struct PageEditorView: View {
             ) {
                 if let id = viewModel.selectedPlacementID {
                     Task { await viewModel.toggleLock(placementID: id) }
+                }
+            }
+
+            toolButton("複製", systemImage: "plus.square.on.square", identifier: "pageEditor.duplicateButton") {
+                if let id = viewModel.selectedPlacementID {
+                    Task { await viewModel.duplicatePlacement(placementID: id) }
                 }
             }
 
@@ -1085,6 +1091,10 @@ struct PageEditorView: View {
                         }
                         .buttonStyle(.borderless)
                         .tint(placement.isLocked ? .accentColor : .secondary)
+                        Button { Task { await viewModel.duplicatePlacement(placementID: placement.id) } } label: {
+                            Image(systemName: "plus.square.on.square")
+                        }
+                        .buttonStyle(.borderless)
                         Button { Task { await viewModel.bringForward(placementID: placement.id) } } label: {
                             Image(systemName: "chevron.up")
                         }

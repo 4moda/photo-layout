@@ -196,6 +196,36 @@ extension ProjectEntity {
         }
     }
 
+    /// 配置（写真1枚）を複製し、複製元の直後（重なり順で1段前面）に挿入する。
+    /// 写真選択メニュー・レイヤーシート両方から呼ぶ。
+    /// `photo`/`cropRect`はそのまま複製し、`destRect`は`addPhoto`のカスケード配置と同じ考え方で
+    /// 軽微にオフセットして完全な重なりを避ける。
+    /// 複製元が`slotIndex != nil`（スロット拘束）の場合、スロットは1つにつき1配置が前提
+    /// （`assignPhoto`/`emptySlotIndices`/`applyTemplate`）のため、複製後は自由配置（`slotIndex = nil`）
+    /// にする。複製元は元のスロットに残る。
+    /// - Returns: 複製後の配置のid（呼び出し側が選択状態にするために使う）。複製元が存在しなければnil
+    @discardableResult
+    public mutating func duplicatePlacement(placementID: UUID) -> UUID? {
+        guard let source = placements.first(where: { $0.id == placementID }) else { return nil }
+        let newSortIndex = source.sortIndex + 1
+        for index in placements.indices where placements[index].sortIndex >= newSortIndex {
+            placements[index].sortIndex += 1
+        }
+        let shift = Double(placements(onPage: source.pageIndex).count % 5) * 0.05
+        var copy = source
+        copy.id = UUID()
+        copy.sortIndex = newSortIndex
+        copy.slotIndex = nil
+        copy.destRect = LayoutRect(
+            x: source.destRect.x + shift,
+            y: source.destRect.y + shift,
+            width: source.destRect.width,
+            height: source.destRect.height
+        )
+        placements.append(copy)
+        return copy.id
+    }
+
     /// 指定スライドの背景/余白と枠プリセットを設定する（「ページ選択」メニュー用・そのページだけ）。
     public mutating func setPageStyle(_ preset: FramePreset, pageIndex: Int) {
         guard let idx = pages.firstIndex(where: { $0.index == pageIndex }) else { return }
