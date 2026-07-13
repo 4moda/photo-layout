@@ -178,15 +178,18 @@ final class ScreenshotSmokeTests: XCTestCase {
             snapshot("S02-undo-redo-active")
         }
 
-        if app.buttons["pageEditor.cropButton"].waitForExistence(timeout: 3) {
-            app.buttons["pageEditor.cropButton"].tap()
-            if app.buttons["pageEditor.cropDone"].waitForExistence(timeout: 3) {
-                sleep(1)
-                snapshot("S02-F10-crop-mode")
-                app.buttons["pageEditor.cropDone"].tap()
-                sleep(1)
-            }
-        }
+        XCTAssertTrue(app.buttons["pageEditor.cropButton"].waitForExistence(timeout: 3), "クロップボタンが無い")
+        app.buttons["pageEditor.cropButton"].tap()
+        XCTAssertTrue(app.otherElements["pageEditor.cropOverlay"].waitForExistence(timeout: 3), "クロップオーバーレイが表示されない")
+        // このデモ写真は3000x2000（3:2）だが、直前に枠比率を4:5へ変更済みのため、
+        // クロップ窓の幅は元画像の約53%まで既に狭まっている（CropMath.subCrop）。
+        // 枠外を暗くする効果を出すのに追加のズーム操作は不要（かつXCUITestの合成ピンチは
+        // シミュレータ上での再現性が不確実なため、確実な状態にだけ依存する）。
+        sleep(1)
+        snapshot("S02-F10-crop-mode")
+        // 枠外（キャンバス隅の暗い地）をタップしてクロップモードを抜ける（フッターの完了ボタンは廃止済み）
+        canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: 0.03)).tap()
+        sleep(1)
 
         if app.buttons["pageEditor.frameButton"].waitForExistence(timeout: 3) {
             app.buttons["pageEditor.frameButton"].tap()
