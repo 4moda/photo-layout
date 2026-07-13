@@ -35,7 +35,6 @@ struct PageEditorView: View {
     @State private var dragMode: SpreadDragMode?
     @State private var didInitialScroll = false
     private let controlsOverlayBaseHeight: CGFloat = 110
-    private let cropHintHeight: CGFloat = 34
 
     private enum SpreadDragMode {
         case photo(id: UUID, isCrop: Bool, denom: CGSize)
@@ -68,18 +67,9 @@ struct PageEditorView: View {
                 }
 
             VStack(spacing: 10) {
-                if viewModel.cropModePlacementID != nil {
-                    Text("クロップ調整中 — ドラッグ/ピンチで位置と拡大を変更、枠の外をタップで完了")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .overlay(Capsule().strokeBorder(Color.orange.opacity(0.25), lineWidth: 0.8))
-                        .accessibilityIdentifier("pageEditor.cropModeHint")
+                if viewModel.cropModePlacementID == nil {
+                    controls
                 }
-
-                controls
             }
             .padding(.bottom, 8)
             // フッターのビジュアル選択シート（1枚に集約）
@@ -219,25 +209,104 @@ struct PageEditorView: View {
             .onChange(of: viewModel.currentPageIndex) { _, _ in
                 withAnimation(.easeInOut(duration: 0.2)) { resetView(geo: geo) }
             }
+            .overlay(cropOverlay(geo: geo, stripHeight: stripHeight))
         }
     }
 
-    /// 選択中の配置の枠・ハンドル・スナップガイド（スプレッド座標）
+    /// 選択中の配置の枠・ハンドル・スナップガイド（スプレッド座標）。クロップ中は `cropOverlay` が見た目を担うので出さない
     @ViewBuilder
     private func stripSelectionOverlay(stripHeight: CGFloat) -> some View {
         if let contentStrip = selectedContentRectInStrip(stripHeight: stripHeight),
            let selectedID = viewModel.selectedPlacementID,
-           let placement = viewModel.project.placements.first(where: { $0.id == selectedID }) {
+           let placement = viewModel.project.placements.first(where: { $0.id == selectedID }),
+           viewModel.cropModePlacementID != selectedID {
             let rect = PageGeometry.imageRect(destRect: placement.destRect, in: contentStrip)
-            selectionChrome(
-                rect: rect,
-                contentRect: contentStrip,
-                isCrop: viewModel.cropModePlacementID == selectedID,
-                placementID: selectedID
-            )
+            selectionChrome(rect: rect, contentRect: contentStrip, placementID: selectedID)
             ForEach(Array(viewModel.activeGuides.enumerated()), id: \.offset) { _, guide in
                 guideLine(guide, contentRect: contentStrip)
             }
+        }
+    }
+
+    /// クロップモード中のオーバーレイ: 元画像全体をレイアウト画面に重ねて表示し、
+    /// クロップ枠の外側を暗いスクリムで覆う（内側は現状通り鮮明）。
+    /// パン/ピンチのジェスチャは下のキャンバスがそのまま受けるので、このレイヤー自体はヒットテストを持たない。
+    @ViewBuilder
+    private func cropOverlay(geo: GeometryProxy, stripHeight: CGFloat) -> some View {
+        if let cropID = viewModel.cropModePlacementID,
+           let placement = viewModel.project.placements.first(where: { $0.id == cropID }),
+           let contentStrip = contentRectInStrip(pageIndex: placement.pageIndex, stripHeight: stripHeight) {
+            let window = PageGeometry.imageRect(destRect: placement.destRect, in: contentStrip)
+            let dest = CGRect(
+                x: window.x + panOffset.width,
+                y: window.y + panOffset.height,
+                width: window.width,
+                height: window.height
+            )
+            // フル画像がdestRectへ写る拡大率（CanvasRenderViewのdrawImage写像と同じ式）
+            let source = placement.cropRect
+            let fullWidth = dest.width / source.width
+            let fullHeight = dest.height / source.height
+            let fullRect = CGRect(
+                x: dest.minX - source.x * fullWidth,
+                y: dest.minY - source.y * fullHeight,
+                width: fullWidth,
+                height: fullHeight
+            )
+            ZStack(alignment: .topLeading) {
+                if let uiImage = viewModel.previewImages[cropID] {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .frame(width: fullRect.width, height: fullRect.height)
+                        .position(x: fullRect.midX, y: fullRect.midY)
+                }
+                Path { path in
+                    path.addRect(CGRect(origin: .zero, size: geo.size))
+                    path.addRect(dest)
+                }
+                .fill(Color.black.opacity(0.65), style: FillStyle(eoFill: true))
+                cropFrameChrome(rect: dest)
+            }
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
+            .clipped()
+            .allowsHitTesting(false)
+            .accessibilityIdentifier("pageEditor.cropOverlay")
+        }
+    }
+
+    /// クロップ枠の角・辺ハンドル（見た目のみ・既存selectionChromeの意匠を流用）。
+    /// パン/ズームは写真自体のドラッグ/ピンチで行うため、ここにはジェスチャを付けない
+    @ViewBuilder
+    private func cropFrameChrome(rect: CGRect) -> some View {
+        Rectangle()
+            .stroke(Color.orange, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+            .frame(width: rect.width, height: rect.height)
+            .position(x: rect.midX, y: rect.midY)
+
+        let corners = [
+            CGPoint(x: rect.minX, y: rect.minY), CGPoint(x: rect.maxX, y: rect.minY),
+            CGPoint(x: rect.minX, y: rect.maxY), CGPoint(x: rect.maxX, y: rect.maxY)
+        ]
+        ForEach(Array(corners.enumerated()), id: \.offset) { _, point in
+            ZStack {
+                Circle().fill(Color.white)
+                Circle().stroke(Color.orange, lineWidth: 2)
+            }
+            .frame(width: 16, height: 16)
+            .position(point)
+        }
+
+        let edges: [(point: CGPoint, vertical: Bool)] = [
+            (CGPoint(x: rect.midX, y: rect.minY), false), (CGPoint(x: rect.midX, y: rect.maxY), false),
+            (CGPoint(x: rect.minX, y: rect.midY), true), (CGPoint(x: rect.maxX, y: rect.midY), true)
+        ]
+        ForEach(Array(edges.enumerated()), id: \.offset) { _, edge in
+            ZStack {
+                Capsule().fill(Color.white)
+                Capsule().stroke(Color.orange, lineWidth: 2)
+            }
+            .frame(width: edge.vertical ? 8 : 20, height: edge.vertical ? 20 : 8)
+            .position(edge.point)
         }
     }
 
@@ -348,12 +417,10 @@ struct PageEditorView: View {
         panOffset = clampedPan(desired: centeredPan(geo: geo, zoom: zoom), geo: geo, zoom: zoom)
     }
 
+    /// クロップ中はフッターを表示しないため、その分キャンバスへ高さを回す
     private func editorLayoutHeight(geo: GeometryProxy) -> CGFloat {
-        max(geo.size.height - controlsOverlayBaseHeight - cropHintInset, 1)
-    }
-
-    private var cropHintInset: CGFloat {
-        viewModel.cropModePlacementID == nil ? 0 : cropHintHeight
+        let reserved = viewModel.cropModePlacementID == nil ? controlsOverlayBaseHeight : 0
+        return max(geo.size.height - reserved, 1)
     }
 
     /// パンの可動域: キャンバスがビューポートより小さい軸は中央固定、大きい軸は端まで
@@ -582,41 +649,38 @@ struct PageEditorView: View {
 
     /// 選択枠＋四隅ハンドル（対角固定・アスペクト固定拡縮）＋辺ハンドル（枠アスペクト変更）
     @ViewBuilder
-    private func selectionChrome(rect: LayoutRect, contentRect: LayoutRect, isCrop: Bool, placementID: UUID) -> some View {
-        let color: Color = isCrop ? .orange : .accentColor
+    private func selectionChrome(rect: LayoutRect, contentRect: LayoutRect, placementID: UUID) -> some View {
         Rectangle()
-            .stroke(color, style: StrokeStyle(lineWidth: 2, dash: isCrop ? [6, 4] : []))
+            .stroke(Color.accentColor, lineWidth: 2)
             .frame(width: rect.width, height: rect.height)
             .position(x: rect.midX, y: rect.midY)
             .allowsHitTesting(false)
-        if !isCrop {
-            // 角: 対角アンカーのアスペクト固定拡縮
-            ForEach(Array(Self.cornerOrder.enumerated()), id: \.offset) { _, corner in
-                ZStack {
-                    Circle().fill(Color.white)
-                    Circle().stroke(color, lineWidth: 2)
-                }
-                .frame(width: 16, height: 16)
-                .contentShape(Circle().scale(2)) // 指で掴みやすいよう当たり判定を広げる
-                .position(cornerPoint(corner, of: rect))
-                .gesture(cornerHandleGesture(
-                    placementID: placementID,
-                    handle: cornerPoint(corner, of: rect),
-                    anchor: cornerPoint(corner.opposite, of: rect)
-                ))
+        // 角: 対角アンカーのアスペクト固定拡縮
+        ForEach(Array(Self.cornerOrder.enumerated()), id: \.offset) { _, corner in
+            ZStack {
+                Circle().fill(Color.white)
+                Circle().stroke(Color.accentColor, lineWidth: 2)
             }
-            // 辺: 枠アスペクト変更（画像は歪まずクロップ窓が変わる）
-            ForEach(Array(Self.edgeOrder.enumerated()), id: \.offset) { _, edge in
-                let vertical = (edge == .leading || edge == .trailing)
-                ZStack {
-                    Capsule().fill(Color.white)
-                    Capsule().stroke(color, lineWidth: 2)
-                }
-                .frame(width: vertical ? 8 : 20, height: vertical ? 20 : 8)
-                .contentShape(Rectangle().scale(2.5))
-                .position(edgePoint(edge, of: rect))
-                .gesture(edgeHandleGesture(placementID: placementID, edge: edge, contentRect: contentRect))
+            .frame(width: 16, height: 16)
+            .contentShape(Circle().scale(2)) // 指で掴みやすいよう当たり判定を広げる
+            .position(cornerPoint(corner, of: rect))
+            .gesture(cornerHandleGesture(
+                placementID: placementID,
+                handle: cornerPoint(corner, of: rect),
+                anchor: cornerPoint(corner.opposite, of: rect)
+            ))
+        }
+        // 辺: 枠アスペクト変更（画像は歪まずクロップ窓が変わる）
+        ForEach(Array(Self.edgeOrder.enumerated()), id: \.offset) { _, edge in
+            let vertical = (edge == .leading || edge == .trailing)
+            ZStack {
+                Capsule().fill(Color.white)
+                Capsule().stroke(Color.accentColor, lineWidth: 2)
             }
+            .frame(width: vertical ? 8 : 20, height: vertical ? 20 : 8)
+            .contentShape(Rectangle().scale(2.5))
+            .position(edgePoint(edge, of: rect))
+            .gesture(edgeHandleGesture(placementID: placementID, edge: edge, contentRect: contentRect))
         }
     }
 
@@ -695,14 +759,12 @@ struct PageEditorView: View {
 
     // MARK: - コントロール（コンテキスト依存メニュー）
 
-    /// 選択状態で出すメニューを切り替える（2状態）:
-    /// クロップ中=完了のみ / 写真選択=写真メニュー / それ以外=スライド編集メニュー
+    /// 選択状態で出すメニューを切り替える（写真選択=写真メニュー / それ以外=スライド編集メニュー）。
+    /// クロップ中はフッター自体を出さない（`cropOverlay` が見た目を担い、枠外タップで完了する）
     @ViewBuilder
     private var controls: some View {
         Group {
-            if viewModel.cropModePlacementID != nil {
-                cropControls
-            } else if viewModel.selectedPlacementID != nil {
+            if viewModel.selectedPlacementID != nil {
                 photoControls
             } else {
                 slideControls
@@ -718,16 +780,6 @@ struct PageEditorView: View {
         .shadow(color: .black.opacity(0.14), radius: 16, y: 8)
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
-    }
-
-    private var cropControls: some View {
-        Button {
-            viewModel.exitCropMode()
-        } label: {
-            Label("クロップ完了", systemImage: "checkmark")
-        }
-        .buttonStyle(.borderedProminent)
-        .accessibilityIdentifier("pageEditor.cropDone")
     }
 
     // MARK: - 下部ツールバーの共通部品（アイコン＋ラベル縦積み・横スクロールで崩れ防止）

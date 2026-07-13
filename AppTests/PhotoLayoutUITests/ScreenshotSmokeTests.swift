@@ -183,10 +183,11 @@ final class ScreenshotSmokeTests: XCTestCase {
 
         if app.buttons["pageEditor.cropButton"].waitForExistence(timeout: 3) {
             app.buttons["pageEditor.cropButton"].tap()
-            if app.buttons["pageEditor.cropDone"].waitForExistence(timeout: 3) {
+            if app.otherElements["pageEditor.cropOverlay"].waitForExistence(timeout: 3) {
                 sleep(1)
                 snapshot("S02-F10-crop-mode")
-                app.buttons["pageEditor.cropDone"].tap()
+                // 枠外（キャンバス隅の暗い地）をタップしてクロップモードを抜ける（フッターの完了ボタンは廃止済み）
+                canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: 0.03)).tap()
                 sleep(1)
             }
         }
