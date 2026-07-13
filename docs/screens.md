@@ -57,6 +57,8 @@ fastlane snapshot の出力ファイルは安全なASCII名の
 
 ## S01 プロジェクト一覧 (`ProjectListView`)
 
+上部に「Recent」「Folder」のモード切替（手組みの2セグメント）を持つ。「Recent」は既存の全プロジェクトを更新日時順で表示するフラット一覧（本機能追加前と挙動は同じ）。「Folder」は作成済みフォルダの一覧で、フォルダをタップするとそのフォルダの`folderID`を持つプロジェクトだけを同じ`ProjectCell`/グリッドで表示する詳細画面へ遷移する（フォルダ未分類のプロジェクトは「Folder」モードには出ない）。
+
 ### 状態
 
 | 状態ID | 状態 | 撮 |
@@ -65,10 +67,20 @@ fastlane snapshot の出力ファイルは安全なASCII名の
 | S01-b | 一覧（複数プロジェクト・サムネイルグリッド） | `S01-F01-project-list-populated` |
 | S01-c | セル: 単一ページ（サムネイルのみ） | （S01-bに含む） |
 | S01-d | セル: 複数ページ（右下に「Nページ」バッジ） | （S01-bに含む） |
+| S01-e | Folderモード: フォルダ一覧（作成済みフォルダをグリッド表示） | `S01-F13-folder-list-populated` |
+| S01-f | Folderモード: 空状態（フォルダなし） | |
+| S01-g | フォルダ詳細（そのフォルダのプロジェクトのみをグリッド表示） | `S01-F16-folder-detail-populated` |
+| S01-h | フォルダ詳細: 空状態（フォルダ内に0件） | `S01-F16-folder-detail-empty-state` |
 
 ### 操作・機能
 
-下部フローティングメニュー（S02 `PageEditorView` の `slideControls` と同じ位置・見た目。一覧が空でも1件以上でも常時表示。ナビゲーションバー右上には＋を置かない）:
+上部モード切替:
+
+| 機能ID | 操作 | 結果 | 撮 |
+|---|---|---|---|
+| S01-F12 | 「Recent」⇔「Folder」を切替 | 表示モードが切り替わる（挙動は変えず、表示対象のみ変わる） | `S01-F12-project-list-recent-folder-toggle` |
+
+下部フローティングメニュー（S02 `PageEditorView` の `slideControls` と同じ位置・見た目。一覧が空でも1件以上でも常時表示。ナビゲーションバー右上には＋を置かない。「フォルダを作成」ボタンをプロジェクト追加（⊕）の隣に常設）:
 
 | 機能ID | 操作 | 結果 | 撮 |
 |---|---|---|---|
@@ -83,6 +95,10 @@ fastlane snapshot の出力ファイルは安全なASCII名の
 | S01-F09 | セルをタップ | S02 スライド編集へ遷移 | （各デモを開いて撮影） |
 | S01-F10 | セルの⋯メニュー → 削除 | 確認シートを表示（即削除はしない） | `S01-F10-project-cell-delete-menu` |
 | S01-F11 | 削除確認シート（拡大サムネイル＋タイトル＋ページ数を表示） → 「削除」を確定 | 一覧から除去。「キャンセル」なら一覧に残る | `S01-F11-project-cell-delete-confirm` |
+| S01-F15 | 下部フローティングのフォルダ追加ボタンを開き、名前を入力して「作成」 | フォルダ名入力シート → 再起動なしで「Folder」モードの一覧に反映（受け入れ条件） | `S01-F15-folder-create-sheet`（結果は`S01-F13-folder-list-populated`） |
+| S01-F16 | フォルダをタップ | フォルダ詳細（そのフォルダのプロジェクトのみ表示。0件なら空状態） | ✓ |
+| S01-F17 | フォルダの⋯メニュー → 名前を変更 | 名称入力シート → 保存でフォルダ名を更新 | `S01-F17-folder-rename-sheet` |
+| S01-F18 | フォルダの⋯メニュー → 削除 | 確認シートを表示（即削除はしない。「削除」確定でフォルダのみ削除し、フォルダ内プロジェクトは削除せず「Recent」に残す） | `S01-F18-folder-delete-confirm` |
 
 ---
 
@@ -232,7 +248,7 @@ fastlane snapshot の出力ファイルは安全なASCII名の
 |---|---|---|
 | `testProjectListEmptyAndCreate` | `--reset-store` | S01(空)→S01-F03→S02(空/テンプレ)→S03 |
 | `testCanvasAspectsFromCreate` | `--reset-store` | S01-F04〜F08（用紙サイズ別の空キャンバス） |
-| `testProjectListPopulated` | `--reset-store --seed-demo` | S01(複数)、S01-F10(⋯削除メニュー)、S01-F11(削除確認シート) |
+| `testProjectListPopulated` | `--reset-store --seed-demo` | S01(複数)、S01-F10(⋯削除メニュー)、S01-F11(削除確認シート)、S01-F12〜F18(Recent/Folder切替・フォルダ作成/一覧/詳細/名称変更/削除) |
 | `testDemoPhotoOperations` | `--reset-store --seed-demo` | S02(選択/枠比率/undo-redo/クロップ/枠/レイヤー)、S04 |
 | `testLayoutKinds` | `--reset-store --seed-demo` | S02(コラージュ/枠付き/パノラマ/X)、S03(比率/背景/ページ選択)、S04(複数ページ) |
 | `testDarkModeSpotCheck` | `--reset-store --seed-demo`（ダーク固定） | S01/S02/S03/S04 各1枚の最小巡回（`-dark`サフィックス） |

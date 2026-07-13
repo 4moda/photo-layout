@@ -7,11 +7,16 @@ import PhotoLayoutCore
 @MainActor
 final class ProjectListViewModel {
     private(set) var projects: [ProjectEntity] = []
+    private(set) var folders: [FolderEntity] = []
     var errorMessage: String?
 
     private let listProjects: ListProjectsUseCase
     private let createProject: CreateProjectUseCase
     private let deleteProject: DeleteProjectUseCase
+    private let listFolders: ListFoldersUseCase
+    private let createFolderUseCase: CreateFolderUseCase
+    private let renameFolderUseCase: RenameFolderUseCase
+    private let deleteFolderUseCase: DeleteFolderUseCase
     /// 一覧サムネイル用の小さいデコード（256px上限）を注入する
     private let thumbnailProvider: any PreviewImageProviding
     /// projectID → (更新日時, 1ページ目の配置画像)。updatedAtが変わったら作り直す
@@ -24,12 +29,20 @@ final class ProjectListViewModel {
         listProjects: ListProjectsUseCase,
         createProject: CreateProjectUseCase,
         deleteProject: DeleteProjectUseCase,
+        listFolders: ListFoldersUseCase,
+        createFolder: CreateFolderUseCase,
+        renameFolder: RenameFolderUseCase,
+        deleteFolder: DeleteFolderUseCase,
         thumbnailProvider: any PreviewImageProviding,
         seedDemo: (() async -> Void)? = nil
     ) {
         self.listProjects = listProjects
         self.createProject = createProject
         self.deleteProject = deleteProject
+        self.listFolders = listFolders
+        self.createFolderUseCase = createFolder
+        self.renameFolderUseCase = renameFolder
+        self.deleteFolderUseCase = deleteFolder
         self.thumbnailProvider = thumbnailProvider
         self.seedDemo = seedDemo
     }
@@ -41,10 +54,16 @@ final class ProjectListViewModel {
         }
         do {
             projects = try await listProjects.execute()
+            folders = try await listFolders.execute()
             await refreshThumbnails()
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// 指定フォルダに属するプロジェクトのみ（Folderモードの詳細画面用）
+    func projects(inFolder folderID: UUID) -> [ProjectEntity] {
+        projects.filter { $0.folderID == folderID }
     }
 
     /// 1ページ目のサムネイル描画に使う画像（未生成なら空）
@@ -87,6 +106,35 @@ final class ProjectListViewModel {
     func delete(id: UUID) async {
         do {
             try await deleteProject.execute(id: id)
+            projects = try await listProjects.execute()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func createFolder(name: String) async {
+        do {
+            try await createFolderUseCase.execute(name: name)
+            folders = try await listFolders.execute()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func renameFolder(id: UUID, name: String) async {
+        do {
+            try await renameFolderUseCase.execute(id: id, name: name)
+            folders = try await listFolders.execute()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// フォルダのみ削除する。属していたプロジェクトは未分類（Recent）に残す。
+    func deleteFolder(id: UUID) async {
+        do {
+            try await deleteFolderUseCase.execute(id: id, mode: .folderOnly)
+            folders = try await listFolders.execute()
             projects = try await listProjects.execute()
         } catch {
             errorMessage = error.localizedDescription

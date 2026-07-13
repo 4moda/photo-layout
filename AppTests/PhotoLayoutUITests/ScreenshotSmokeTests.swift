@@ -95,6 +95,77 @@ final class ScreenshotSmokeTests: XCTestCase {
                 }
             }
         }
+
+        captureFolderMode(app)
+    }
+
+    // MARK: - S01 Recent/Folder切替・フォルダ作成/一覧/詳細/名称変更/削除（S01-F12〜F18）
+
+    /// デモ投入時に「お気に入り」フォルダへパノラマデモを1件分類済み（Folderモードが空にならないようにするため）。
+    @MainActor
+    private func captureFolderMode(_ app: XCUIApplication) {
+        // S01-F12: 「Recent」→「Folder」へ切替
+        let folderModeButton = app.buttons["projectList.mode.folder"]
+        XCTAssertTrue(folderModeButton.waitForExistence(timeout: 5))
+        folderModeButton.tap()
+        XCTAssertTrue(app.buttons["お気に入り"].waitForExistence(timeout: 5))
+        sleep(1)
+        snapshot("S01-F12-project-list-recent-folder-toggle")
+
+        // S01-F15: 下部フローティングのフォルダ追加ボタン→名前入力→作成。
+        // 再起動なしで「Folder」モードの一覧に反映されることを確認する（受け入れ条件）。
+        let addFolderButton = app.buttons["projectList.addFolder"]
+        XCTAssertTrue(addFolderButton.waitForExistence(timeout: 5))
+        addFolderButton.tap()
+        let folderNameField = app.textFields["projectList.newFolder.field"]
+        XCTAssertTrue(folderNameField.waitForExistence(timeout: 5))
+        snapshot("S01-F15-folder-create-sheet")
+        folderNameField.tap()
+        folderNameField.typeText("Travel")
+        app.buttons["projectList.newFolder.confirm"].tap()
+        XCTAssertTrue(app.buttons["Travel"].waitForExistence(timeout: 5))
+        sleep(1)
+        snapshot("S01-F13-folder-list-populated")
+
+        // S01-F16: 空のフォルダをタップ → 空状態を表示する（受け入れ条件）
+        app.buttons["Travel"].tap()
+        XCTAssertTrue(app.otherElements["projectList.folderDetail.empty"].waitForExistence(timeout: 5))
+        sleep(1)
+        snapshot("S01-F16-folder-detail-empty-state")
+        back(app)
+        folderModeButton.tap()
+
+        // S01-F16: 「お気に入り」フォルダをタップ → そのフォルダのプロジェクトのみ表示される
+        // （フォルダに分類していないプロジェクトは出ない）
+        app.buttons["お気に入り"].tap()
+        XCTAssertTrue(app.buttons["パノラマ（3連）"].waitForExistence(timeout: 5))
+        sleep(1)
+        snapshot("S01-F16-folder-detail-populated")
+        back(app)
+        folderModeButton.tap()
+
+        // S01-F17/F18: フォルダの⋯メニュー → 名前を変更／削除（確認シートを表示するのみ。実削除はしない）
+        let folderMenu = app.buttons["projectList.folderMenu"].firstMatch
+        if folderMenu.waitForExistence(timeout: 3) {
+            folderMenu.tap()
+            if app.buttons["名前を変更"].waitForExistence(timeout: 3) {
+                app.buttons["名前を変更"].tap()
+                if app.textFields["projectList.folderRename.field"].waitForExistence(timeout: 5) {
+                    snapshot("S01-F17-folder-rename-sheet")
+                    app.buttons["projectList.folderRename.confirm"].tap()
+                }
+            }
+
+            folderMenu.tap()
+            if app.buttons["削除"].waitForExistence(timeout: 3) {
+                app.buttons["削除"].tap()
+                if app.buttons["キャンセル"].waitForExistence(timeout: 3) {
+                    sleep(1)
+                    snapshot("S01-F18-folder-delete-confirm")
+                    app.buttons["キャンセル"].tap()
+                }
+            }
+        }
     }
 
     // MARK: - S01 用紙サイズ別の新規作成（S01-F04〜F08）→ 各アスペクトの空キャンバス
