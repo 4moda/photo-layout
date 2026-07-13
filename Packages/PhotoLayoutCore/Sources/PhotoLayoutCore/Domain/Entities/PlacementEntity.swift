@@ -26,6 +26,9 @@ public struct PlacementEntity: Hashable, Codable, Sendable, Identifiable {
     public var cropRotation: Double
     /// nilならProject.defaultPhotoFrameを使う
     public var frameOverride: PhotoFrameStyle?
+    /// ロック中はジオメトリ操作（移動/拡縮/クロップ突入）と削除を禁止する。
+    /// 重なり順変更・枠スタイル変更はロック対象外（許可し続ける）
+    public var isLocked: Bool
 
     public init(
         id: UUID = UUID(),
@@ -36,7 +39,8 @@ public struct PlacementEntity: Hashable, Codable, Sendable, Identifiable {
         cropRect: LayoutRect = .unit,
         destRect: LayoutRect,
         cropRotation: Double = 0,
-        frameOverride: PhotoFrameStyle? = nil
+        frameOverride: PhotoFrameStyle? = nil,
+        isLocked: Bool = false
     ) {
         self.id = id
         self.sortIndex = sortIndex
@@ -47,5 +51,11 @@ public struct PlacementEntity: Hashable, Codable, Sendable, Identifiable {
         self.destRect = destRect
         self.cropRotation = cropRotation
         self.frameOverride = frameOverride
+        self.isLocked = isLocked
     }
+
+    /// ロック中に禁止するジオメトリ操作（ドラッグ・ピンチ・角/辺ハンドル・クロップ突入）を
+    /// 行ってよいか。`PlacementGesture`自体は状態を持たない純粋計算のままとし、
+    /// 呼び出し側（ViewModel）が各`PlacementGesture.*`呼び出し前にこれを見てガードする。
+    public var allowsGeometryGesture: Bool { !isLocked }
 }

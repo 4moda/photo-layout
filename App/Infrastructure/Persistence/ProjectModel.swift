@@ -82,6 +82,8 @@ final class PlacementModel {
     // 既存ストアからの軽量マイグレーションのため既定値を持つ（0=回転なし）
     var cropRotation: Double = 0
     var frameOverrideData: Data?
+    // 既存ストアからの軽量マイグレーションのため既定値を持つ（false=未ロック）
+    var isLocked: Bool = false
     var project: ProjectModel?
 
     init(
@@ -95,7 +97,8 @@ final class PlacementModel {
         cropX: Double, cropY: Double, cropWidth: Double, cropHeight: Double,
         destX: Double, destY: Double, destWidth: Double, destHeight: Double,
         cropRotation: Double,
-        frameOverrideData: Data?
+        frameOverrideData: Data?,
+        isLocked: Bool = false
     ) {
         self.id = id
         self.sortIndex = sortIndex
@@ -114,5 +117,6 @@ final class PlacementModel {
         self.destHeight = destHeight
         self.cropRotation = cropRotation
         self.frameOverrideData = frameOverrideData
+        self.isLocked = isLocked
     }
 }

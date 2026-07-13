@@ -101,7 +101,8 @@ final class SwiftDataProjectRepository: ProjectRepository {
                         cropRotation: placement.cropRotation,
                         frameOverride: try placement.frameOverrideData.map {
                             try decoder.decode(PhotoFrameStyle.self, from: $0)
-                        }
+                        },
+                        isLocked: placement.isLocked
                     )
                 },
             defaultPhotoFrame: try decoder.decode(PhotoFrameStyle.self, from: model.defaultFrameData),
@@ -136,7 +137,8 @@ final class SwiftDataProjectRepository: ProjectRepository {
             destX: placement.destRect.x, destY: placement.destRect.y,
             destWidth: placement.destRect.width, destHeight: placement.destRect.height,
             cropRotation: placement.cropRotation,
-            frameOverrideData: try placement.frameOverride.map { try encoder.encode($0) }
+            frameOverrideData: try placement.frameOverride.map { try encoder.encode($0) },
+            isLocked: placement.isLocked
         )
     }
 }

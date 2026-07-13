@@ -164,6 +164,15 @@ final class ScreenshotSmokeTests: XCTestCase {
         guard app.buttons["pageEditor.deletePhoto"].waitForExistence(timeout: 5) else { return }
         snapshot("S02-F09-photo-selected-menu")
 
+        // S02-n/S02-F27: ロックすると移動・拡縮ハンドルが消え施錠アイコンが出る。以降の手順に影響しないよう撮影後は解除する
+        if app.buttons["pageEditor.lockButton"].waitForExistence(timeout: 3) {
+            app.buttons["pageEditor.lockButton"].tap()
+            sleep(1)
+            snapshot("S02-F27-locked-photo-selected")
+            app.buttons["pageEditor.lockButton"].tap()
+            sleep(1)
+        }
+
         if app.buttons["pageEditor.frameAspectMenu"].waitForExistence(timeout: 3) {
             app.buttons["pageEditor.frameAspectMenu"].tap()
             if app.buttons["4:5"].waitForExistence(timeout: 3) {

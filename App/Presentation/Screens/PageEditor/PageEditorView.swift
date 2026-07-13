@@ -224,11 +224,33 @@ struct PageEditorView: View {
            let placement = viewModel.project.placements.first(where: { $0.id == selectedID }),
            viewModel.cropModePlacementID != selectedID {
             let rect = PageGeometry.imageRect(destRect: placement.destRect, in: contentStrip)
-            selectionChrome(rect: rect, contentRect: contentStrip, placementID: selectedID)
-            ForEach(Array(viewModel.activeGuides.enumerated()), id: \.offset) { _, guide in
-                guideLine(guide, contentRect: contentStrip)
+            if placement.isLocked {
+                lockedSelectionChrome(rect: rect)
+            } else {
+                selectionChrome(rect: rect, contentRect: contentStrip, placementID: selectedID)
+                ForEach(Array(viewModel.activeGuides.enumerated()), id: \.offset) { _, guide in
+                    guideLine(guide, contentRect: contentStrip)
+                }
             }
         }
+    }
+
+    /// ロック中の写真の選択表現: 選択枠のみ表示し、移動・拡縮ハンドルは出さない。
+    /// 施錠アイコンをオーバーレイして操作不可であることを視覚的に示す
+    private func lockedSelectionChrome(rect: LayoutRect) -> some View {
+        ZStack {
+            Rectangle()
+                .stroke(Color.accentColor, lineWidth: 2)
+                .frame(width: rect.width, height: rect.height)
+            Image(systemName: "lock.fill")
+                .font(.system(size: min(rect.width, rect.height) * 0.16, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(10)
+                .background(Circle().fill(Color.black.opacity(0.55)))
+        }
+        .position(x: rect.midX, y: rect.midY)
+        .allowsHitTesting(false)
+        .accessibilityIdentifier("pageEditor.lockedSelectionOverlay")
     }
 
     /// クロップモード中のオーバーレイ: 元画像全体をレイアウト画面に重ねて表示し、
@@ -902,8 +924,9 @@ struct PageEditorView: View {
         return !Self.frameAspectChoices.contains { abs($0.pixelAspect - current) < Self.frameAspectTolerance }
     }
 
-    /// 写真選択中のメニュー（枠比率 / クロップ / 削除）。
+    /// 写真選択中のメニュー（枠比率 / クロップ / 枠 / ロック切替 / 削除）。
     /// 前面/背面はページ選択の「レイヤー」に集約、差し替えは廃止。移動/拡縮はドラッグ。
+    /// ロック中はクロップ・削除がdisabled（Coreの`removePlacement`/ジェスチャガードと二重に防御）。
     private var photoControls: some View {
         toolbarStrip {
             Button {
@@ -919,15 +942,27 @@ struct PageEditorView: View {
                     viewModel.toggleCropMode(id)
                 }
             }
+            .disabled(viewModel.isSelectedPhotoLocked)
 
             toolButton("枠", systemImage: "photo.artframe", identifier: "pageEditor.frameButton") {
                 activeSheet = .frame
+            }
+
+            toolButton(
+                viewModel.isSelectedPhotoLocked ? "ロック解除" : "ロック",
+                systemImage: viewModel.isSelectedPhotoLocked ? "lock.fill" : "lock.open",
+                identifier: "pageEditor.lockButton"
+            ) {
+                if let id = viewModel.selectedPlacementID {
+                    Task { await viewModel.toggleLock(placementID: id) }
+                }
             }
 
             toolButton("削除", systemImage: "trash", role: .destructive,
                        identifier: "pageEditor.deletePhoto") {
                 Task { await viewModel.deleteSelectedPhoto() }
             }
+            .disabled(viewModel.isSelectedPhotoLocked)
         }
     }
 
@@ -1045,6 +1080,11 @@ struct PageEditorView: View {
                                 .fill(Color.gray.opacity(0.2)).frame(width: 64, height: 64)
                         }
                         Spacer()
+                        Button { Task { await viewModel.toggleLock(placementID: placement.id) } } label: {
+                            Image(systemName: placement.isLocked ? "lock.fill" : "lock.open")
+                        }
+                        .buttonStyle(.borderless)
+                        .tint(placement.isLocked ? .accentColor : .secondary)
                         Button { Task { await viewModel.bringForward(placementID: placement.id) } } label: {
                             Image(systemName: "chevron.up")
                         }

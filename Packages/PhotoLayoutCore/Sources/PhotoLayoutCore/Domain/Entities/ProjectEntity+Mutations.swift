@@ -36,9 +36,9 @@ extension ProjectEntity {
         )
     }
 
-    /// 配置（写真）を削除し、sortIndexを0からの連番に詰め直す。
+    /// 配置（写真）を削除し、sortIndexを0からの連番に詰め直す。ロック中の写真は無視する。
     public mutating func removePlacement(id: UUID) {
-        guard placements.contains(where: { $0.id == id }) else { return }
+        guard let placement = placements.first(where: { $0.id == id }), !placement.isLocked else { return }
         placements.removeAll { $0.id == id }
         let orderedIDs = orderedPlacements.map(\.id)
         for (newIndex, placementID) in orderedIDs.enumerated() {
@@ -222,6 +222,13 @@ extension ProjectEntity {
     public mutating func setPlacementFrame(_ frame: PhotoFrameStyle?, placementID: UUID) {
         guard let idx = placements.firstIndex(where: { $0.id == placementID }) else { return }
         placements[idx].frameOverride = frame
+    }
+
+    /// 写真1枚のロック状態を設定する。ロック中はジオメトリ操作（移動/拡縮/クロップ突入）と
+    /// 削除を禁止する（重なり順変更・枠スタイル変更は対象外）。写真選択メニュー・レイヤーシート両方から呼ぶ。
+    public mutating func setPlacementLocked(_ isLocked: Bool, placementID: UUID) {
+        guard let idx = placements.firstIndex(where: { $0.id == placementID }) else { return }
+        placements[idx].isLocked = isLocked
     }
 
     /// 1枚を全スライドにまたがせて敷く（プロジェクト配置モデル: 手動シームレスカルーセル用）。
