@@ -466,44 +466,36 @@ private struct ProjectCell: View {
     }
 
     /// フォルダへ移動ピッカー: 作成済みフォルダ一覧＋「フォルダなし」（未分類に戻す）。
-    /// 現在の所属先にはチェックマークを付ける。新規/名称変更フォルダ操作と同じ
-    /// `NavigationStack` + `Form`ではなく`List`で行選択のみのシンプルな構成にする。
+    /// 現在の所属先には枠のハイライト＋チェックマークを付ける。「Folder」モードのフォルダ一覧
+    /// （`folderContent`/`FolderCell`）と同じグリッド・カードの見た目に統一する
+    /// （テキスト行のみの`List`だとフォルダ選択画面と見た目がバラバラになるため）。
     private var folderPickerSheet: some View {
         NavigationStack {
-            List {
-                Button {
-                    showingFolderPicker = false
-                    onMoveToFolder(nil)
-                } label: {
-                    HStack {
-                        Text("フォルダなし")
-                            .foregroundStyle(.primary)
-                        Spacer()
-                        if project.folderID == nil {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(Color.accentColor)
-                        }
-                    }
-                }
-                .accessibilityIdentifier("projectList.moveToFolder.none")
-
-                ForEach(folders) { folder in
-                    Button {
+            ScrollView {
+                LazyVGrid(columns: gridColumns, spacing: 12) {
+                    FolderPickerCard(
+                        title: "フォルダなし",
+                        systemImage: "tray",
+                        isSelected: project.folderID == nil
+                    ) {
                         showingFolderPicker = false
-                        onMoveToFolder(folder.id)
-                    } label: {
-                        HStack {
-                            Text(folder.name)
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            if project.folderID == folder.id {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(Color.accentColor)
-                            }
-                        }
+                        onMoveToFolder(nil)
                     }
-                    .accessibilityIdentifier("projectList.moveToFolder.\(folder.name)")
+                    .accessibilityIdentifier("projectList.moveToFolder.none")
+
+                    ForEach(folders) { folder in
+                        FolderPickerCard(
+                            title: folder.name,
+                            systemImage: "folder.fill",
+                            isSelected: project.folderID == folder.id
+                        ) {
+                            showingFolderPicker = false
+                            onMoveToFolder(folder.id)
+                        }
+                        .accessibilityIdentifier("projectList.moveToFolder.\(folder.name)")
+                    }
                 }
+                .padding(12)
             }
             .navigationTitle("フォルダへ移動")
             .navigationBarTitleDisplayMode(.inline)
@@ -601,6 +593,52 @@ private struct ProjectCell: View {
                     .padding(6)
             }
         }
+    }
+}
+
+/// フォルダへ移動ピッカーの1枚。「Folder」モードの`FolderCell`と同じ正方形カード
+/// （アイコン＋下にキャプション、`systemGray5`の枠）で見た目を揃える。選択中（現在の所属先）は
+/// 枠をアクセントカラーで強調し、右上にチェックマークバッジを重ねる。
+private struct FolderPickerCard: View {
+    let title: String
+    let systemImage: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                ZStack(alignment: .topTrailing) {
+                    ZStack {
+                        Color(.secondarySystemBackground)
+                        Image(systemName: systemImage)
+                            .font(.system(size: 36))
+                            .foregroundStyle(Color.accentColor)
+                    }
+                    .aspectRatio(1, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(isSelected ? Color.accentColor : Color(.systemGray5), lineWidth: isSelected ? 2 : 0.5)
+                    )
+
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.title3)
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, Color.accentColor)
+                            .padding(6)
+                    }
+                }
+
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+        }
+        .buttonStyle(.plain)
     }
 }
 
