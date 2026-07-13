@@ -123,7 +123,11 @@ struct ProjectListView: View {
                             ProjectCell(
                                 project: project,
                                 thumbnailImages: viewModel.thumbnailImages(for: project),
-                                onDelete: { Task { await viewModel.delete(id: project.id) } }
+                                folders: viewModel.folders,
+                                onDelete: { Task { await viewModel.delete(id: project.id) } },
+                                onMoveToFolder: { folderID in
+                                    Task { await viewModel.moveToFolder(projectID: project.id, folderID: folderID) }
+                                }
                             )
                         }
                     }
@@ -313,8 +317,9 @@ private struct NewProjectAspectSheet: View {
 }
 
 /// フォルダ詳細。そのフォルダの`folderID`を持つプロジェクトだけを既存の`ProjectCell`/グリッドで表示する。
-/// 下部フローティングの＋ボタンから、最初からこのフォルダに属する新規プロジェクトを作成できる
-/// （既存プロジェクトをフォルダへ移動する操作は別途スコープ外のまま。ここは新規作成時点での分類のみ）。
+/// 下部フローティングの＋ボタンから、最初からこのフォルダに属する新規プロジェクトを作成できる。
+/// 既存プロジェクトをこのフォルダへ移動する（またはここから他フォルダ/未分類へ移す）操作は
+/// `ProjectCell`の「⋯」メニュー→「フォルダへ移動」から行う（このフォルダ詳細画面にも同じセルが並ぶ）。
 private struct FolderDetailView: View {
     let folder: FolderEntity
     let viewModel: ProjectListViewModel
@@ -342,7 +347,11 @@ private struct FolderDetailView: View {
                                 ProjectCell(
                                     project: project,
                                     thumbnailImages: viewModel.thumbnailImages(for: project),
-                                    onDelete: { Task { await viewModel.delete(id: project.id) } }
+                                    folders: viewModel.folders,
+                                    onDelete: { Task { await viewModel.delete(id: project.id) } },
+                                    onMoveToFolder: { folderID in
+                                        Task { await viewModel.moveToFolder(projectID: project.id, folderID: folderID) }
+                                    }
                                 )
                             }
                         }
@@ -401,13 +410,18 @@ private struct FolderDetailView: View {
 }
 
 /// 一覧のサムネイルセル。名前は出さず、1ページ目のプレビューを正方形カードで見せる。
-/// タップで編集へ、右上「⋯」メニューで削除。
+/// タップで編集へ、右上「⋯」メニューでフォルダへ移動・削除。
 private struct ProjectCell: View {
     let project: ProjectEntity
     /// 1ページ目の配置ID→サムネイル画像（ViewModelのキャッシュから供給）
     let thumbnailImages: [UUID: UIImage]
+    /// 「フォルダへ移動」ピッカーに並べる作成済みフォルダ一覧
+    let folders: [FolderEntity]
     let onDelete: () -> Void
+    /// 選んだフォルダのIDを渡す。「フォルダなし」を選んだ場合はnil（未分類に戻す）
+    let onMoveToFolder: (UUID?) -> Void
     @State private var showingDeleteConfirmation = false
+    @State private var showingFolderPicker = false
 
     private var displayTitle: String {
         project.title ?? "無題のレイアウト"
@@ -422,6 +436,11 @@ private struct ProjectCell: View {
             .accessibilityIdentifier(displayTitle)
 
             Menu {
+                Button {
+                    showingFolderPicker = true
+                } label: {
+                    Label("フォルダへ移動", systemImage: "folder")
+                }
                 Button(role: .destructive) {
                     showingDeleteConfirmation = true
                 } label: {
@@ -441,6 +460,60 @@ private struct ProjectCell: View {
         .sheet(isPresented: $showingDeleteConfirmation) {
             deleteConfirmationSheet
         }
+        .sheet(isPresented: $showingFolderPicker) {
+            folderPickerSheet
+        }
+    }
+
+    /// フォルダへ移動ピッカー: 作成済みフォルダ一覧＋「フォルダなし」（未分類に戻す）。
+    /// 現在の所属先にはチェックマークを付ける。新規/名称変更フォルダ操作と同じ
+    /// `NavigationStack` + `Form`ではなく`List`で行選択のみのシンプルな構成にする。
+    private var folderPickerSheet: some View {
+        NavigationStack {
+            List {
+                Button {
+                    showingFolderPicker = false
+                    onMoveToFolder(nil)
+                } label: {
+                    HStack {
+                        Text("フォルダなし")
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        if project.folderID == nil {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(Color.accentColor)
+                        }
+                    }
+                }
+                .accessibilityIdentifier("projectList.moveToFolder.none")
+
+                ForEach(folders) { folder in
+                    Button {
+                        showingFolderPicker = false
+                        onMoveToFolder(folder.id)
+                    } label: {
+                        HStack {
+                            Text(folder.name)
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            if project.folderID == folder.id {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(Color.accentColor)
+                            }
+                        }
+                    }
+                    .accessibilityIdentifier("projectList.moveToFolder.\(folder.name)")
+                }
+            }
+            .navigationTitle("フォルダへ移動")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") { showingFolderPicker = false }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 
     /// 削除確認。ユーザはタイトル（「枠付き（黒背景）」等の説明的な文字列）ではなく

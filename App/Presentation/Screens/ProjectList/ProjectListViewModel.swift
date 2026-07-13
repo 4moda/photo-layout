@@ -137,6 +137,17 @@ final class ProjectListViewModel {
         }
     }
 
+    /// 既存プロジェクトをフォルダへ移動する（⋯メニュー→「フォルダへ移動」）。
+    /// `folderID` に nil を渡すと未分類（Recent）に戻す。
+    func moveToFolder(projectID: UUID, folderID: UUID?) async {
+        do {
+            try await moveProjectToFolderUseCase.execute(projectID: projectID, folderID: folderID)
+            projects = try await listProjects.execute()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     /// フォルダのみ削除する。属していたプロジェクトは未分類（Recent）に残す。
     func deleteFolder(id: UUID) async {
         do {
