@@ -47,7 +47,7 @@ struct RenderPlanBuilderTests {
         #expect(abs(contentAspect - 0.72 / 0.92) < 1e-9)
 
         let commands = plan(project, size: LayoutSize(width: 400, height: 500))
-        guard case .drawImage(_, _, let source, let dest, _) = commands[1] else {
+        guard case .drawImage(_, _, let source, let dest, _, _, _) = commands[1] else {
             Issue.record("2番目がdrawImageでない"); return
         }
         // 横長写真(1.5)を縦長領域(0.7826)へ → 幅が絞られる: (4000*0.7826..)/6000
@@ -66,7 +66,7 @@ struct RenderPlanBuilderTests {
         project.placeAllMatted(coverage: 0.9)
 
         let commands = plan(project, size: LayoutSize(width: 400, height: 500))
-        guard case .drawImage(_, _, let source, let dest, _) = commands[1] else {
+        guard case .drawImage(_, _, let source, let dest, _, _, _) = commands[1] else {
             Issue.record("2番目がdrawImageでない"); return
         }
         // クロップは全体（防御的正規化でもほぼunitのまま）
@@ -102,7 +102,7 @@ struct RenderPlanBuilderTests {
         project.placeAllMatted(coverage: 0.9)
 
         let commands = plan(project, size: LayoutSize(width: 400, height: 500))
-        guard case .drawImage(_, _, _, let dest, _) = commands[1],
+        guard case .drawImage(_, _, _, let dest, _, _, _) = commands[1],
               case .strokeBorder(_, _, _, let borderRect) = commands[2] else {
             Issue.record("コマンド構成が想定外"); return
         }
@@ -127,10 +127,12 @@ struct RenderPlanBuilderTests {
             switch (s, l) {
             case (.fillRect(_, let rs), .fillRect(_, let rl)):
                 expectScaled(rs, rl, scale: scale)
-            case (.drawImage(_, _, let srcS, let destS, let crS),
-                  .drawImage(_, _, let srcL, let destL, let crL)):
+            case (.drawImage(_, _, let srcS, let destS, let clipS, let rotS, let crS),
+                  .drawImage(_, _, let srcL, let destL, let clipL, let rotL, let crL)):
                 #expect(srcS.isApproximatelyEqual(to: srcL))
                 expectScaled(destS, destL, scale: scale)
+                expectScaled(clipS, clipL, scale: scale)
+                #expect(rotS == rotL)
                 #expect(abs(crS * scale - crL) < 1e-6)
             case (.strokeBorder(_, let wS, let crS, let rS),
                   .strokeBorder(_, let wL, let crL, let rL)):
@@ -160,6 +162,27 @@ struct RenderPlanBuilderTests {
         let page = matted.orderedPages[0]
         let destPixelAspect = placement.destRect.aspectRatio * page.contentAspect
         #expect(abs(destPixelAspect - 1.5) < 1e-6)
+    }
+
+    @Test("cropRotationはdrawImageコマンドへそのまま伝わり、destRect/clipRectは回転前と同じ")
+    func cropRotationPassesThroughUnchangedGeometry() {
+        var project = makeProject()
+        project.placements[0].cropRotation = 12.5
+
+        let commands = plan(project, size: LayoutSize(width: 400, height: 500))
+        guard case .drawImage(_, _, _, _, _, let rotation, _) = commands[1] else {
+            Issue.record("2番目がdrawImageでない"); return
+        }
+        #expect(abs(rotation - 12.5) < 1e-9)
+    }
+
+    @Test("未設定のcropRotationはデフォルト0（既存プロジェクトの読み込み互換）")
+    func cropRotationDefaultsToZero() {
+        let commands = plan(makeProject(), size: LayoutSize(width: 400, height: 500))
+        guard case .drawImage(_, _, _, _, _, let rotation, _) = commands[1] else {
+            Issue.record("2番目がdrawImageでない"); return
+        }
+        #expect(rotation == 0)
     }
 
     private func expectScaled(_ small: LayoutRect, _ large: LayoutRect, scale: Double) {

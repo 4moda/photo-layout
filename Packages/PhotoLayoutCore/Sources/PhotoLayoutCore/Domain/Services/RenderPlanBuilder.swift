@@ -43,23 +43,20 @@ public enum RenderPlanBuilder {
                 targetPixelAspect: imageRect.aspectRatio
             )
 
-            // はみ出した写真は配置領域内の見える部分だけ描く。
-            // 描画矩形を切ると同時にsourceRectも同比率で切ることで、拡縮・平行移動が
-            // そのままクロップ調整として振る舞う（プレビューと書き出しで同一の計算）
+            // はみ出した写真は配置領域内の見える部分だけ描く。回転はsourceRect→destRectの写像を
+            // 崩すため（回転後は矩形が矩形のままsourceRectへ写らない）、sourceRect/destRectは
+            // クロップ窓全体を渡し、可視範囲はclipRectとして別に持たせてレンダラ側で切る
+            // （プレビューと書き出しで同一の計算・DrawCommandのドキュメント参照）
             let visibleRect = imageRect.intersection(contentRect)
             guard visibleRect.width > 0, visibleRect.height > 0 else { continue }
-            let visibleSource = LayoutRect(
-                x: sourceRect.x + (visibleRect.x - imageRect.x) / imageRect.width * sourceRect.width,
-                y: sourceRect.y + (visibleRect.y - imageRect.y) / imageRect.height * sourceRect.height,
-                width: visibleRect.width / imageRect.width * sourceRect.width,
-                height: visibleRect.height / imageRect.height * sourceRect.height
-            )
 
             commands.append(.drawImage(
                 placementID: placement.id,
                 photo: placement.photo,
-                sourceRect: visibleSource,
-                destRect: visibleRect,
+                sourceRect: sourceRect,
+                destRect: imageRect,
+                clipRect: visibleRect,
+                rotationDegrees: placement.cropRotation,
                 cornerRadiusPx: cornerRadiusPx
             ))
 

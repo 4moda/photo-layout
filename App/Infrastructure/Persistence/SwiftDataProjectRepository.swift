@@ -97,6 +97,7 @@ final class SwiftDataProjectRepository: ProjectRepository {
                             x: placement.destX, y: placement.destY,
                             width: placement.destWidth, height: placement.destHeight
                         ),
+                        cropRotation: placement.cropRotation,
                         frameOverride: try placement.frameOverrideData.map {
                             try decoder.decode(PhotoFrameStyle.self, from: $0)
                         }
@@ -132,6 +133,7 @@ final class SwiftDataProjectRepository: ProjectRepository {
             cropWidth: placement.cropRect.width, cropHeight: placement.cropRect.height,
             destX: placement.destRect.x, destY: placement.destRect.y,
             destWidth: placement.destRect.width, destHeight: placement.destRect.height,
+            cropRotation: placement.cropRotation,
             frameOverrideData: try placement.frameOverride.map { try encoder.encode($0) }
         )
     }

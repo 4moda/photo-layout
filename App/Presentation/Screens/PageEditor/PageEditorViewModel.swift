@@ -390,6 +390,17 @@ final class PageEditorViewModel {
         setCropRect(PlacementGesture.zoomCrop(cropRect: base.cropRect, factor: factor), for: placementID)
     }
 
+    /// クロップモードの回転（画面下の水平ドラッグバー）。translationXはバー全体に対する累積ドラッグ量(pt)
+    func updateCropRotation(placementID: UUID, translationX: Double, barWidth: Double) {
+        guard let base = basePlacement(placementID) else { return }
+        setCropRotation(
+            PlacementGesture.cropRotationFromDrag(
+                baseDegrees: base.cropRotation, translationX: translationX, barWidth: barWidth
+            ),
+            for: placementID
+        )
+    }
+
     /// ジェスチャ終了: ガイドを消して永続化（画像は不変なので再デコードしない）。
     /// 変更があった場合のみジェスチャ開始時点の状態をundo履歴へ積む
     func endGesture() async {
@@ -414,6 +425,11 @@ final class PageEditorViewModel {
     private func setCropRect(_ rect: LayoutRect, for placementID: UUID) {
         guard let index = project.placements.firstIndex(where: { $0.id == placementID }) else { return }
         project.placements[index].cropRect = rect
+    }
+
+    private func setCropRotation(_ degrees: Double, for placementID: UUID) {
+        guard let index = project.placements.firstIndex(where: { $0.id == placementID }) else { return }
+        project.placements[index].cropRotation = degrees
     }
 
     // MARK: - Undo/Redo
