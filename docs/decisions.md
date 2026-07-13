@@ -106,6 +106,14 @@ S01（プロジェクト一覧）の下部フローティングメニュー（[#
 - **理由**: 2つの丸ボタンが常時横並びで表示され続けるのはUIとして煩雑という指摘。フォルダ作成はプロジェクト作成ほど頻度の高い操作ではなく、常設の専用ボタンを持たせるほどではないため、＋ボタン配下のメニュー項目に格下げした。
 - **帰結**: `projectList.addFolder`のアクセシビリティ識別子は廃止（UIテストは＋FAB→メニュー項目のラベルテキストでたどる）。`projectList.add`は＋FAB自身の識別子として存続。
 
+### main push時にもCloudflare Pagesスクショプレビューを更新（2026-07-13、[#79](https://github.com/4moda/photo-layout/issues/79)）
+
+`ios-ci.yml` の `screenshots-index` ジョブに、`push`（main）イベント用のCloudflare Pagesデプロイステップ「Deploy screenshots to Cloudflare Pages (main preview)」を追加した。既存のPRプレビュー用ステップと同じPagesプロジェクト（`photolayout-screenshots`）・同じ`cf_check`/`screenshots_check`スキップ分岐を流用し、`branch: main-latest`で常に`https://main-latest.photolayout-screenshots.pages.dev`へ上書きデプロイする。
+
+- **`main`ではなく`main-latest`を使う理由**: `cloudflare/pages-action`の`branch`パラメータがCloudflare Pagesプロジェクトのproduction branch（既定`main`）と一致すると、そのデプロイはProductionデプロイとして扱われ、apexドメイン`https://photolayout-screenshots.pages.dev`が公開されてしまう。Zero Trust Accessのワイルドカードポリシー`*.photolayout-screenshots.pages.dev`はapexドメインを保護しないため、これは非公開維持の前提を破る。`main`以外の固定ブランチ名であれば常にPreviewデプロイとして扱われ、既存のワイルドカードポリシーで保護される。
+- **PRコメント投稿は行わない**: `push`イベントにはPRコンテキストが存在しないため、「Comment preview URL on PR」ステップは引き続き`pull_request`用デプロイ（`deploy_pr`）の成否のみを条件にし、push用デプロイ（`deploy_push`）とは無関係のまま維持した。
+- **`screenshots-preview-cleanup.yml`は変更しない**: push用プレビューはPRに紐づかずクローズイベントが無いため、過去デプロイの自動削除は対象外（上書き更新のみ）。
+
 ### trunk ベース開発（2026-07-08 改定）
 
 Issue/PR 単位をやめ、動く段階まで仕上げて main へ直接コミット。詳細は [../CLAUDE.md](../CLAUDE.md)。
