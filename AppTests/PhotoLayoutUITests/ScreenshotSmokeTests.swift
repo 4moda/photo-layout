@@ -377,7 +377,7 @@ final class ScreenshotSmokeTests: XCTestCase {
         snapshot("S02-x-timeline-composite")
     }
 
-    // MARK: - S05 設定 / S06 利用規約
+    // MARK: - S05 設定 / S06 利用規約 / S07 プライバシーポリシー
 
     @MainActor
     func testSettingsAndTerms() throws {
@@ -389,10 +389,20 @@ final class ScreenshotSmokeTests: XCTestCase {
         XCTAssertTrue(settingsButton.waitForExistence(timeout: 5))
         settingsButton.tap()
 
+        let privacyPolicyRow = app.buttons["settings.privacyPolicy"]
         let termsRow = app.buttons["settings.terms"]
+        XCTAssertTrue(privacyPolicyRow.waitForExistence(timeout: 5))
         XCTAssertTrue(termsRow.waitForExistence(timeout: 5))
         sleep(1)
         snapshot("S05-settings-list")
+
+        privacyPolicyRow.tap()
+        XCTAssertTrue(app.otherElements["privacyPolicy.scroll"].waitForExistence(timeout: 5))
+        sleep(1)
+        snapshot("S07-privacy-policy")
+
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(termsRow.waitForExistence(timeout: 5))
 
         termsRow.tap()
         XCTAssertTrue(app.otherElements["termsOfService.scroll"].waitForExistence(timeout: 5))
