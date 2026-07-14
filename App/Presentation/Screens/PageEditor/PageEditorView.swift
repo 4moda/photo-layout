@@ -15,6 +15,9 @@ struct PageEditorView: View {
     // スロット充填ピッカー（空スロットのタップで開く）
     @State private var slotPickerPresented = false
     @State private var slotFillItem: PhotosPickerItem?
+    /// 写真差し替え用ピッカー（選択中の写真を入れ替える）
+    @State private var replacePickerPresented = false
+    @State private var replaceItem: PhotosPickerItem?
     @State private var pendingSlotFill: (page: Int, slot: Int)?
     // フッターから開くビジュアル選択シート（テンプレ/枠比率/レイヤー/枠）は1枚に集約
     @State private var activeSheet: EditorSheet?
@@ -75,6 +78,18 @@ struct PageEditorView: View {
                 }
             }
             .padding(.bottom, 8)
+            // 差し替えピッカーはフッターに付ける（キャンバス・ルートと同一ノードに
+            // 複数モーダルを積まない方針に合わせる）
+            .photosPicker(isPresented: $replacePickerPresented, selection: $replaceItem, matching: .images)
+            .onChange(of: replaceItem) { _, newItem in
+                guard let newItem else { return }
+                replaceItem = nil
+                Task {
+                    if let data = try? await newItem.loadTransferable(type: Data.self) {
+                        await viewModel.replaceSelectedPhoto(data: data)
+                    }
+                }
+            }
             // フッターのビジュアル選択シート（1枚に集約）
             .sheet(item: $activeSheet) { sheet in
                 Group {
@@ -94,7 +109,8 @@ struct PageEditorView: View {
             }
         }
         .padding(.vertical)
-        .navigationTitle(viewModel.project.title ?? "レイアウト")
+        // プロジェクトに名前は付けない方針（一覧はサムネイル識別）のため、タイトルは表示しない
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -1026,11 +1042,11 @@ struct PageEditorView: View {
         return !Self.frameAspectChoices.contains { abs($0.pixelAspect - current) < Self.frameAspectTolerance }
     }
 
-    /// 写真選択中のメニュー（枠比率 / クロップ / 枠 / ロック切替 / 複製 / 削除）。
+    /// 写真選択中のメニュー（枠比率 / クロップ / 差し替え / 枠 / ロック切替 / 複製 / 削除）。
     /// 前面/背面はページ選択の「レイヤー」に集約、差し替えは廃止。移動/拡縮はドラッグ。
     /// ロック中はクロップ・削除がdisabled（Coreの`removePlacement`/ジェスチャガードと二重に防御）。
     private var photoControls: some View {
-        toolbarStrip(itemCount: 6) { itemWidth in
+        toolbarStrip(itemCount: 7) { itemWidth in
             Button {
                 activeSheet = .frameAspect
             } label: {
@@ -1044,6 +1060,12 @@ struct PageEditorView: View {
                 if let id = viewModel.selectedPlacementID {
                     viewModel.toggleCropMode(id)
                 }
+            }
+            .disabled(viewModel.isSelectedPhotoLocked)
+
+            toolButton("差し替え", systemImage: "arrow.triangle.2.circlepath",
+                       identifier: "pageEditor.replaceButton", width: itemWidth) {
+                replacePickerPresented = true
             }
             .disabled(viewModel.isSelectedPhotoLocked)
 
@@ -1373,7 +1395,7 @@ private struct FrameSwatch: View {
         let radius = CGFloat(f.cornerRadiusRatio) * 60
         let lineWidth: CGFloat = f.borderWidthRatio > 0 ? max(2, CGFloat(f.borderWidthRatio) * 120) : 0
         return ZStack {
-            Rectangle().fill(Color(.systemGray5)) // 地（白フチが見えるよう）
+            Rectangle().fill(Color(.systemGray4)) // 地（白フチがシート背景に同化しない濃さ）
             RoundedRectangle(cornerRadius: radius)
                 .fill(Color.gray.opacity(0.55))
                 .overlay(

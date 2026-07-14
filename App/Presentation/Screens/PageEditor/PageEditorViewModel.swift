@@ -18,6 +18,10 @@ final class PageEditorViewModel {
     /// 書き出し解像度（標準=元画像の実解像度優先 / 高解像度=長辺2048px最低保証）。
     /// プレビュー画面のセグメントで切り替えるセッション内設定（永続化しない）
     var exportResolution: ExportResolution = .standard
+    /// 複数枚の書き出し/共有準備の進捗（1始まり）。単独枚・非実行中はnil
+    private(set) var exportProgress: (current: Int, total: Int)?
+    /// 直近の書き出しが成功したか（成功アラートにのみ「写真アプリを開く」を出すため）
+    private(set) var exportSucceeded = false
     /// non-nil = 共有シートを表示中（一時ファイルURL群）
     var shareItems: [URL]?
 
@@ -40,6 +44,7 @@ final class PageEditorViewModel {
     private let saveProject: SaveProjectUseCase
     private let addPhoto: AddPhotoUseCase
     private let exportPage: ExportPageUseCase
+    private let replacePhoto: ReplacePhotoUseCase
     private let imageProvider: any PreviewImageProviding
     private let shareFileWriter: any ShareFileWriting
 
@@ -47,6 +52,7 @@ final class PageEditorViewModel {
         project: ProjectEntity,
         saveProject: SaveProjectUseCase,
         addPhoto: AddPhotoUseCase,
+        replacePhoto: ReplacePhotoUseCase,
         exportPage: ExportPageUseCase,
         imageProvider: any PreviewImageProviding,
         shareFileWriter: any ShareFileWriting
@@ -54,6 +60,7 @@ final class PageEditorViewModel {
         self.project = project
         self.saveProject = saveProject
         self.addPhoto = addPhoto
+        self.replacePhoto = replacePhoto
         self.exportPage = exportPage
         self.imageProvider = imageProvider
         self.shareFileWriter = shareFileWriter
@@ -197,6 +204,19 @@ final class PageEditorViewModel {
                     project: project, imageData: data, pageIndex: currentPageIndex
                 )
             }
+            await refreshImages()
+        } catch {
+            errorMessage = "写真を読み込めませんでした: \(error.localizedDescription)"
+        }
+    }
+
+    /// 選択中の写真を差し替える（配置・枠・重なり順は維持、クロップは新画像の全体から
+    /// 現在の枠比率へ再計算）。ロック中はCore側のガードで何も起きない。
+    func replaceSelectedPhoto(data: Data) async {
+        guard let id = selectedPlacementID else { return }
+        record()
+        do {
+            project = try await replacePhoto.execute(project: project, placementID: id, imageData: data)
             await refreshImages()
         } catch {
             errorMessage = "写真を読み込めませんでした: \(error.localizedDescription)"
@@ -500,15 +520,27 @@ final class PageEditorViewModel {
             return
         }
         isExporting = true
-        defer { isExporting = false }
+        exportSucceeded = false
+        defer {
+            isExporting = false
+            exportProgress = nil
+        }
         do {
             if pageCount > 1 {
-                let results = try await exportPage.executeAll(project: project, resolution: exportResolution)
+                // 進捗（N/M）を出すためexecuteAllではなく1ページずつ書き出す（保存順=投稿順は同じ）
+                let ordered = project.orderedPages
+                var results: [ExportResult] = []
+                for (i, page) in ordered.enumerated() {
+                    exportProgress = (i + 1, ordered.count)
+                    results.append(try await exportPage.execute(
+                        project: project, pageIndex: page.index, resolution: exportResolution))
+                }
                 let totalMB = Double(results.reduce(0) { $0 + $1.byteCount }) / 1_000_000
                 exportMessage = String(
                     format: "%d枚を投稿順に書き出しました（計%.1fMB）\nカメラロールに保存済み",
                     results.count, totalMB
                 )
+                exportSucceeded = true
             } else {
                 let result = try await exportPage.execute(
                     project: project, pageIndex: currentPageIndex, resolution: exportResolution)
@@ -517,6 +549,7 @@ final class PageEditorViewModel {
                     format: "書き出し完了: %.0f×%.0fpx / %.1fMB\nカメラロールに保存しました",
                     result.pixelSize.width, result.pixelSize.height, mb
                 )
+                exportSucceeded = true
             }
         } catch {
             exportMessage = "書き出しに失敗しました: \(error.localizedDescription)"
@@ -529,17 +562,29 @@ final class PageEditorViewModel {
     func prepareShare() async {
         guard hasPhoto, !isExporting, !isPreparingShare else { return }
         isPreparingShare = true
-        defer { isPreparingShare = false }
+        defer {
+            isPreparingShare = false
+            exportProgress = nil
+        }
         do {
             let dataList: [Data]
             if pageCount > 1 {
-                dataList = try await exportPage.renderAllImageData(project: project, resolution: exportResolution)
+                let ordered = project.orderedPages
+                var collected: [Data] = []
+                for (i, page) in ordered.enumerated() {
+                    exportProgress = (i + 1, ordered.count)
+                    collected.append(try await exportPage.renderImageData(
+                        project: project, pageIndex: page.index, resolution: exportResolution))
+                }
+                dataList = collected
             } else {
                 dataList = [try await exportPage.renderImageData(
                     project: project, pageIndex: currentPageIndex, resolution: exportResolution)]
             }
             shareItems = try await shareFileWriter.writeTemporaryFiles(dataList, format: .defaultJPEG)
         } catch {
+            // 失敗アラートに「写真アプリを開く」（保存成功時専用）が紛れないようフラグを落とす
+            exportSucceeded = false
             exportMessage = "共有用の画像を準備できませんでした: \(error.localizedDescription)"
         }
     }

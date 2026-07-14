@@ -176,6 +176,35 @@ extension ProjectEntity {
     }
 
     /// スライドを複製し、直後に挿入する（写真・スタイルごとコピー）。「ページ選択」メニュー用。
+    /// プロジェクト全体の複製を返す（プロジェクト/ページ/配置すべて新ID）。
+    /// 写真ファイルの参照（`PhotoRef.fileName`）は複製せず共有する
+    /// （プロジェクト削除はレコードのみでファイルは消さないため、共有参照で安全）。
+    public func duplicated(at date: Date = Date()) -> ProjectEntity {
+        var copy = self
+        copy.id = UUID()
+        for i in copy.pages.indices { copy.pages[i].id = UUID() }
+        for i in copy.placements.indices { copy.placements[i].id = UUID() }
+        copy.createdAt = date
+        copy.updatedAt = date
+        return copy
+    }
+
+    /// 写真の差し替え: destRect・枠・重なり順・スロット拘束・ロック以外の状態を保ち、写真だけ入れ替える。
+    /// クロップは新しい元画像の全体から現在の枠のピクセルアスペクトへ中央絞り込み（`CropMath.subCrop`）、
+    /// 回転はリセットする（不変条件: destRectとcropRectのピクセルアスペクト一致を維持）。
+    /// ロック中は何もしない（クロップ・削除と同じガード）。差し替えたらtrue
+    public mutating func replacePhoto(_ photo: PhotoRef, placementID: UUID) -> Bool {
+        guard let index = placements.firstIndex(where: { $0.id == placementID }),
+              !placements[index].isLocked,
+              let page = page(at: placements[index].pageIndex) else { return false }
+        let framePixelAspect = placements[index].destRect.aspectRatio * page.contentAspect
+        placements[index].photo = photo
+        placements[index].cropRect = CropMath.subCrop(
+            .unit, photo: photo, targetPixelAspect: framePixelAspect)
+        placements[index].cropRotation = 0
+        return true
+    }
+
     public mutating func duplicatePage(at pageIndex: Int) {
         guard let source = page(at: pageIndex) else { return }
         let newIndex = pageIndex + 1

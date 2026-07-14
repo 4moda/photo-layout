@@ -360,6 +360,7 @@ private struct BackgroundColorSwatch: View {
         Circle()
             .fill(Color(red: color.red, green: color.green, blue: color.blue, opacity: color.alpha))
             .frame(width: diameter, height: diameter)
-            .overlay(Circle().stroke(Color.gray.opacity(0.35), lineWidth: 0.75))
+            // 白・薄グレーがシート地に同化しないよう、輪郭線は全色にはっきり付ける
+            .overlay(Circle().strokeBorder(Color(.systemGray3), lineWidth: 1))
     }
 }

@@ -103,8 +103,16 @@ struct ProjectListView: View {
                     createAndOpen(aspect: aspect, title: nil)
                 }
             }
-            .sheet(isPresented: $showingNewFolderSheet) {
-                newFolderSheet
+            // フォルダ作成は名前を1つ入れるだけなのでシートではなく標準の入力ダイアログ
+            // （表示と同時にキーボードへ自動フォーカスされる）
+            .alert("フォルダを作成", isPresented: $showingNewFolderSheet) {
+                TextField("フォルダ名", text: $newFolderName)
+                Button("キャンセル", role: .cancel) {}
+                Button("作成") {
+                    let trimmed = newFolderName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { return }
+                    Task { await viewModel.createFolder(name: trimmed) }
+                }
             }
             .sheet(isPresented: $showingBulkDeleteConfirmation) {
                 BulkDeleteConfirmationSheet(
@@ -193,6 +201,7 @@ struct ProjectListView: View {
                                 isSelecting: isSelectingRecent,
                                 isSelected: recentSelection.contains(project.id),
                                 onDelete: { Task { await viewModel.delete(id: project.id) } },
+                                onDuplicate: { Task { await viewModel.duplicate(project: project) } },
                                 onMoveToFolder: { folderID in
                                     Task { await viewModel.moveToFolder(projectID: project.id, folderID: folderID) }
                                 },
@@ -282,34 +291,6 @@ struct ProjectListView: View {
         .accessibilityIdentifier("projectList.add")
         .padding(.horizontal, 20)
         .padding(.bottom, 12)
-    }
-
-    /// フォルダ作成: 名前入力のみのシンプルなシート。
-    private var newFolderSheet: some View {
-        NavigationStack {
-            Form {
-                TextField("フォルダ名", text: $newFolderName)
-                    .accessibilityIdentifier("projectList.newFolder.field")
-            }
-            .navigationTitle("フォルダを作成")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") { showingNewFolderSheet = false }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("作成") {
-                        let trimmed = newFolderName.trimmingCharacters(in: .whitespacesAndNewlines)
-                        showingNewFolderSheet = false
-                        guard !trimmed.isEmpty else { return }
-                        Task { await viewModel.createFolder(name: trimmed) }
-                    }
-                    .disabled(newFolderName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .accessibilityIdentifier("projectList.newFolder.confirm")
-                }
-            }
-        }
-        .presentationDetents([.medium])
     }
 
     private func createAndOpen(aspect: AspectRatio, title: String?) {
@@ -412,6 +393,7 @@ private struct FolderDetailView: View {
                                     isSelecting: isSelecting,
                                     isSelected: selection.contains(project.id),
                                     onDelete: { Task { await viewModel.delete(id: project.id) } },
+                                    onDuplicate: { Task { await viewModel.duplicate(project: project) } },
                                     onMoveToFolder: { folderID in
                                         Task { await viewModel.moveToFolder(projectID: project.id, folderID: folderID) }
                                     },
@@ -535,6 +517,8 @@ private struct ProjectCell: View {
     let isSelecting: Bool
     let isSelected: Bool
     let onDelete: () -> Void
+    /// 同じ構図（ページ・配置・枠）のまま新しいプロジェクトとして複製する
+    let onDuplicate: () -> Void
     /// 選んだフォルダのIDを渡す。「フォルダなし」を選んだ場合はnil（未分類に戻す）
     let onMoveToFolder: (UUID?) -> Void
     /// 「⋯」メニューの「選択」または長押しで呼ばれる。このプロジェクトを選択済みの状態で選択モードへ入る
@@ -581,6 +565,11 @@ private struct ProjectCell: View {
                         showingFolderPicker = true
                     } label: {
                         Label("フォルダへ移動", systemImage: "folder")
+                    }
+                    Button {
+                        onDuplicate()
+                    } label: {
+                        Label("複製", systemImage: "plus.square.on.square")
                     }
                     Button(role: .destructive) {
                         showingDeleteConfirmation = true
@@ -971,8 +960,15 @@ private struct FolderCell: View {
             }
             .accessibilityIdentifier("projectList.folderMenu")
         }
-        .sheet(isPresented: $showingRenameSheet) {
-            renameSheet
+        // 名前変更もフォルダ作成と同じ標準の入力ダイアログ（自動フォーカス）
+        .alert("名前を変更", isPresented: $showingRenameSheet) {
+            TextField("フォルダ名", text: $renameText)
+            Button("キャンセル", role: .cancel) {}
+            Button("保存") {
+                let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return }
+                onRename(trimmed)
+            }
         }
         .sheet(isPresented: $showingDeleteConfirmation) {
             deleteConfirmationSheet
@@ -1052,33 +1048,6 @@ private struct FolderCell: View {
                     .padding(6)
             }
         }
-    }
-
-    private var renameSheet: some View {
-        NavigationStack {
-            Form {
-                TextField("フォルダ名", text: $renameText)
-                    .accessibilityIdentifier("projectList.folderRename.field")
-            }
-            .navigationTitle("名前を変更")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") { showingRenameSheet = false }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
-                        let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
-                        showingRenameSheet = false
-                        guard !trimmed.isEmpty else { return }
-                        onRename(trimmed)
-                    }
-                    .disabled(renameText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .accessibilityIdentifier("projectList.folderRename.confirm")
-                }
-            }
-        }
-        .presentationDetents([.medium])
     }
 
     /// フォルダ削除確認。プロジェクト削除確認（拡大サムネイル付き）と違い実体の見た目を持たないため、

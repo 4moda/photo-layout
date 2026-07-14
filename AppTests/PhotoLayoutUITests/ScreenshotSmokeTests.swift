@@ -175,12 +175,12 @@ final class ScreenshotSmokeTests: XCTestCase {
         let newFolderMenuItem = app.buttons["フォルダを作成"]
         XCTAssertTrue(newFolderMenuItem.waitForExistence(timeout: 5))
         newFolderMenuItem.tap()
-        let folderNameField = app.textFields["projectList.newFolder.field"]
+        // フォルダ作成は標準の入力ダイアログ（.alert）。フィールドは自動フォーカス済みなのでタップ不要
+        let folderNameField = app.alerts.textFields.firstMatch
         XCTAssertTrue(folderNameField.waitForExistence(timeout: 5))
         snapshot("S01-F15-folder-create-sheet")
-        folderNameField.tap()
         folderNameField.typeText("Travel")
-        app.buttons["projectList.newFolder.confirm"].tap()
+        app.alerts.buttons["作成"].tap()
         XCTAssertTrue(app.buttons["Travel"].waitForExistence(timeout: 5))
         sleep(1)
         snapshot("S01-F13-folder-list-populated")
@@ -258,9 +258,10 @@ final class ScreenshotSmokeTests: XCTestCase {
             folderMenu.tap()
             if app.buttons["名前を変更"].waitForExistence(timeout: 3) {
                 app.buttons["名前を変更"].tap()
-                if app.textFields["projectList.folderRename.field"].waitForExistence(timeout: 5) {
+                // 名前変更も標準の入力ダイアログ（.alert）
+                if app.alerts.textFields.firstMatch.waitForExistence(timeout: 5) {
                     snapshot("S01-F17-folder-rename-sheet")
-                    app.buttons["projectList.folderRename.confirm"].tap()
+                    app.alerts.buttons["保存"].tap()
                 }
             }
 

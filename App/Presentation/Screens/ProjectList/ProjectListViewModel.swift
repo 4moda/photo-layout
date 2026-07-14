@@ -13,6 +13,7 @@ final class ProjectListViewModel {
     private let listProjects: ListProjectsUseCase
     private let createProject: CreateProjectUseCase
     private let deleteProject: DeleteProjectUseCase
+    private let duplicateProjectUseCase: DuplicateProjectUseCase
     private let listFolders: ListFoldersUseCase
     private let createFolderUseCase: CreateFolderUseCase
     private let renameFolderUseCase: RenameFolderUseCase
@@ -30,6 +31,7 @@ final class ProjectListViewModel {
         listProjects: ListProjectsUseCase,
         createProject: CreateProjectUseCase,
         deleteProject: DeleteProjectUseCase,
+        duplicateProject: DuplicateProjectUseCase,
         listFolders: ListFoldersUseCase,
         createFolder: CreateFolderUseCase,
         renameFolder: RenameFolderUseCase,
@@ -41,6 +43,7 @@ final class ProjectListViewModel {
         self.listProjects = listProjects
         self.createProject = createProject
         self.deleteProject = deleteProject
+        self.duplicateProjectUseCase = duplicateProject
         self.listFolders = listFolders
         self.createFolderUseCase = createFolder
         self.renameFolderUseCase = renameFolder
@@ -107,6 +110,18 @@ final class ProjectListViewModel {
         } catch {
             errorMessage = error.localizedDescription
             return nil
+        }
+    }
+
+    /// プロジェクトを複製する（同じ構図で写真を差し替える連続投稿の起点）。
+    /// 複製は新IDになるためサムネイルも生成し直す。
+    func duplicate(project: ProjectEntity) async {
+        do {
+            _ = try await duplicateProjectUseCase.execute(project)
+            projects = try await listProjects.execute()
+            await refreshThumbnails()
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 

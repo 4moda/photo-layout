@@ -46,6 +46,7 @@ enum AppComposition {
             listProjects: ListProjectsUseCase(repository: repo),
             createProject: CreateProjectUseCase(repository: repo),
             deleteProject: DeleteProjectUseCase(repository: repo),
+            duplicateProject: DuplicateProjectUseCase(repository: repo),
             listFolders: ListFoldersUseCase(repository: folderRepo),
             createFolder: CreateFolderUseCase(repository: folderRepo),
             renameFolder: RenameFolderUseCase(repository: folderRepo),
@@ -63,6 +64,7 @@ enum AppComposition {
             project: project,
             saveProject: SaveProjectUseCase(repository: repo),
             addPhoto: AddPhotoUseCase(photoStore: FilePhotoStore(), repository: repo),
+            replacePhoto: ReplacePhotoUseCase(photoStore: FilePhotoStore(), repository: repo),
             exportPage: ExportPageUseCase(
                 renderer: CoreGraphicsExportRenderer(decoder: decoder),
                 librarySaver: PHPhotoLibrarySaveAdapter()

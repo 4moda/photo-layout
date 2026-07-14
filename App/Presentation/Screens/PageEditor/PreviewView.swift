@@ -6,6 +6,7 @@ import PhotoLayoutCore
 struct PreviewView: View {
     @Bindable var viewModel: PageEditorViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @State private var currentPage = 0
 
     var body: some View {
@@ -53,6 +54,15 @@ struct PreviewView: View {
                 get: { viewModel.exportMessage != nil },
                 set: { if !$0 { viewModel.exportMessage = nil } }
             )) {
+                // 保存成功時のみ、そのまま投稿フローへ移れる導線を出す
+                if viewModel.exportSucceeded {
+                    Button("写真アプリを開く") {
+                        viewModel.exportMessage = nil
+                        if let url = URL(string: "photos-redirect://") {
+                            openURL(url)
+                        }
+                    }
+                }
                 Button("OK") { viewModel.exportMessage = nil }
             } message: {
                 Text(viewModel.exportMessage ?? "")
@@ -104,7 +114,7 @@ struct PreviewView: View {
                 Task { await viewModel.exportPages() }
             } label: {
                 saveBarItem(
-                    title: viewModel.pageCount > 1 ? "保存（全\(viewModel.pageCount)枚）" : "保存",
+                    title: saveButtonTitle,
                     systemImage: "square.and.arrow.down",
                     isLoading: viewModel.isExporting
                 )
@@ -116,12 +126,33 @@ struct PreviewView: View {
             Button {
                 Task { await viewModel.prepareShare() }
             } label: {
-                saveBarItem(title: "共有", systemImage: "square.and.arrow.up", isLoading: viewModel.isPreparingShare)
+                saveBarItem(title: shareButtonTitle, systemImage: "square.and.arrow.up", isLoading: viewModel.isPreparingShare)
             }
             .buttonStyle(.plain)
             .disabled(viewModel.isExporting || viewModel.isPreparingShare || !viewModel.hasPhoto)
             .accessibilityIdentifier("preview.share")
         }
+    }
+
+    /// 実行中は何枚目を処理しているかまで示す（高解像度×複数枚では数十秒かかりうるため）
+    private var saveButtonTitle: String {
+        if viewModel.isExporting {
+            if let progress = viewModel.exportProgress {
+                return "書き出し中 \(progress.current)/\(progress.total)…"
+            }
+            return "書き出し中…"
+        }
+        return viewModel.pageCount > 1 ? "保存（全\(viewModel.pageCount)枚）" : "保存"
+    }
+
+    private var shareButtonTitle: String {
+        if viewModel.isPreparingShare {
+            if let progress = viewModel.exportProgress {
+                return "準備中 \(progress.current)/\(progress.total)…"
+            }
+            return "準備中…"
+        }
+        return "共有"
     }
 
     /// フローティングメニュー1項目の見た目（アイコンの上に小さなラベル）。他画面の `toolButton` と同じ配置。
