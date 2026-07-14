@@ -44,6 +44,6 @@ TestFlight 配布には **有料の Apple Developer Program** 登録が前提。
 
 ## メモ
 
-- ビルドツールチェーンは CI と揃える（Xcode 16.4 / `DEVELOPER_DIR` 固定）。
+- ビルドツールチェーンは CI と揃える（Xcode 26.6 / `DEVELOPER_DIR` 固定）。
 - 署名まわりの秘密情報はログに出さない（`::add-mask::` / 環境変数経由）。
 - Info.plist は XcodeGen 生成物（`project.yml` の `info:` 由来）。バンドルIDは `com.fourmoda.photolayout`。

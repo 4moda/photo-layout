@@ -26,12 +26,12 @@ concurrency:
 jobs:
   deploy:
     name: Build & upload to Appetize
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 40
     # 手動実行、または ios-ci が成功したときのみ実行（失敗/キャンセル時はスキップ）
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     env:
-      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
       # workflow_run 起動時は既定でデフォルトブランチHEADを取るため、
       # ios-ci が回した実際のコミットを明示的にチェックアウトする。

@@ -17,14 +17,14 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # macos-15イメージのXcodeを明示固定（"latest"任せによるシミュレータランタイム不整合を防ぐ）
-  DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
-  SIMULATOR_DESTINATION: platform=iOS Simulator,name=iPhone 16
+  # macos-26イメージのXcodeを明示固定（"latest"任せによるシミュレータランタイム不整合を防ぐ）
+  DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+  SIMULATOR_DESTINATION: platform=iOS Simulator,name=iPhone 17
 
 jobs:
   build-test:
     name: iOS Build & Test
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -130,18 +130,18 @@ jobs:
   screenshots:
     name: Screenshots (${{ matrix.device.label }} / ${{ matrix.theme.name }})
     needs: build-test
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         device:
-          - name: iPhone 16
-            label: iPhone 16
-            slug: iphone-16
-          - name: iPhone SE (3rd generation)
-            label: iPhone SE 3rd gen
-            slug: iphone-se-3rd-gen
+          - name: iPhone 17
+            label: iPhone 17
+            slug: iphone-17
+          - name: iPhone 16e
+            label: iPhone 16e
+            slug: iphone-16e
         theme:
           # light: ダークモード用の1メソッド（testDarkModeSpotCheck）だけ除外して残り全部を撮る。
           - name: light
@@ -156,7 +156,7 @@ jobs:
             skipTesting: ""
             darkMode: "true"
     env:
-      # DEVELOPER_DIRはworkflow直下のenv(Xcode 16.4固定)をそのまま継承する。
+      # DEVELOPER_DIRはworkflow直下のenv(Xcode 26.6固定)をそのまま継承する。
       # Snapfile側でこれらの環境変数を読み、このジョブが担当する機種・テストだけに絞り込む。
       SNAPSHOT_DEVICES: ${{ matrix.device.name }}
       SNAPSHOT_ONLY_TESTING: ${{ matrix.theme.onlyTesting }}
