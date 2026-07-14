@@ -243,7 +243,8 @@ final class PageEditorViewModel {
     func emptySlot(atNormalizedX x: Double, y: Double, onPage pageIndex: Int) -> Int? {
         guard let slots = project.page(at: pageIndex)?.slots else { return nil }
         let empties = Set(project.emptySlotIndices(onPage: pageIndex))
-        for (i, slot) in slots.enumerated() where empties.contains(i) {
+        for (i, spec) in slots.enumerated() where empties.contains(i) {
+            let slot = spec.rect
             if slot.minX <= x, x <= slot.maxX, slot.minY <= y, y <= slot.maxY { return i }
         }
         return nil
