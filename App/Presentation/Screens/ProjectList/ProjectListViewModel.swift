@@ -119,6 +119,19 @@ final class ProjectListViewModel {
         }
     }
 
+    /// 複数選択モードの「まとめて削除」。既存の単体削除UseCaseを選択IDぶん順に呼び出す
+    /// （Core側にバッチ削除ポートは無く、本Issueでも追加しない）。
+    func deleteProjects(ids: Set<UUID>) async {
+        do {
+            for id in ids {
+                try await deleteProject.execute(id: id)
+            }
+            projects = try await listProjects.execute()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func createFolder(name: String) async {
         do {
             try await createFolderUseCase.execute(name: name)
@@ -142,6 +155,18 @@ final class ProjectListViewModel {
     func moveToFolder(projectID: UUID, folderID: UUID?) async {
         do {
             try await moveProjectToFolderUseCase.execute(projectID: projectID, folderID: folderID)
+            projects = try await listProjects.execute()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// 複数選択モードの「フォルダを設定」。既存の単体移動UseCaseを選択IDぶん順に呼び出す。
+    func moveProjectsToFolder(ids: Set<UUID>, folderID: UUID?) async {
+        do {
+            for id in ids {
+                try await moveProjectToFolderUseCase.execute(projectID: id, folderID: folderID)
+            }
             projects = try await listProjects.execute()
         } catch {
             errorMessage = error.localizedDescription
