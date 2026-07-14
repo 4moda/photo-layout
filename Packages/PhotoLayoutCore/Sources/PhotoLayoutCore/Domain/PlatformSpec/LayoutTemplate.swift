@@ -4,16 +4,25 @@
 public struct LayoutTemplate: Equatable, Sendable, Identifiable {
     public let id: String
     public let name: String
-    /// スロット矩形（ページ配置領域の正規化0..1座標、表示順）
-    public let slots: [LayoutRect]
+    /// スロット（写真窓）仕様（ページ配置領域の正規化0..1座標、表示順）
+    public let slots: [SlotSpec]
     /// このテンプレートが想定するページの推奨アスペクト（適用時にページへ設定してよい）
     public let recommendedAspect: AspectRatio?
 
-    public init(id: String, name: String, slots: [LayoutRect], recommendedAspect: AspectRatio? = nil) {
+    public init(id: String, name: String, slots: [SlotSpec], recommendedAspect: AspectRatio? = nil) {
         self.id = id
         self.name = name
         self.slots = slots
         self.recommendedAspect = recommendedAspect
+    }
+
+    /// 矩形だけのテンプレート定義用の互換init（`LayoutTemplateTable`の定数定義を簡潔に保つ）
+    public init(id: String, name: String, slots: [LayoutRect], recommendedAspect: AspectRatio? = nil) {
+        self.init(
+            id: id, name: name,
+            slots: slots.map { SlotSpec(rect: $0) },
+            recommendedAspect: recommendedAspect
+        )
     }
 
     public var slotCount: Int { slots.count }

@@ -28,10 +28,12 @@ PhotoLayout の設計・実装を引き継ぐための中核ドキュメント�
 ProjectEntity              # 下書き1件。pages と placements を持つ（placementはページの子ではなくProject直下）
 ├── platformPreset?        # .x / .instagram。現在は「不活性メタデータ」。挙動は分岐させない
 ├── pages: [PageEntity]    # index順。各ページ = 1書き出し単位。aspect + background(色・余白)
+│   └── slots: [SlotSpec]?  # ページ直付きの型枠（写真窓）。nil=自由キャンバス。SlotSpec=rect+クリップ形状+窓ごとの縁
 │                          # ※背景色はプロジェクト共通として全ページ一括で設定する（俯瞰/新規作成）
 ├── placements: [PlacementEntity]
 │   ├── sortIndex          # 重なり順（昇順で奥→手前）
 │   ├── pageIndex          # 所属ページ
+│   ├── slot: SlotAssignment?  # 写真窓への拘束。nil=自由配置。現状 .pageSlot(index) のみ
 │   ├── photo: PhotoRef    # ローカルコピーのファイル名 + 元ピクセルサイズ
 │   ├── cropRect           # 元画像に対する正規化(0..1)。画像のどこを見せるか
 │   ├── destRect           # 所属ページの配置領域に対する正規化。写真の表示矩形（枠が付く対象）
@@ -46,6 +48,30 @@ FolderEntity                # プロジェクトのグルーピング（v1: 入�
 ├── createdAt
 └── updatedAt
 ```
+
+### 構図モデル（SlotSpec / SlotAssignment）と将来拡張
+
+「構図」の最小単位は **`SlotSpec`（写真窓の仕様）** — rect（親ローカルの正規化0..1）＋クリップ形状
+（当面`.rectangle`のみ）＋窓ごとの縁スタイル（nil=プロジェクト既定）。`PageEntity.slots: [SlotSpec]?`
+（ページ直付きの型枠）と`LayoutTemplate.slots`が共有する。配置側の拘束は **`SlotAssignment`**
+（enum、現状`.pageSlot(index:)`のみ。互換アクセサ`slotIndex: Int?`あり）。
+
+この語彙は次の将来機能を手戻りなく受け入れるために設計されている（**実装時にcase／型を足すだけ**にする）:
+
+- **マイテンプレート**（[#92](https://github.com/4moda/photo-layout/issues/92)）: 保存形式は
+  「構図要素の配列」= ページごとの`[SlotSpec]`＋比率＋背景＋既定縁。組み込み`LayoutTemplateTable`
+  （静的）にユーザー定義テンプレートを合流させる
+- **装飾枠（フィルム風・フォトフレーム風）**: `DecorativeFrameSpec`（カタログ値オブジェクト:
+  underlay/overlayの装飾アート＋apertures: [SlotSpec]）＋`FrameInstanceEntity`
+  （pageIndex/destRect/sortIndex/specID —「動かせる複数窓オブジェクト」）を追加し、
+  `SlotAssignment`に`.frameAperture(instanceID:index:)`をcase追加する。
+  描画は`RenderPlanBuilder`が「underlay→窓内写真（クリップ）→overlay」の順に既存DrawCommandを
+  吐き、`drawAsset(assetRef:destRect:clipRect:)`を1命令追加するだけ（プレビュー=書き出しの
+  構造保証は維持）。装飾アートは`assetRef: String`の名前参照でCoreのApple framework非依存を守る
+  （解決はInfrastructure）
+- 永続化: `SlotAssignment`はケースごとのカラムへマップ（現状`slotIndex: Int?`のみ。
+  `.frameAperture`導入時にカラム追加）。`SlotSpec`へ将来キーを足すときは
+  `decodeIfPresent`＋既定値のカスタムデコードで旧データを読む
 
 ### 自由変形モデル（fill/fit の永続モードは廃止）
 

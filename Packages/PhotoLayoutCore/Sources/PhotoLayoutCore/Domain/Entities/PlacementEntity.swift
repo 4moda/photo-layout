@@ -1,5 +1,14 @@
 import Foundation
 
+/// 配置（写真）の拘束先。nil（非拘束）= 自由配置。
+/// 将来、装飾枠（フィルム風・フォトフレーム風の「動かせる複数窓オブジェクト」= FrameInstance構想）の
+/// 窓拘束（例: `.frameAperture(instanceID: UUID, index: Int)`）をcase追加する。
+/// 永続化はケースごとのカラムにマップする（現状は`slotIndex: Int?`カラムのみ）。
+public enum SlotAssignment: Hashable, Codable, Sendable {
+    /// ページ直付きスロット（`PageEntity.slots`）のindexへの拘束
+    case pageSlot(index: Int)
+}
+
 /// 写真1枚の配置。写真は自由変形オブジェクトであり、fill/fitのようなモードは持たない。
 /// 「全面に敷く」「余白を残して置く」はすべてcropRect/destRectのジオメトリとして表現される。
 ///
@@ -12,9 +21,19 @@ public struct PlacementEntity: Hashable, Codable, Sendable, Identifiable {
     /// 所属ページ（PageEntity.index）。X複数枚のような異アスペクトページ構成で必須。
     /// カルーセルのまたがり配置（フェーズ5）はアンカーページ＋destRectのはみ出しで表現する
     public var pageIndex: Int
-    /// テンプレートのどのスロットに入っているか（PageEntity.slots のindex）。
-    /// nil = スロット非拘束の自由配置。スロット拘束の配置は空スロット判定・当てはめの対象
-    public var slotIndex: Int?
+    /// どの写真窓に拘束されているか。nil = 非拘束の自由配置。
+    /// 拘束された配置は空スロット判定・当てはめの対象になる
+    public var slot: SlotAssignment?
+
+    /// ページ直付きスロットのindex（`.pageSlot`のときのみ非nil）。
+    /// 既存コードの大半はページスロットだけを扱うため、この形で読み書きできるようにする
+    public var slotIndex: Int? {
+        get {
+            if case .pageSlot(let index) = slot { return index }
+            return nil
+        }
+        set { slot = newValue.map { .pageSlot(index: $0) } }
+    }
     public var photo: PhotoRef
     /// 元画像に対する正規化(0..1)クロップ矩形（CLAUDE.md ルール3）
     public var cropRect: LayoutRect
@@ -45,7 +64,7 @@ public struct PlacementEntity: Hashable, Codable, Sendable, Identifiable {
         self.id = id
         self.sortIndex = sortIndex
         self.pageIndex = pageIndex
-        self.slotIndex = slotIndex
+        self.slot = slotIndex.map { .pageSlot(index: $0) }
         self.photo = photo
         self.cropRect = cropRect
         self.destRect = destRect

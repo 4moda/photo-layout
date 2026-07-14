@@ -134,6 +134,7 @@ Issue/PR 単位をやめ、動く段階まで仕上げて main へ直接コミ�
 | ページ単位の背景設定UI | プロジェクト共通背景（俯瞰・新規作成） | 「枠＝写真単位」「背景＝プロジェクト単位」で責務分離。混在をやめる |
 | テスト内 `XCUIDevice.shared.appearance = .dark`（`makeApp(dark:)`） | fastlane snapshotの `dark_mode` Snapfileオプション（`SNAPSHOT_DARK_MODE`） | `xcodebuild test-without-building` 経由のCI実行では反映されず、dark legのスクショが実際にはライト外観のまま撮れていた（[#43](https://github.com/4moda/photo-layout/issues/43)） |
 | 一覧のレイアウト名表示 | サムネイルのみ（SCRL 風グリッド） | 名前より中身（1ページ目プレビュー）で識別するほうが速い |
+| `PageEntity.slots: [LayoutRect]`（素の矩形） | `[SlotSpec]`（rect＋クリップ形状＋窓ごとの縁）＋配置側は`SlotAssignment` enum | マイテンプレート（#92）と装飾枠（フィルム風/フォトフレーム風=FrameInstance構想）を手戻りなく受けるための構図語彙の整理（2026-07-14、docs/design.md「構図モデル」参照。利用者ゼロのため旧データ互換は持たない） |
 | ダウンロード即保存 | プレビュー画面（`PreviewView`）を挟む | 書き出し前に全スライドの仕上がりを確認できるようにする |
 | S01下部の新規作成＋フォルダ作成ボタンを横並びで常設した`.ultraThinMaterial`パネル（`projectList.addFolder`） | 単独の丸＋FAB＋タップで開く2択メニュー | 常時2ボタンが横並びで見えるのは煩雑という指摘（[#82](https://github.com/4moda/photo-layout/issues/82)）。フォルダ作成は頻度が低くメニュー項目で十分 |
 

@@ -34,9 +34,9 @@ struct SlotTemplateTests {
         #expect(placed.count == 1)
         let p = placed[0]
         #expect(p.slotIndex == 1)
-        #expect(p.destRect.isApproximatelyEqual(to: template.slots[1]))
+        #expect(p.destRect.isApproximatelyEqual(to: template.slots[1].rect))
         let page = project.page(at: 0)!
-        let slotPxAspect = template.slots[1].aspectRatio * page.contentAspect
+        let slotPxAspect = template.slots[1].rect.aspectRatio * page.contentAspect
         #expect(abs(cropPixelAspect(p) - slotPxAspect) < 1e-9)
         #expect(LayoutRect.unit.contains(p.cropRect))
     }

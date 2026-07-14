@@ -9,7 +9,7 @@ struct LayoutTemplateTests {
         for template in LayoutTemplateTable.templates(forPhotoCount: count) {
             #expect(template.slotCount == count)
             for slot in template.slots {
-                #expect(LayoutRect.unit.contains(slot))
+                #expect(LayoutRect.unit.contains(slot.rect))
             }
         }
     }
@@ -17,17 +17,17 @@ struct LayoutTemplateTests {
     @Test("2枚左右分割はスロットが重ならない")
     func twoUpSlotsDontOverlap() {
         let template = LayoutTemplateTable.twoUp()[0]
-        let overlap = template.slots[0].intersection(template.slots[1])
+        let overlap = template.slots[0].rect.intersection(template.slots[1].rect)
         #expect(overlap.width <= 0 || overlap.height <= 0)
     }
 
     private func expectSlotsFitAndDontOverlap(_ template: LayoutTemplate) {
         for slot in template.slots {
-            #expect(LayoutRect.unit.contains(slot))
+            #expect(LayoutRect.unit.contains(slot.rect))
         }
         for i in 0..<template.slots.count {
             for j in (i + 1)..<template.slots.count {
-                let overlap = template.slots[i].intersection(template.slots[j])
+                let overlap = template.slots[i].rect.intersection(template.slots[j].rect)
                 #expect(overlap.width <= 0 || overlap.height <= 0)
             }
         }
@@ -85,7 +85,7 @@ struct ApplyTemplateTests {
         project.applyTemplate(template, toPage: 0)
         let page = project.page(at: 0)!
         for (offset, placement) in project.placements(onPage: 0).enumerated() {
-            #expect(placement.destRect.isApproximatelyEqual(to: template.slots[offset]))
+            #expect(placement.destRect.isApproximatelyEqual(to: template.slots[offset].rect))
             #expect(abs(destPixelAspect(placement, page: page) - cropPixelAspect(placement)) < 1e-9)
             #expect(LayoutRect.unit.contains(placement.cropRect))
         }
@@ -97,6 +97,6 @@ struct ApplyTemplateTests {
         let template = LayoutTemplateTable.fourUp()[0] // 4スロット
         project.applyTemplate(template, toPage: 0)
         #expect(project.placements(onPage: 0).count == 1)
-        #expect(project.placements(onPage: 0)[0].destRect.isApproximatelyEqual(to: template.slots[0]))
+        #expect(project.placements(onPage: 0)[0].destRect.isApproximatelyEqual(to: template.slots[0].rect))
     }
 }

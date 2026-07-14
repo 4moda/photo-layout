@@ -7,16 +7,17 @@ public struct PageEntity: Hashable, Codable, Sendable, Identifiable {
     public var index: Int
     public var aspect: AspectRatio
     public var background: CanvasBackgroundStyle
-    /// このスライドに敷いたテンプレートのスロット矩形（配置領域の正規化0..1）。
-    /// nil = 型枠なしの自由キャンバス。非nilなら「空スロット」が存在でき、写真を当てはめる。
-    public var slots: [LayoutRect]?
+    /// このスライドに敷いたテンプレートのスロット（写真窓）仕様。矩形に加えクリップ形状・
+    /// 窓ごとの縁を持てる（`SlotSpec`）。nil = 型枠なしの自由キャンバス。
+    /// 非nilなら「空スロット」が存在でき、写真を当てはめる。
+    public var slots: [SlotSpec]?
 
     public init(
         id: UUID = UUID(),
         index: Int,
         aspect: AspectRatio,
         background: CanvasBackgroundStyle = .plainWhite,
-        slots: [LayoutRect]? = nil
+        slots: [SlotSpec]? = nil
     ) {
         self.id = id
         self.index = index

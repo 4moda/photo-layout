@@ -434,7 +434,7 @@ struct PageEditorView: View {
             if let slots = page.slots,
                let content = contentRectInStrip(pageIndex: page.index, stripHeight: stripHeight) {
                 ForEach(viewModel.project.emptySlotIndices(onPage: page.index), id: \.self) { i in
-                    let slot = slots[i]
+                    let slot = slots[i].rect
                     let w = slot.width * content.width
                     let h = slot.height * content.height
                     ZStack {
@@ -1365,7 +1365,8 @@ private struct TemplateThumbnail: View {
     var body: some View {
         GeometryReader { g in
             ZStack(alignment: .topLeading) {
-                ForEach(Array(template.slots.enumerated()), id: \.offset) { _, slot in
+                ForEach(Array(template.slots.enumerated()), id: \.offset) { _, spec in
+                    let slot = spec.rect
                     RoundedRectangle(cornerRadius: 3)
                         .fill(Color.accentColor.opacity(0.22))
                         .overlay(

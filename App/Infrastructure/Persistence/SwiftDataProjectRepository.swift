@@ -74,7 +74,7 @@ final class SwiftDataProjectRepository: ProjectRepository {
                         index: page.index,
                         aspect: AspectRatio(width: page.aspectWidth, height: page.aspectHeight),
                         background: try decoder.decode(CanvasBackgroundStyle.self, from: page.backgroundData),
-                        slots: try page.slotsData.map { try decoder.decode([LayoutRect].self, from: $0) }
+                        slots: try page.slotsData.map { try decoder.decode([SlotSpec].self, from: $0) }
                     )
                 },
             placements: try model.placements

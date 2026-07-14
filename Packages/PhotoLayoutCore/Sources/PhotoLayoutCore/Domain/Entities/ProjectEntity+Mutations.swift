@@ -101,7 +101,7 @@ extension ProjectEntity {
             guard let index = placements.firstIndex(where: { $0.id == placement.id }) else { continue }
             if offset < template.slots.count {
                 placements[index].slotIndex = offset
-                fitPlacementToSlot(placementArrayIndex: index, slot: template.slots[offset], page: page)
+                fitPlacementToSlot(placementArrayIndex: index, slot: template.slots[offset].rect, page: page)
             } else {
                 // スロットからあふれた写真は外す
                 placements.remove(at: index)
@@ -115,7 +115,7 @@ extension ProjectEntity {
         guard let page = page(at: pageIndex),
               let slots = page.slots, slots.indices.contains(slotIndex) else { return }
         placements.removeAll { $0.pageIndex == pageIndex && $0.slotIndex == slotIndex }
-        let slot = slots[slotIndex]
+        let slot = slots[slotIndex].rect
         let slotPixelAspect = slot.aspectRatio * page.contentAspect
         placements.append(PlacementEntity(
             sortIndex: placements.count,
@@ -144,7 +144,7 @@ extension ProjectEntity {
         background: CanvasBackgroundStyle = .plainWhite
     ) {
         let n = max(1, min(count, 20))
-        pages = (0..<n).map { PageEntity(index: $0, aspect: slideAspect, background: background, slots: [.unit]) }
+        pages = (0..<n).map { PageEntity(index: $0, aspect: slideAspect, background: background, slots: [SlotSpec(rect: .unit)]) }
         // 余白込みの配置領域アスペクト × n が仮想キャンバスのアスペクト
         let slideContentAspect = pages[0].contentAspect
         let totalAspect = slideContentAspect * Double(n)
