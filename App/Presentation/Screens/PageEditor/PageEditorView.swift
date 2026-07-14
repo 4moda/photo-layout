@@ -207,7 +207,7 @@ struct PageEditorView: View {
                     }
                 }
                 emptySlotOverlay(stripHeight: stripHeight)
-                stripSelectionOverlay(stripHeight: stripHeight)
+                stripSelectionOverlay(stripHeight: stripHeight, viewportHeight: geo.size.height)
             }
             .frame(width: stripWidth, height: stripHeight, alignment: .topLeading)
             .offset(panOffset)
@@ -238,7 +238,7 @@ struct PageEditorView: View {
 
     /// 選択中の配置の枠・ハンドル・スナップガイド（スプレッド座標）。クロップ中は `cropOverlay` が見た目を担うので出さない
     @ViewBuilder
-    private func stripSelectionOverlay(stripHeight: CGFloat) -> some View {
+    private func stripSelectionOverlay(stripHeight: CGFloat, viewportHeight: CGFloat) -> some View {
         if let contentStrip = selectedContentRectInStrip(stripHeight: stripHeight),
            let selectedID = viewModel.selectedPlacementID,
            let placement = viewModel.project.placements.first(where: { $0.id == selectedID }),
@@ -254,7 +254,8 @@ struct PageEditorView: View {
             }
             selectionHoverMenu(
                 rect: rect, placementID: selectedID,
-                isLocked: placement.isLocked, stripHeight: stripHeight
+                isLocked: placement.isLocked,
+                stripHeight: stripHeight, viewportHeight: viewportHeight
             )
         }
     }
@@ -263,7 +264,8 @@ struct PageEditorView: View {
     /// フッターの写真メニューと同じ操作への近接ショートカット（フッター側も残す）。
     /// 削除はフッター同様ロック中はdisabled
     private func selectionHoverMenu(
-        rect: LayoutRect, placementID: UUID, isLocked: Bool, stripHeight: CGFloat
+        rect: LayoutRect, placementID: UUID, isLocked: Bool,
+        stripHeight: CGFloat, viewportHeight: CGFloat
     ) -> some View {
         HStack(spacing: 2) {
             hoverMenuButton(
@@ -291,7 +293,9 @@ struct PageEditorView: View {
         .background(.ultraThinMaterial, in: Capsule())
         .overlay(Capsule().strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8))
         .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
-        .position(hoverMenuPosition(rect: rect, isLocked: isLocked, stripHeight: stripHeight))
+        .position(hoverMenuPosition(
+            rect: rect, isLocked: isLocked,
+            stripHeight: stripHeight, viewportHeight: viewportHeight))
     }
 
     private func hoverMenuButton(
@@ -312,9 +316,13 @@ struct PageEditorView: View {
     /// ホバーメニューの表示位置: 選択クローム（枠線・ハンドル）の最上端から一定の間隔を空けた真上。
     /// 「最上端」は非ロック時は角ハンドルのはみ出し（枠線から約8pt）を含む — 常に枠線基準にすると
     /// ハンドルの無いロック時だけ間隔が広く見えて、キャプチャごとに位置関係が違って見えるため。
-    /// 上に置く余地が無いときは写真の下側へフリップし、それも無理なら枠内上部に重ねる。
+    /// はみ出し判定は**ページではなくビューポート（描画領域）基準**: ページ上端の近くでも
+    /// 画面に暗いキャンバス地が見えていればそこへ置き、ビューポート上端からはみ出すときだけ
+    /// 写真の下側へフリップする（それも無理なら枠内上部・ビューポート内に重ねる）。
     /// 水平方向はストリップ端で見切れないようクランプする
-    private func hoverMenuPosition(rect: LayoutRect, isLocked: Bool, stripHeight: CGFloat) -> CGPoint {
+    private func hoverMenuPosition(
+        rect: LayoutRect, isLocked: Bool, stripHeight: CGFloat, viewportHeight: CGFloat
+    ) -> CGPoint {
         let stripWidth = SpreadGeometry.totalWidth(project: viewModel.project) * Double(stripHeight)
         let halfWidth: Double = 70
         let x = min(max(rect.midX, halfWidth), max(stripWidth - halfWidth, halfWidth))
@@ -322,15 +330,20 @@ struct PageEditorView: View {
         let menuHalfHeight: Double = 19 // アイコン34pt＋上下パディング2ptの半分
         let gap: Double = 5             // 選択クローム（枠線・ハンドル）との見た目の間隔
         let handleOverhang: Double = isLocked ? 0 : 8 // 角ハンドル（16pt円が枠線中心）のはみ出し
+        // ストリップ座標→ビューポート座標は panOffset.height を足すだけ（ズームはstripHeightに織り込み済み）。
+        // ビューポート上下端から8ptの余白を、ストリップ座標での可動範囲に変換しておく
+        let minCenterY = 8.0 + menuHalfHeight - Double(panOffset.height)
+        let maxCenterY = Double(viewportHeight) - 8 - menuHalfHeight - Double(panOffset.height)
+
         let aboveCenterY = rect.minY - handleOverhang - gap - menuHalfHeight
         let y: Double
-        if aboveCenterY - menuHalfHeight >= 8 {
+        if aboveCenterY >= minCenterY {
             y = aboveCenterY
         } else {
             let belowCenterY = rect.maxY + handleOverhang + gap + menuHalfHeight
-            y = belowCenterY + menuHalfHeight <= Double(stripHeight) - 8
+            y = belowCenterY <= maxCenterY
                 ? belowCenterY
-                : rect.minY + gap + menuHalfHeight
+                : max(rect.minY + gap + menuHalfHeight, minCenterY)
         }
         return CGPoint(x: x, y: y)
     }
