@@ -120,6 +120,8 @@ final class ScreenshotSmokeTests: XCTestCase {
         snapshot("S01-F23-project-list-selection-mode")
 
         // S01-F28: 「フォルダを設定」ピッカー。確認したらキャンセルで閉じ、移動はしない。
+        // 注: ラベル「キャンセル」は背後の選択モードバーにもあり多重一致でタップが失敗するため、
+        // ピッカー側のidentifierで一意に指定する（過去にここで中断しフォルダ系スクショが全滅した）
         let setFolderButton = app.buttons["projectList.selection.setFolder"]
         if setFolderButton.waitForExistence(timeout: 3) {
             setFolderButton.tap()
@@ -127,8 +129,9 @@ final class ScreenshotSmokeTests: XCTestCase {
                 sleep(1)
                 snapshot("S01-F28-project-list-bulk-set-folder-menu")
             }
-            if app.buttons["キャンセル"].waitForExistence(timeout: 3) {
-                app.buttons["キャンセル"].tap()
+            let pickerCancel = app.buttons["projectList.bulkMoveToFolder.cancel"]
+            if pickerCancel.waitForExistence(timeout: 3) {
+                pickerCancel.tap()
             }
         }
 
@@ -368,15 +371,18 @@ final class ScreenshotSmokeTests: XCTestCase {
 
         XCTAssertTrue(app.buttons["pageEditor.cropButton"].waitForExistence(timeout: 3), "クロップボタンが無い")
         app.buttons["pageEditor.cropButton"].tap()
-        XCTAssertTrue(app.otherElements["pageEditor.cropOverlay"].waitForExistence(timeout: 3), "クロップオーバーレイが表示されない")
+        // クロップモード突入の確認は「閉じる」ボタンで行う（cropOverlay自体はallowsHitTesting(false)の
+        // 装飾レイヤーでaccessibility treeに露出しないことがある）
+        XCTAssertTrue(app.buttons["pageEditor.cropClose"].waitForExistence(timeout: 3), "クロップモードに入っていない")
         // このデモ写真は3000x2000（3:2）だが、直前に枠比率を4:5へ変更済みのため、
         // クロップ窓の幅は元画像の約53%まで既に狭まっている（CropMath.subCrop）。
         // 枠外を暗くする効果を出すのに追加のズーム操作は不要（かつXCUITestの合成ピンチは
         // シミュレータ上での再現性が不確実なため、確実な状態にだけ依存する）。
         sleep(1)
         snapshot("S02-F10-crop-mode")
-        // 枠外（キャンバス隅の暗い地）をタップしてクロップモードを抜ける（フッターの完了ボタンは廃止済み）
-        canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: 0.03)).tap()
+        // 「閉じる」でクロップモードを抜ける（枠外タップでも抜けられるが、クロップ中は
+        // キャンバスのidentifier再解決が不安定なためボタンを使う）
+        app.buttons["pageEditor.cropClose"].tap()
         sleep(1)
 
         if app.buttons["pageEditor.frameButton"].waitForExistence(timeout: 3) {

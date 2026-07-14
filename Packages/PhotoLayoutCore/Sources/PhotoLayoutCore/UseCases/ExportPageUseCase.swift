@@ -24,7 +24,8 @@ public struct ExportPageUseCase: Sendable {
     public func execute(
         project: ProjectEntity,
         pageIndex: Int,
-        format: ExportFormat = .defaultJPEG
+        format: ExportFormat = .defaultJPEG,
+        resolution: ExportResolution = .standard
     ) async throws -> ExportResult {
         guard let page = project.page(at: pageIndex) else {
             throw ExportError.pageNotFound
@@ -34,7 +35,8 @@ public struct ExportPageUseCase: Sendable {
             page: page,
             placements: SpreadGeometry.visiblePlacements(onPage: pageIndex, project: project),
             defaultFrame: project.defaultPhotoFrame,
-            format: format
+            format: format,
+            resolution: resolution
         )
     }
 
@@ -42,11 +44,13 @@ public struct ExportPageUseCase: Sendable {
     /// カメラロール上でも選択しやすいよう、保存順＝投稿順を保証する。
     public func executeAll(
         project: ProjectEntity,
-        format: ExportFormat = .defaultJPEG
+        format: ExportFormat = .defaultJPEG,
+        resolution: ExportResolution = .standard
     ) async throws -> [ExportResult] {
         var results: [ExportResult] = []
         for page in project.orderedPages {
-            results.append(try await execute(project: project, pageIndex: page.index, format: format))
+            results.append(try await execute(
+                project: project, pageIndex: page.index, format: format, resolution: resolution))
         }
         return results
     }
@@ -56,7 +60,8 @@ public struct ExportPageUseCase: Sendable {
     public func renderImageData(
         project: ProjectEntity,
         pageIndex: Int,
-        format: ExportFormat = .defaultJPEG
+        format: ExportFormat = .defaultJPEG,
+        resolution: ExportResolution = .standard
     ) async throws -> Data {
         guard let page = project.page(at: pageIndex) else {
             throw ExportError.pageNotFound
@@ -65,18 +70,21 @@ public struct ExportPageUseCase: Sendable {
             page: page,
             placements: SpreadGeometry.visiblePlacements(onPage: pageIndex, project: project),
             defaultFrame: project.defaultPhotoFrame,
-            format: format
+            format: format,
+            resolution: resolution
         ).data
     }
 
     /// 全ページを投稿順に書き出し、カメラロールへは保存せず画像Dataの配列を返す（共有シート用）。
     public func renderAllImageData(
         project: ProjectEntity,
-        format: ExportFormat = .defaultJPEG
+        format: ExportFormat = .defaultJPEG,
+        resolution: ExportResolution = .standard
     ) async throws -> [Data] {
         var results: [Data] = []
         for page in project.orderedPages {
-            results.append(try await renderImageData(project: project, pageIndex: page.index, format: format))
+            results.append(try await renderImageData(
+                project: project, pageIndex: page.index, format: format, resolution: resolution))
         }
         return results
     }
@@ -87,7 +95,8 @@ public struct ExportPageUseCase: Sendable {
     public func executeSlots(
         project: ProjectEntity,
         pageIndex: Int,
-        format: ExportFormat = .defaultJPEG
+        format: ExportFormat = .defaultJPEG,
+        resolution: ExportResolution = .standard
     ) async throws -> [ExportResult] {
         guard let page = project.page(at: pageIndex) else {
             throw ExportError.pageNotFound
@@ -108,7 +117,8 @@ public struct ExportPageUseCase: Sendable {
                 page: slotPage,
                 placements: [slotPlacement],
                 defaultFrame: project.defaultPhotoFrame,
-                format: format
+                format: format,
+                resolution: resolution
             ))
         }
         return results
@@ -118,13 +128,15 @@ public struct ExportPageUseCase: Sendable {
         page: PageEntity,
         placements: [PlacementEntity],
         defaultFrame: PhotoFrameStyle,
-        format: ExportFormat
+        format: ExportFormat,
+        resolution: ExportResolution
     ) async throws -> ExportResult {
         let rendered = try await renderData(
             page: page,
             placements: placements,
             defaultFrame: defaultFrame,
-            format: format
+            format: format,
+            resolution: resolution
         )
         try await librarySaver.save(imageData: rendered.data)
         return ExportResult(pixelSize: rendered.pixelSize, byteCount: rendered.data.count)
@@ -135,9 +147,11 @@ public struct ExportPageUseCase: Sendable {
         page: PageEntity,
         placements: [PlacementEntity],
         defaultFrame: PhotoFrameStyle,
-        format: ExportFormat
+        format: ExportFormat,
+        resolution: ExportResolution
     ) async throws -> (data: Data, pixelSize: LayoutSize) {
-        let pixelSize = ExportSizeCalculator.pageSize(page: page, placements: placements)
+        let pixelSize = ExportSizeCalculator.pageSize(
+            page: page, placements: placements, resolution: resolution)
         let plan = RenderPlanBuilder.build(
             page: page,
             placements: placements,

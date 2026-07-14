@@ -15,6 +15,9 @@ final class PageEditorViewModel {
     // MARK: - 共有シート
 
     var isPreparingShare = false
+    /// 書き出し解像度（標準=元画像の実解像度優先 / 高解像度=長辺2048px最低保証）。
+    /// プレビュー画面のセグメントで切り替えるセッション内設定（永続化しない）
+    var exportResolution: ExportResolution = .standard
     /// non-nil = 共有シートを表示中（一時ファイルURL群）
     var shareItems: [URL]?
 
@@ -500,14 +503,15 @@ final class PageEditorViewModel {
         defer { isExporting = false }
         do {
             if pageCount > 1 {
-                let results = try await exportPage.executeAll(project: project)
+                let results = try await exportPage.executeAll(project: project, resolution: exportResolution)
                 let totalMB = Double(results.reduce(0) { $0 + $1.byteCount }) / 1_000_000
                 exportMessage = String(
                     format: "%d枚を投稿順に書き出しました（計%.1fMB）\nカメラロールに保存済み",
                     results.count, totalMB
                 )
             } else {
-                let result = try await exportPage.execute(project: project, pageIndex: currentPageIndex)
+                let result = try await exportPage.execute(
+                    project: project, pageIndex: currentPageIndex, resolution: exportResolution)
                 let mb = Double(result.byteCount) / 1_000_000
                 exportMessage = String(
                     format: "書き出し完了: %.0f×%.0fpx / %.1fMB\nカメラロールに保存しました",
@@ -529,9 +533,10 @@ final class PageEditorViewModel {
         do {
             let dataList: [Data]
             if pageCount > 1 {
-                dataList = try await exportPage.renderAllImageData(project: project)
+                dataList = try await exportPage.renderAllImageData(project: project, resolution: exportResolution)
             } else {
-                dataList = [try await exportPage.renderImageData(project: project, pageIndex: currentPageIndex)]
+                dataList = [try await exportPage.renderImageData(
+                    project: project, pageIndex: currentPageIndex, resolution: exportResolution)]
             }
             shareItems = try await shareFileWriter.writeTemporaryFiles(dataList, format: .defaultJPEG)
         } catch {

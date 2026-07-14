@@ -31,6 +31,50 @@ struct ExportSizeCalculatorTests {
         #expect(size.width == 1200)
     }
 
+    @Test("高解像度指定: 小さい元画像は長辺2048へ引き上げ（アスペクト維持・偶数px）")
+    func highResolutionUpscalesSmallPhoto() {
+        let page = PageEntity(index: 0, aspect: AspectRatio(width: 4, height: 5))
+        let placement = PlacementEntity(
+            sortIndex: 0,
+            photo: PhotoRef(fileName: "p.jpg", pixelWidth: 800, pixelHeight: 1000),
+            destRect: .unit
+        )
+        let standard = ExportSizeCalculator.pageSize(page: page, placements: [placement])
+        #expect(standard.height == 1000)
+
+        let high = ExportSizeCalculator.pageSize(page: page, placements: [placement], resolution: .high)
+        #expect(high.height == 2048) // 長辺
+        #expect(abs(high.width - 2048 * 0.8) < 2)
+        #expect(Int(high.width) % 2 == 0)
+    }
+
+    @Test("高解像度指定: 長辺2048以上の元画像はstandardと同じ（引き上げなし）")
+    func highResolutionKeepsLargePhoto() {
+        let page = PageEntity(index: 0, aspect: AspectRatio(width: 1, height: 1))
+        let placement = PlacementEntity(
+            sortIndex: 0,
+            photo: PhotoRef(fileName: "p.jpg", pixelWidth: 3000, pixelHeight: 3000),
+            destRect: .unit
+        )
+        let standard = ExportSizeCalculator.pageSize(page: page, placements: [placement])
+        let high = ExportSizeCalculator.pageSize(page: page, placements: [placement], resolution: .high)
+        #expect(high == standard)
+        #expect(high.height == 3000)
+    }
+
+    @Test("高解像度指定でも長辺4096クランプが優先される")
+    func highResolutionStillClamped() {
+        let page = PageEntity(index: 0, aspect: AspectRatio(width: 1, height: 1))
+        let placement = PlacementEntity(
+            sortIndex: 0,
+            photo: PhotoRef(fileName: "p.jpg", pixelWidth: 6000, pixelHeight: 6000),
+            destRect: .unit
+        )
+        let high = ExportSizeCalculator.pageSize(page: page, placements: [placement], resolution: .high)
+        #expect(high.height == 4096)
+        #expect(high.width == 4096)
+    }
+
     @Test("写真なしはfallback（短辺2048）")
     func fallbackWithoutPhotos() {
         let portrait = PageEntity(index: 0, aspect: AspectRatio(width: 4, height: 5))

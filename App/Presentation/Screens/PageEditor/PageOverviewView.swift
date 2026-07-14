@@ -64,10 +64,14 @@ struct PageOverviewView: View {
                 }
             }
             .sheet(item: $activePicker) { picker in
-                switch picker {
-                case .ratio: ratioPickerSheet
-                case .background: backgroundColorPickerSheet
+                Group {
+                    switch picker {
+                    case .ratio: ratioPickerSheet
+                    case .background: backgroundColorPickerSheet
+                    }
                 }
+                // 既定のガラス素材は背後のカルーセルが強く透けて読みにくいため不透明寄りに
+                .presentationBackground(.regularMaterial)
             }
         }
     }

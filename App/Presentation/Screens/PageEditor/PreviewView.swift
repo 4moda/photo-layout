@@ -30,7 +30,9 @@ struct PreviewView: View {
                             PageDotsIndicator(pageCount: viewModel.pageCount, currentIndex: currentPage)
                         }
 
-                        let size = ExportSizeCalculator.pageSize(page: page, placements: placements)
+                        let size = ExportSizeCalculator.pageSize(
+                            page: page, placements: placements,
+                            resolution: viewModel.exportResolution)
                         Text("(\(Int(size.width)) × \(Int(size.height)) px)")
                             .font(.caption2).foregroundStyle(.secondary)
                     }
@@ -69,6 +71,34 @@ struct PreviewView: View {
     /// 保存・共有バー。他画面（`PageEditorView`/`PageOverviewView`）と同じ、
     /// ultraThinMaterialの丸角フローティングメニューの見た目に揃える。
     private var saveBar: some View {
+        VStack(spacing: 10) {
+            // 書き出し解像度: 標準=元画像の実解像度優先 / 高解像度=長辺2048px最低保証。
+            // 切り替えると上のpxサイズ表示が連動して変わる（効果の有無がその場で分かる）
+            Picker("書き出し解像度", selection: $viewModel.exportResolution) {
+                Text("標準").tag(ExportResolution.standard)
+                Text("高解像度").tag(ExportResolution.high)
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 220)
+            .accessibilityIdentifier("preview.resolution")
+
+            saveButtons
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(.ultraThinMaterial)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8)
+        )
+        .shadow(color: .black.opacity(0.14), radius: 16, y: 8)
+        .padding(.bottom, 20)
+    }
+
+    private var saveButtons: some View {
         HStack(spacing: 12) {
             Button {
                 Task { await viewModel.exportPages() }
@@ -92,18 +122,6 @@ struct PreviewView: View {
             .disabled(viewModel.isExporting || viewModel.isPreparingShare || !viewModel.hasPhoto)
             .accessibilityIdentifier("preview.share")
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(.ultraThinMaterial)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8)
-        )
-        .shadow(color: .black.opacity(0.14), radius: 16, y: 8)
-        .padding(.bottom, 20)
     }
 
     /// フローティングメニュー1項目の見た目（アイコンの上に小さなラベル）。他画面の `toolButton` と同じ配置。

@@ -77,12 +77,16 @@ struct PageEditorView: View {
             .padding(.bottom, 8)
             // フッターのビジュアル選択シート（1枚に集約）
             .sheet(item: $activeSheet) { sheet in
-                switch sheet {
-                case .template: templatePickerSheet
-                case .frameAspect: frameAspectPickerSheet
-                case .layers: layerSheet
-                case .frame: framePickerSheet
+                Group {
+                    switch sheet {
+                    case .template: templatePickerSheet
+                    case .frameAspect: frameAspectPickerSheet
+                    case .layers: layerSheet
+                    case .frame: framePickerSheet
+                    }
                 }
+                // 既定のガラス素材は背後のキャンバスが強く透けて文字が読みにくいため不透明寄りに
+                .presentationBackground(.regularMaterial)
             }
             // 書き出しプレビュー（俯瞰カバーと別ノードに付けて多重モーダル競合を避ける）
             .fullScreenCover(isPresented: $previewPresented) {
@@ -232,7 +236,71 @@ struct PageEditorView: View {
                     guideLine(guide, contentRect: contentStrip)
                 }
             }
+            selectionHoverMenu(
+                rect: rect, placementID: selectedID,
+                isLocked: placement.isLocked, stripHeight: stripHeight
+            )
         }
+    }
+
+    /// 選択写真の直上に出す小型のフローティングメニュー（ロック/複製/削除）。
+    /// フッターの写真メニューと同じ操作への近接ショートカット（フッター側も残す）。
+    /// 削除はフッター同様ロック中はdisabled
+    private func selectionHoverMenu(
+        rect: LayoutRect, placementID: UUID, isLocked: Bool, stripHeight: CGFloat
+    ) -> some View {
+        HStack(spacing: 2) {
+            hoverMenuButton(
+                systemImage: isLocked ? "lock.fill" : "lock.open",
+                identifier: "pageEditor.hover.lock"
+            ) {
+                Task { await viewModel.toggleLock(placementID: placementID) }
+            }
+            hoverMenuButton(
+                systemImage: "plus.square.on.square",
+                identifier: "pageEditor.hover.duplicate"
+            ) {
+                Task { await viewModel.duplicatePlacement(placementID: placementID) }
+            }
+            hoverMenuButton(
+                systemImage: "trash", tint: .red,
+                identifier: "pageEditor.hover.delete"
+            ) {
+                Task { await viewModel.deleteSelectedPhoto() }
+            }
+            .disabled(isLocked)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8))
+        .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
+        .position(hoverMenuPosition(rect: rect, stripHeight: stripHeight))
+    }
+
+    private func hoverMenuButton(
+        systemImage: String, tint: Color = .primary,
+        identifier: String, action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 15))
+                .foregroundStyle(tint)
+                .frame(width: 40, height: 34)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
+    }
+
+    /// ホバーメニューの表示位置: 選択枠の上辺の少し上。
+    /// ストリップ端では見切れないよう水平方向をクランプし、上端に近いときは枠に重ねて下げる
+    private func hoverMenuPosition(rect: LayoutRect, stripHeight: CGFloat) -> CGPoint {
+        let stripWidth = SpreadGeometry.totalWidth(project: viewModel.project) * Double(stripHeight)
+        let halfWidth: Double = 70
+        let x = min(max(rect.midX, halfWidth), max(stripWidth - halfWidth, halfWidth))
+        let y = max(rect.minY - 32, 26)
+        return CGPoint(x: x, y: y)
     }
 
     /// ロック中の写真の選択表現: 選択枠のみ表示し、移動・拡縮ハンドルは出さない。
@@ -823,31 +891,48 @@ struct PageEditorView: View {
     private var cropRotationBar: some View {
         if let cropID = viewModel.cropModePlacementID,
            let placement = viewModel.project.placements.first(where: { $0.id == cropID }) {
-            VStack(spacing: 6) {
-                Text("\(Int(placement.cropRotation.rounded()))°")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.white)
-                GeometryReader { barGeo in
-                    ZStack {
-                        Capsule()
-                            .fill(Color.white.opacity(0.18))
-                            .frame(height: 6)
-                        Rectangle()
-                            .fill(Color.orange)
-                            .frame(width: 2, height: 20)
+            HStack(spacing: 10) {
+                VStack(spacing: 6) {
+                    Text("\(Int(placement.cropRotation.rounded()))°")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.white)
+                    GeometryReader { barGeo in
+                        ZStack {
+                            Capsule()
+                                .fill(Color.white.opacity(0.18))
+                                .frame(height: 6)
+                            Rectangle()
+                                .fill(Color.orange)
+                                .frame(width: 2, height: 20)
+                        }
+                        .frame(width: barGeo.size.width, height: barGeo.size.height)
+                        .contentShape(Rectangle())
+                        .gesture(cropRotationDragGesture(placementID: cropID, barWidth: barGeo.size.width))
                     }
-                    .frame(width: barGeo.size.width, height: barGeo.size.height)
-                    .contentShape(Rectangle())
-                    .gesture(cropRotationDragGesture(placementID: cropID, barWidth: barGeo.size.width))
+                    .frame(height: 32)
                 }
-                .frame(height: 32)
+                .frame(maxWidth: 240)
+                .padding(.vertical, 10)
+                .padding(.horizontal, 20)
+                .background(.ultraThinMaterial, in: Capsule())
+                .accessibilityIdentifier("pageEditor.cropRotationBar")
+
+                // クロップ終了の明示的な出口（枠外タップでも終了できるが、初見では気づけないため）。
+                // レイヤー順シート等の「閉じる」と同じ文言に揃える
+                Button {
+                    viewModel.exitCropMode()
+                } label: {
+                    Text("閉じる")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 16)
+                        .background(.ultraThinMaterial, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("pageEditor.cropClose")
             }
-            .frame(maxWidth: 280)
-            .padding(.vertical, 10)
-            .padding(.horizontal, 20)
-            .background(.ultraThinMaterial, in: Capsule())
             .padding(.bottom, 24)
-            .accessibilityIdentifier("pageEditor.cropRotationBar")
         }
     }
 
@@ -869,7 +954,9 @@ struct PageEditorView: View {
     // MARK: - 下部ツールバーの共通部品（アイコン＋ラベル縦積み・横スクロールで崩れ防止）
 
     /// ツールバー1項目の見た目（アイコンの上に小さなラベル）。等幅にして整列させる。
-    private func toolItemLabel(_ title: String, systemImage: String, tint: Color = .accentColor) -> some View {
+    private func toolItemLabel(
+        _ title: String, systemImage: String, tint: Color = .accentColor, width: CGFloat = 62
+    ) -> some View {
         VStack(spacing: 3) {
             Image(systemName: systemImage)
                 .font(.system(size: 20))
@@ -880,30 +967,45 @@ struct PageEditorView: View {
                 .minimumScaleFactor(0.8)
         }
         .foregroundStyle(tint)
-        .frame(width: 62)
+        .frame(width: width)
         .padding(.vertical, 6)
         .contentShape(Rectangle())
     }
 
     private func toolButton(
         _ title: String, systemImage: String, role: ButtonRole? = nil,
-        identifier: String, action: @escaping () -> Void
+        identifier: String, width: CGFloat = 62, action: @escaping () -> Void
     ) -> some View {
         Button(role: role, action: action) {
-            toolItemLabel(title, systemImage: systemImage, tint: role == .destructive ? .red : .accentColor)
+            toolItemLabel(
+                title, systemImage: systemImage,
+                tint: role == .destructive ? .red : .accentColor, width: width
+            )
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(identifier)
     }
 
-    /// 項目が画面幅を超えても崩れないよう横スクロールに載せる共通コンテナ
-    private func toolbarStrip<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                content()
+    /// 項目が画面幅を超えても崩れないよう横スクロールに載せる共通コンテナ。
+    /// 項目が5つ以上のときは約5.5個分の幅に項目を縮め、右端の見切れで「まだ先がある」ことを示す
+    /// （全項目が収まって見えると6個目以降の存在に気づけないため。closureには項目幅を渡す）。
+    private func toolbarStrip<Content: View>(
+        itemCount: Int, @ViewBuilder _ content: @escaping (CGFloat) -> Content
+    ) -> some View {
+        GeometryReader { geo in
+            // 可視幅 ≒ 先頭パディング12 + 項目幅×5.5 + 間隔6×5
+            let visibleCount: CGFloat = 5.5
+            let itemWidth: CGFloat = itemCount >= 5
+                ? max(48, (geo.size.width - 12 - 6 * 5) / visibleCount)
+                : 62
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    content(itemWidth)
+                }
+                .padding(.horizontal, 12)
             }
-            .padding(.horizontal, 12)
         }
+        .frame(height: 54)
     }
 
     /// 枠アスペクトのプリセット（写真は歪まずクロップ窓が変わる）
@@ -928,44 +1030,48 @@ struct PageEditorView: View {
     /// 前面/背面はページ選択の「レイヤー」に集約、差し替えは廃止。移動/拡縮はドラッグ。
     /// ロック中はクロップ・削除がdisabled（Coreの`removePlacement`/ジェスチャガードと二重に防御）。
     private var photoControls: some View {
-        toolbarStrip {
+        toolbarStrip(itemCount: 6) { itemWidth in
             Button {
                 activeSheet = .frameAspect
             } label: {
-                toolItemLabel("枠比率", systemImage: "aspectratio")
+                toolItemLabel("枠比率", systemImage: "aspectratio", width: itemWidth)
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("pageEditor.frameAspectMenu")
 
-            toolButton("クロップ", systemImage: "crop", identifier: "pageEditor.cropButton") {
+            toolButton("クロップ", systemImage: "crop",
+                       identifier: "pageEditor.cropButton", width: itemWidth) {
                 if let id = viewModel.selectedPlacementID {
                     viewModel.toggleCropMode(id)
                 }
             }
             .disabled(viewModel.isSelectedPhotoLocked)
 
-            toolButton("枠", systemImage: "photo.artframe", identifier: "pageEditor.frameButton") {
+            toolButton("枠", systemImage: "photo.artframe",
+                       identifier: "pageEditor.frameButton", width: itemWidth) {
                 activeSheet = .frame
             }
 
             toolButton(
                 viewModel.isSelectedPhotoLocked ? "ロック解除" : "ロック",
                 systemImage: viewModel.isSelectedPhotoLocked ? "lock.fill" : "lock.open",
-                identifier: "pageEditor.lockButton"
+                identifier: "pageEditor.lockButton",
+                width: itemWidth
             ) {
                 if let id = viewModel.selectedPlacementID {
                     Task { await viewModel.toggleLock(placementID: id) }
                 }
             }
 
-            toolButton("複製", systemImage: "plus.square.on.square", identifier: "pageEditor.duplicateButton") {
+            toolButton("複製", systemImage: "plus.square.on.square",
+                       identifier: "pageEditor.duplicateButton", width: itemWidth) {
                 if let id = viewModel.selectedPlacementID {
                     Task { await viewModel.duplicatePlacement(placementID: id) }
                 }
             }
 
             toolButton("削除", systemImage: "trash", role: .destructive,
-                       identifier: "pageEditor.deletePhoto") {
+                       identifier: "pageEditor.deletePhoto", width: itemWidth) {
                 Task { await viewModel.deleteSelectedPhoto() }
             }
             .disabled(viewModel.isSelectedPhotoLocked)

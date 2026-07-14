@@ -148,8 +148,8 @@ struct ProjectListView: View {
     /// アプリ内の他シート（枠比率シート等）と統一感のあるスタイルにする。
     private var modePicker: some View {
         HStack(spacing: 4) {
-            modeButton(.recent, title: "Recent")
-            modeButton(.folder, title: "Folder")
+            modeButton(.recent, title: "最近")
+            modeButton(.folder, title: "フォルダ")
         }
         .padding(4)
         .background(Color(.secondarySystemBackground), in: Capsule())
@@ -642,6 +642,7 @@ private struct ProjectCell: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル") { showingFolderPicker = false }
+                        .accessibilityIdentifier("projectList.moveToFolder.cancel")
                 }
             }
         }
@@ -913,7 +914,10 @@ private struct BulkFolderPickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
+                    // 背後の選択モードバーにも「キャンセル」があるため、UIテストが
+                    // 一意にタップできるようidentifierを付ける
                     Button("キャンセル") { dismiss() }
+                        .accessibilityIdentifier("\(idPrefix).cancel")
                 }
             }
         }

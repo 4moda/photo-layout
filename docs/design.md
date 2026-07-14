@@ -80,7 +80,7 @@ FolderEntity                # プロジェクトのグルーピング（v1: 入�
 | `PlacementGesture` | ジェスチャ→ジオメトリ純粋計算。move / scale / scaleAnchored(対角固定) / stretchEdge(枠比率) / panCrop / zoomCrop / cropRotationFromDrag(回転バー)。状態は持たない。ロック中の禁止判定は`PlacementEntity.allowsGeometryGesture`が担い、呼び出し側（`PageEditorViewModel`）が各エントリポイント呼び出し前にガードする |
 | `SnapEngine` | 移動中の辺・中心スナップ＋ガイド線 |
 | `CropMath.subCrop` | クロップを目標pxアスペクトへ中央絞り込み（不変条件の要） |
-| `ExportSizeCalculator` | 出力pxサイズ決定（元解像度ベース・長辺4096クランプ・偶数丸め） |
+| `ExportSizeCalculator` | 出力pxサイズ決定（元解像度ベース・長辺4096クランプ・偶数丸め）。`ExportResolution.high`（プレビューの解像度セグメント）指定時のみ長辺2048px未満をアップスケールで最低保証 |
 | `EditHistory` | ProjectEntity スナップショットの undo/redo スタック |
 | `LayoutTemplate` / `LayoutTemplateTable` | スロット矩形テンプレ（単写真 / 2〜4分割 / Xタイムライン）。`ProjectEntity.applyTemplate` で写真をスロットへ |
 | `XTimelineComposite` | Xタイムライン表示のスロット配置（テンプレの一種として利用） |
