@@ -131,7 +131,9 @@ jobs:
     name: Screenshots (${{ matrix.device.label }} / ${{ matrix.theme.name }})
     needs: build-test
     runs-on: macos-26
-    timeout-minutes: 30
+    # lightジョブは全テストを撮影して28〜30分かかる（スクショテスト修復で従来中断していた
+    # フォルダ系フローが最後まで走るようになった）。30分だとiPhone 17/lightがタイムアウトする
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
