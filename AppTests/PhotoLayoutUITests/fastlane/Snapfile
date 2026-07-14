@@ -6,10 +6,11 @@
 # XcodeGen生成のプロジェクトはリポジトリ直下。CWDからの相対で指定する。
 project("../../PhotoLayout.xcodeproj")
 
-# iPhone 16（標準）＋ iPhone SE 第3世代（最小4.7"幅＝コンパイル/レイアウト崩れの検知用）。
+# iPhone 17（標準）＋ iPhone 16e（最小6.1"幅＝コンパイル/レイアウト崩れの検知用。
+# macOS 26イメージのシミュレータにiPhone SE系がなくなったため最小幅機種として採用）。
 # CIは機種ごとに独立したジョブ（matrix）で並列撮影し、SNAPSHOT_DEVICES（カンマ区切り）で
 # そのジョブが担当する機種だけに絞り込む。未設定時（ローカル実行）は全機種を逐次撮影する。
-default_devices = ["iPhone 16", "iPhone SE (3rd generation)"]
+default_devices = ["iPhone 17", "iPhone 16e"]
 devices(ENV["SNAPSHOT_DEVICES"]&.split(",") || default_devices)
 languages(["ja-JP"])
 
