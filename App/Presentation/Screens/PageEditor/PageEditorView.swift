@@ -36,7 +36,10 @@ struct PageEditorView: View {
     @State private var panOffset: CGSize = .zero
     @State private var pinchBase: (zoom: CGFloat, pan: CGSize)?
     @State private var dragMode: SpreadDragMode?
-    @State private var didInitialScroll = false
+    /// ユーザーが手でビューポートをパン/ズームしたか。falseの間はgeoサイズの変化に追随して
+    /// 現在ページを中央へフィットし直す（onAppear時点のgeoはナビゲーションバー等の確定前で
+    /// 高さが違うことがあり、その値で計算したpanOffsetのままだとページが左・上へずれるため）
+    @State private var didUserAdjustViewport = false
     private let controlsOverlayBaseHeight: CGFloat = 110
     private let cropRotationBarHeight: CGFloat = 90
 
@@ -219,11 +222,11 @@ struct PageEditorView: View {
             .gesture(stripDoubleTap(geo: geo).exclusively(before: stripSingleTap(geo: geo)))
             .simultaneousGesture(stripDrag(geo: geo))
             .simultaneousGesture(stripMagnify(geo: geo))
-            .onAppear {
-                if !didInitialScroll {
-                    didInitialScroll = true
-                    resetView(geo: geo)
-                }
+            // 初期表示とレイアウト確定（ナビバー・セーフエリア反映でgeoが変わる）に追随して
+            // 中央フィット。ユーザーが手でパン/ズームした後は勝手に動かさない
+            .onChange(of: geo.size, initial: true) { _, _ in
+                guard !didUserAdjustViewport else { return }
+                resetView(geo: geo)
             }
             // ページ追加/削除・切替後は現在ページを中央にフィットし直す
             .onChange(of: viewModel.pageCount) { _, _ in
@@ -656,6 +659,7 @@ struct PageEditorView: View {
                         )
                     }
                 case .pan(let base):
+                    didUserAdjustViewport = true
                     panOffset = clampedPan(
                         desired: CGSize(
                             width: base.width + value.translation.width,
@@ -731,6 +735,7 @@ struct PageEditorView: View {
                     if pinchBase == nil {
                         pinchBase = (zoom: viewZoom, pan: panOffset)
                     }
+                    didUserAdjustViewport = true
                     guard let base = pinchBase else { return }
                     let newZoom = min(max(base.zoom * value.magnification, 0.25), 4)
                     // ビューポート中央を不動点にする
