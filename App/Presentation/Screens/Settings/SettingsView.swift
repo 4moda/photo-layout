@@ -11,6 +11,13 @@ struct SettingsView: View {
         List {
             Section {
                 NavigationLink {
+                    PrivacyPolicyView()
+                } label: {
+                    Text("プライバシーポリシー")
+                }
+                .accessibilityIdentifier("settings.privacyPolicy")
+
+                NavigationLink {
                     TermsOfServiceView()
                 } label: {
                     Text("利用規約")
