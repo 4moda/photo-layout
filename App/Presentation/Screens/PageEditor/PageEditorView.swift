@@ -291,7 +291,7 @@ struct PageEditorView: View {
         .background(.ultraThinMaterial, in: Capsule())
         .overlay(Capsule().strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8))
         .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
-        .position(hoverMenuPosition(rect: rect, stripHeight: stripHeight))
+        .position(hoverMenuPosition(rect: rect, isLocked: isLocked, stripHeight: stripHeight))
     }
 
     private func hoverMenuButton(
@@ -309,13 +309,29 @@ struct PageEditorView: View {
         .accessibilityIdentifier(identifier)
     }
 
-    /// ホバーメニューの表示位置: 選択枠の上辺の少し上。
-    /// ストリップ端では見切れないよう水平方向をクランプし、上端に近いときは枠に重ねて下げる
-    private func hoverMenuPosition(rect: LayoutRect, stripHeight: CGFloat) -> CGPoint {
+    /// ホバーメニューの表示位置: 選択クローム（枠線・ハンドル）の最上端から一定の間隔を空けた真上。
+    /// 「最上端」は非ロック時は角ハンドルのはみ出し（枠線から約8pt）を含む — 常に枠線基準にすると
+    /// ハンドルの無いロック時だけ間隔が広く見えて、キャプチャごとに位置関係が違って見えるため。
+    /// 上に置く余地が無いときは写真の下側へフリップし、それも無理なら枠内上部に重ねる。
+    /// 水平方向はストリップ端で見切れないようクランプする
+    private func hoverMenuPosition(rect: LayoutRect, isLocked: Bool, stripHeight: CGFloat) -> CGPoint {
         let stripWidth = SpreadGeometry.totalWidth(project: viewModel.project) * Double(stripHeight)
         let halfWidth: Double = 70
         let x = min(max(rect.midX, halfWidth), max(stripWidth - halfWidth, halfWidth))
-        let y = max(rect.minY - 32, 26)
+
+        let menuHalfHeight: Double = 19 // アイコン34pt＋上下パディング2ptの半分
+        let gap: Double = 5             // 選択クローム（枠線・ハンドル）との見た目の間隔
+        let handleOverhang: Double = isLocked ? 0 : 8 // 角ハンドル（16pt円が枠線中心）のはみ出し
+        let aboveCenterY = rect.minY - handleOverhang - gap - menuHalfHeight
+        let y: Double
+        if aboveCenterY - menuHalfHeight >= 8 {
+            y = aboveCenterY
+        } else {
+            let belowCenterY = rect.maxY + handleOverhang + gap + menuHalfHeight
+            y = belowCenterY + menuHalfHeight <= Double(stripHeight) - 8
+                ? belowCenterY
+                : rect.minY + gap + menuHalfHeight
+        }
         return CGPoint(x: x, y: y)
     }
 
