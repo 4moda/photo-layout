@@ -17,14 +17,14 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # macos-15イメージのXcodeを明示固定（"latest"任せによるシミュレータランタイム不整合を防ぐ）
-  DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+  # macos-26イメージのXcodeを明示固定（"latest"任せによるシミュレータランタイム不整合を防ぐ）
+  DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
   SIMULATOR_DESTINATION: platform=iOS Simulator,name=iPhone 16
 
 jobs:
   build-test:
     name: iOS Build & Test
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -130,7 +130,7 @@ jobs:
   screenshots:
     name: Screenshots (${{ matrix.device.label }} / ${{ matrix.theme.name }})
     needs: build-test
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 30
     strategy:
       fail-fast: false

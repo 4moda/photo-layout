@@ -25,7 +25,7 @@ X / Instagram への写真投稿を準備するための iOS アプリ（開発�
 | 検証 | 場所 |
 |---|---|
 | ドメインロジック（`Packages/PhotoLayoutCore`） | ローカル `swift test`（Linux可） |
-| iOSビルド・テスト・スクリーンショット・.ipa | GitHub Actions（macos-15） |
+| iOSビルド・テスト・スクリーンショット・.ipa | GitHub Actions（macos-26） |
 
 ## プロジェクト構成
 

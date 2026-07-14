@@ -5,7 +5,7 @@ X/Instagram向け投稿準備iOSアプリ。責務は**トリミング・枠付�
 ## 環境の大前提（Macなし開発）
 
 - 開発機はWSL2 (Ubuntu 24.04)。**XcodeもiOSシミュレータもローカルに存在しない**
-- Apple framework（SwiftUI/SwiftData/PhotosUI/CoreGraphics）に依存するコードのコンパイル確認はGitHub Actions（macos-15）でしかできない。1往復≒10分 — **App層の変更はpush前に型・APIの自己レビューを必ず行う**
+- Apple framework（SwiftUI/SwiftData/PhotosUI/CoreGraphics）に依存するコードのコンパイル確認はGitHub Actions（macos-26）でしかできない。1往復≒10分 — **App層の変更はpush前に型・APIの自己レビューを必ず行う**
 - `Packages/PhotoLayoutCore` はApple framework非依存。**ローカルの `swift test` で検証できる唯一の場所**。ロジックは必ずここに置く
 - 実機確認は無料Apple ID＋Sideloadly手動サイドロード。CIはunsigned .ipaをartifact化するだけ（CIで署名しない）
 
@@ -13,9 +13,9 @@ X/Instagram向け投稿準備iOSアプリ。責務は**トリミング・枠付�
 
 | 場所 | バージョン |
 |---|---|
-| CI Xcode | 16.4 固定（`DEVELOPER_DIR`、macos-15イメージ） |
-| CI / ローカル Swift | 6.1（swiftly管理。`~/.local/share/swiftly/bin` をPATHへ） |
-| swift-tools-version | 6.1（Core＝Swift 6言語モード） |
+| CI Xcode | 26.6 固定（`DEVELOPER_DIR`、macos-26イメージ） |
+| CI / ローカル Swift | 6.3（swiftly管理。`~/.local/share/swiftly/bin` をPATHへ） |
+| swift-tools-version | 6.3（Core＝Swift 6言語モード） |
 | App層の言語モード | Swift 5（`SWIFT_VERSION: "5.0"`。strict concurrencyのCI往復を避けるため当面維持） |
 | 最低iOS | 17.0 |
 
