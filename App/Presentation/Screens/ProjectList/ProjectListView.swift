@@ -6,9 +6,8 @@ private let gridColumns = [GridItem(.adaptive(minimum: 108), spacing: 12)]
 
 /// 新規作成は「用紙サイズ（キャンバスのアスペクト）」だけ選ぶ。SNS別のモードは持たず、
 /// ラベルは用途のヒントに留める。枠付けもレイアウトも同じ汎用プロジェクトで行う。
-/// 「Recent」の新規作成とフォルダ詳細での新規作成の両方から使うため file scope に置く。
-private let canvasChoices: [(id: String, label: String, aspect: AspectRatio)] =
-    AspectRatioOption.orderedAll.map { ($0.rawValue, $0.label, $0.aspect) }
+/// 「最近」の新規作成とフォルダ詳細での新規作成の両方から使うため file scope に置く。
+private let canvasChoices: [AspectRatioOption] = AspectRatioOption.orderedAll
 
 /// S01の上部モード切替。「Recent」は既存の全プロジェクト一覧、「Folder」は作成済みフォルダの一覧。
 private enum ProjectListMode: String {
@@ -336,22 +335,26 @@ private struct NewProjectAspectSheet: View {
                     columns: Array(repeating: GridItem(.flexible(), spacing: 16, alignment: .top), count: 3),
                     spacing: 16
                 ) {
-                    ForEach(canvasChoices, id: \.id) { choice in
+                    ForEach(canvasChoices, id: \.rawValue) { choice in
                         Button {
                             dismiss()
                             onSelect(choice.aspect)
                         } label: {
+                            // 比率は可視化された枠の中央に収め、下にSNS用途（サービス名/機能）を示す
                             VStack(spacing: 6) {
-                                AspectRatioSwatch(aspect: choice.aspect.ratio)
-                                Text(choice.label)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.7)
+                                AspectRatioSwatch(aspect: choice.aspect.ratio, centerLabel: choice.label)
+                                VStack(spacing: 1) {
+                                    Text(choice.captionService)
+                                    Text(choice.captionUsage)
+                                }
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
                             }
                         }
                         .buttonStyle(.plain)
-                        .accessibilityIdentifier("projectList.new_\(choice.id)")
+                        .accessibilityIdentifier("projectList.new_\(choice.rawValue)")
                     }
                 }
                 .padding(20)

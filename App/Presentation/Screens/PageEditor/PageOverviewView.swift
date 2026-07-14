@@ -20,8 +20,7 @@ struct PageOverviewView: View {
     /// サムネイルの高さ。ページのアスペクトに応じて幅が決まる（2〜3ページ分が見える目安）
     private let thumbnailHeight: CGFloat = 200
 
-    private static let aspectChoices: [(label: String, aspect: AspectRatio)] =
-        AspectRatioOption.orderedAll.map { ($0.label, $0.aspect) }
+    private static let aspectChoices: [AspectRatioOption] = AspectRatioOption.orderedAll
 
     private static let aspectTolerance: Double = 1e-6
 
@@ -279,22 +278,26 @@ struct PageOverviewView: View {
                     columns: Array(repeating: GridItem(.flexible(), spacing: 16, alignment: .top), count: 3),
                     spacing: 16
                 ) {
-                    ForEach(Self.aspectChoices, id: \.label) { choice in
+                    ForEach(Self.aspectChoices, id: \.rawValue) { choice in
                         Button {
                             viewModel.overviewSetAspect(choice.aspect)
                             activePicker = nil
                         } label: {
+                            // S01の用紙サイズシートと同じ見せ方（比率は枠の中央・下にSNS用途）
                             VStack(spacing: 6) {
-                                AspectRatioSwatch(aspect: choice.aspect.ratio)
+                                AspectRatioSwatch(aspect: choice.aspect.ratio, centerLabel: choice.label)
                                     .selectionHighlight(
                                         isCurrentAspect(choice.aspect),
                                         in: RoundedRectangle(cornerRadius: 6)
                                     )
-                                Text(choice.label)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.7)
+                                VStack(spacing: 1) {
+                                    Text(choice.captionService)
+                                    Text(choice.captionUsage)
+                                }
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
                             }
                         }
                         .buttonStyle(.plain)

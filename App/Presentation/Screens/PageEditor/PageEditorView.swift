@@ -1292,22 +1292,17 @@ struct PageEditorView: View {
                     columns: Array(repeating: GridItem(.flexible(), spacing: 16, alignment: .top), count: 3),
                     spacing: 16
                 ) {
+                    // 写真単体のクロップ窓の比率選択。比率は枠の中央に収める（S01/S03と同じ見せ方。
+                    // SNS用途キャプションは新規作成・カルーセル比率の文脈でのみ意味があるためここでは出さない）
                     Button {
                         activeSheet = nil
                         Task { await viewModel.applyPhotoNativeAspect() }
                     } label: {
-                        VStack(spacing: 6) {
-                            AspectRatioSwatch(aspect: nil)
-                                .selectionHighlight(
-                                    isCurrentFrameAspect(nil),
-                                    in: RoundedRectangle(cornerRadius: 6)
-                                )
-                            Text("元画像")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.7)
-                        }
+                        AspectRatioSwatch(aspect: nil, centerLabel: "元画像")
+                            .selectionHighlight(
+                                isCurrentFrameAspect(nil),
+                                in: RoundedRectangle(cornerRadius: 6)
+                            )
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("元画像の比率（全体を表示）")
@@ -1317,18 +1312,11 @@ struct PageEditorView: View {
                             activeSheet = nil
                             Task { await viewModel.applyFrameAspect(pixelAspect: choice.pixelAspect) }
                         } label: {
-                            VStack(spacing: 6) {
-                                AspectRatioSwatch(aspect: choice.pixelAspect)
-                                    .selectionHighlight(
-                                        isCurrentFrameAspect(choice.pixelAspect),
-                                        in: RoundedRectangle(cornerRadius: 6)
-                                    )
-                                Text(choice.label)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.7)
-                            }
+                            AspectRatioSwatch(aspect: choice.pixelAspect, centerLabel: choice.label)
+                                .selectionHighlight(
+                                    isCurrentFrameAspect(choice.pixelAspect),
+                                    in: RoundedRectangle(cornerRadius: 6)
+                                )
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier(choice.label)

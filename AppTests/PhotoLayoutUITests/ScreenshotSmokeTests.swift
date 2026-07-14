@@ -290,7 +290,8 @@ final class ScreenshotSmokeTests: XCTestCase {
             ("projectList.new_portrait45", "S01-F05-create-portrait-4-5-canvas"),
             ("projectList.new_portrait34", "S01-F06-create-portrait-3-4-canvas"),
             ("projectList.new_landscape169", "S01-F07-create-landscape-16-9-canvas"),
-            ("projectList.new_landscape191", "S01-F08-create-landscape-1-91-1-canvas")
+            ("projectList.new_landscape191", "S01-F08-create-landscape-1-91-1-canvas"),
+            ("projectList.new_portrait916", "S01-F29-create-portrait-9-16-canvas")
         ]
         for size in sizes {
             let add = app.buttons["projectList.add"]

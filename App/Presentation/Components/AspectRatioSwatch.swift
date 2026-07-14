@@ -5,6 +5,8 @@ import SwiftUI
 /// 新規作成の用紙サイズメニュー（`ProjectListView`）の3箇所で同一実装として共有する。
 struct AspectRatioSwatch: View {
     let aspect: Double?
+    /// 可視化された枠の中央に表示するラベル（比率文字列など）。nilなら枠のみ
+    var centerLabel: String?
 
     var body: some View {
         GeometryReader { g in
@@ -26,6 +28,16 @@ struct AspectRatioSwatch: View {
                         RoundedRectangle(cornerRadius: 5)
                             .strokeBorder(Color.accentColor, lineWidth: 1)
                     )
+                    .overlay {
+                        if let centerLabel {
+                            Text(centerLabel)
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(Color.accentColor)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.5)
+                                .padding(.horizontal, 2)
+                        }
+                    }
                     .frame(width: fittedWidth, height: fittedHeight)
             }
         }
