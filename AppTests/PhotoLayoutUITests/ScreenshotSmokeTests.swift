@@ -100,7 +100,55 @@ final class ScreenshotSmokeTests: XCTestCase {
             }
         }
 
+        captureSelectionMode(app, cellMenu: cellMenu)
         captureFolderMode(app)
+    }
+
+    // MARK: - S01 複数選択モード（S01-F23〜F28）: ⋯メニューの「選択」→選択件数・まとめて削除/フォルダ設定・キャンセル
+
+    /// 「⋯」メニュー→「選択」でそのセルを選択済みの状態で複数選択モードに入る（S01-F23）。
+    /// まとめて削除・まとめてフォルダ設定はいずれも確認/ピッカーの「キャンセル」で閉じ、
+    /// 実際には何も変更せずに最後は選択モードごとキャンセルして通常表示へ戻す
+    /// （後続の`captureFolderMode`が前提とするデモの並び・所属フォルダを崩さないため）。
+    @MainActor
+    private func captureSelectionMode(_ app: XCUIApplication, cellMenu: XCUIElement) {
+        guard cellMenu.waitForExistence(timeout: 3) else { return }
+        cellMenu.tap()
+        guard app.buttons["選択"].waitForExistence(timeout: 3) else { return }
+        app.buttons["選択"].tap()
+        sleep(1)
+        snapshot("S01-F23-project-list-selection-mode")
+
+        // S01-F28: 「フォルダを設定」ピッカー。確認したらキャンセルで閉じ、移動はしない。
+        let setFolderButton = app.buttons["projectList.selection.setFolder"]
+        if setFolderButton.waitForExistence(timeout: 3) {
+            setFolderButton.tap()
+            if app.buttons["projectList.bulkMoveToFolder.none"].waitForExistence(timeout: 3) {
+                sleep(1)
+                snapshot("S01-F28-project-list-bulk-set-folder-menu")
+            }
+            if app.buttons["キャンセル"].waitForExistence(timeout: 3) {
+                app.buttons["キャンセル"].tap()
+            }
+        }
+
+        // S01-F27: 「削除」→確認シート。「キャンセル」で閉じ、選択状態を維持したまま何も削除しない。
+        let deleteButton = app.buttons["projectList.selection.delete"]
+        if deleteButton.waitForExistence(timeout: 3) {
+            deleteButton.tap()
+            if app.buttons["projectList.bulkDelete.cancel"].waitForExistence(timeout: 3) {
+                sleep(1)
+                snapshot("S01-F27-project-list-bulk-delete-confirm")
+                app.buttons["projectList.bulkDelete.cancel"].tap()
+            }
+        }
+
+        // S01-F26: 「キャンセル」で選択モードを離脱する（何も変更されない）。
+        let cancelSelectionButton = app.buttons["projectList.selection.cancel"]
+        if cancelSelectionButton.waitForExistence(timeout: 3) {
+            cancelSelectionButton.tap()
+            XCTAssertTrue(app.buttons["デモ"].waitForExistence(timeout: 3))
+        }
     }
 
     // MARK: - S01 Recent/Folder切替・フォルダ作成/一覧/詳細/名称変更/削除・フォルダ内新規作成（S01-F12〜F19）
@@ -155,10 +203,24 @@ final class ScreenshotSmokeTests: XCTestCase {
         sleep(1)
         snapshot("S01-F19-folder-detail-after-create")
 
+        // フォルダ詳細グリッドでも同じ複数選択モードが使えることを確認する（S01-F23相当）。
+        // 直後のF20/F21移動検証を壊さないよう、確認後は必ずキャンセルして選択なしに戻す。
+        let travelProjectMenu = app.buttons["projectList.menu"].firstMatch
+        if travelProjectMenu.waitForExistence(timeout: 3) {
+            travelProjectMenu.tap()
+            if app.buttons["選択"].waitForExistence(timeout: 3) {
+                app.buttons["選択"].tap()
+                sleep(1)
+                snapshot("S01-F23-folder-detail-selection-mode")
+                if app.buttons["projectList.folderDetail.selection.cancel"].waitForExistence(timeout: 3) {
+                    app.buttons["projectList.folderDetail.selection.cancel"].tap()
+                }
+            }
+        }
+
         // S01-F20/F21: このフォルダにはいま作成したプロジェクトしかいないため⋯メニューを
         // 一意に特定できる。「フォルダへ移動」→「フォルダなし」を選ぶと未分類に戻り、
         // このフォルダ詳細（Travel）から消えて空状態に戻ることを確認する（受け入れ条件）。
-        let travelProjectMenu = app.buttons["projectList.menu"].firstMatch
         if travelProjectMenu.waitForExistence(timeout: 3) {
             travelProjectMenu.tap()
             if app.buttons["フォルダへ移動"].waitForExistence(timeout: 3) {

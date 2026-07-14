@@ -33,6 +33,12 @@ struct ProjectListView: View {
     @State private var showingNewProjectSheet = false
     @State private var showingNewFolderSheet = false
     @State private var newFolderName = ""
+    /// 「Recent」グリッドの複数選択モード。Recent⇔Folder切替や画面遷移をまたいでは保持しない
+    /// （切り替えたら選択はクリアされる想定。フォルダ詳細側は`FolderDetailView`が自身の状態を持つ）
+    @State private var isSelectingRecent = false
+    @State private var recentSelection: Set<UUID> = []
+    @State private var showingBulkDeleteConfirmation = false
+    @State private var showingBulkFolderPicker = false
 
     init(viewModel: ProjectListViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -53,9 +59,27 @@ struct ProjectListView: View {
                     .frame(maxHeight: .infinity)
                 }
 
-                addMenuButton
+                if isSelectingRecent {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            ProjectSelectionBar(
+                                count: recentSelection.count,
+                                idPrefix: "projectList.selection",
+                                onCancel: exitRecentSelection,
+                                onSetFolder: { showingBulkFolderPicker = true },
+                                onDelete: { showingBulkDeleteConfirmation = true }
+                            )
+                            Spacer()
+                        }
+                        .padding(.bottom, 12)
+                    }
+                } else {
+                    addMenuButton
+                }
             }
-            .navigationTitle("PhotoLayout")
+            .navigationTitle(isSelectingRecent ? "\(recentSelection.count)件選択中" : "PhotoLayout")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -83,11 +107,41 @@ struct ProjectListView: View {
             .sheet(isPresented: $showingNewFolderSheet) {
                 newFolderSheet
             }
+            .sheet(isPresented: $showingBulkDeleteConfirmation) {
+                BulkDeleteConfirmationSheet(
+                    count: recentSelection.count,
+                    idPrefix: "projectList.bulkDelete",
+                    onConfirm: {
+                        let ids = recentSelection
+                        showingBulkDeleteConfirmation = false
+                        Task {
+                            await viewModel.deleteProjects(ids: ids)
+                            exitRecentSelection()
+                        }
+                    },
+                    onCancel: { showingBulkDeleteConfirmation = false }
+                )
+            }
+            .sheet(isPresented: $showingBulkFolderPicker) {
+                BulkFolderPickerSheet(folders: viewModel.folders, idPrefix: "projectList.bulkMoveToFolder") { folderID in
+                    let ids = recentSelection
+                    showingBulkFolderPicker = false
+                    Task {
+                        await viewModel.moveProjectsToFolder(ids: ids, folderID: folderID)
+                        exitRecentSelection()
+                    }
+                }
+            }
             // 編集画面から戻ったときにも最新を読み直す（.taskは初回のみのため）
             .onAppear {
                 Task { await viewModel.load() }
             }
         }
+    }
+
+    private func exitRecentSelection() {
+        isSelectingRecent = false
+        recentSelection = []
     }
 
     /// 「Recent」「Folder」の切替。セグメントコントロール相当を手組みし、
@@ -106,6 +160,7 @@ struct ProjectListView: View {
     private func modeButton(_ target: ProjectListMode, title: String) -> some View {
         Button {
             mode = target
+            exitRecentSelection()
         } label: {
             Text(title)
                 .font(.subheadline.weight(.semibold))
@@ -136,9 +191,22 @@ struct ProjectListView: View {
                                 project: project,
                                 thumbnailImages: viewModel.thumbnailImages(for: project),
                                 folders: viewModel.folders,
+                                isSelecting: isSelectingRecent,
+                                isSelected: recentSelection.contains(project.id),
                                 onDelete: { Task { await viewModel.delete(id: project.id) } },
                                 onMoveToFolder: { folderID in
                                     Task { await viewModel.moveToFolder(projectID: project.id, folderID: folderID) }
+                                },
+                                onEnterSelection: {
+                                    isSelectingRecent = true
+                                    recentSelection = [project.id]
+                                },
+                                onToggleSelection: {
+                                    if recentSelection.contains(project.id) {
+                                        recentSelection.remove(project.id)
+                                    } else {
+                                        recentSelection.insert(project.id)
+                                    }
                                 }
                             )
                         }
@@ -309,6 +377,12 @@ private struct FolderDetailView: View {
     let viewModel: ProjectListViewModel
     @Binding var path: [ProjectListRoute]
     @State private var showingNewProjectSheet = false
+    /// このフォルダ詳細だけの複数選択モード。画面を離れる（戻る）と`@State`ごと破棄されるため、
+    /// 「Recent」側の選択やモード切替とは独立している（受け入れ条件どおり選択は画面をまたがない）。
+    @State private var isSelecting = false
+    @State private var selection: Set<UUID> = []
+    @State private var showingBulkDeleteConfirmation = false
+    @State private var showingBulkFolderPicker = false
 
     private var projects: [ProjectEntity] {
         viewModel.projects(inFolder: folder.id)
@@ -332,9 +406,22 @@ private struct FolderDetailView: View {
                                     project: project,
                                     thumbnailImages: viewModel.thumbnailImages(for: project),
                                     folders: viewModel.folders,
+                                    isSelecting: isSelecting,
+                                    isSelected: selection.contains(project.id),
                                     onDelete: { Task { await viewModel.delete(id: project.id) } },
                                     onMoveToFolder: { folderID in
                                         Task { await viewModel.moveToFolder(projectID: project.id, folderID: folderID) }
+                                    },
+                                    onEnterSelection: {
+                                        isSelecting = true
+                                        selection = [project.id]
+                                    },
+                                    onToggleSelection: {
+                                        if selection.contains(project.id) {
+                                            selection.remove(project.id)
+                                        } else {
+                                            selection.insert(project.id)
+                                        }
                                     }
                                 )
                             }
@@ -347,15 +434,56 @@ private struct FolderDetailView: View {
             }
             .frame(maxHeight: .infinity)
 
-            newProjectButton
+            if isSelecting {
+                ProjectSelectionBar(
+                    count: selection.count,
+                    idPrefix: "projectList.folderDetail.selection",
+                    onCancel: exitSelection,
+                    onSetFolder: { showingBulkFolderPicker = true },
+                    onDelete: { showingBulkDeleteConfirmation = true }
+                )
+                .padding(.bottom, 12)
+            } else {
+                newProjectButton
+            }
         }
-        .navigationTitle(folder.name)
+        .navigationTitle(isSelecting ? "\(selection.count)件選択中" : folder.name)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingNewProjectSheet) {
             NewProjectAspectSheet { aspect in
                 createAndOpen(aspect: aspect)
             }
         }
+        .sheet(isPresented: $showingBulkDeleteConfirmation) {
+            BulkDeleteConfirmationSheet(
+                count: selection.count,
+                idPrefix: "projectList.folderDetail.bulkDelete",
+                onConfirm: {
+                    let ids = selection
+                    showingBulkDeleteConfirmation = false
+                    Task {
+                        await viewModel.deleteProjects(ids: ids)
+                        exitSelection()
+                    }
+                },
+                onCancel: { showingBulkDeleteConfirmation = false }
+            )
+        }
+        .sheet(isPresented: $showingBulkFolderPicker) {
+            BulkFolderPickerSheet(folders: viewModel.folders, idPrefix: "projectList.folderDetail.bulkMoveToFolder") { folderID in
+                let ids = selection
+                showingBulkFolderPicker = false
+                Task {
+                    await viewModel.moveProjectsToFolder(ids: ids, folderID: folderID)
+                    exitSelection()
+                }
+            }
+        }
+    }
+
+    private func exitSelection() {
+        isSelecting = false
+        selection = []
     }
 
     /// `ProjectListView.bottomFloatingMenu`と同じ見た目・位置の＋のみの版。フォルダ作成ボタンは
@@ -401,9 +529,16 @@ private struct ProjectCell: View {
     let thumbnailImages: [UUID: UIImage]
     /// 「フォルダへ移動」ピッカーに並べる作成済みフォルダ一覧
     let folders: [FolderEntity]
+    /// 複数選択モード中かどうか（true の間はタップがエディタ遷移ではなく選択トグルになる）
+    let isSelecting: Bool
+    let isSelected: Bool
     let onDelete: () -> Void
     /// 選んだフォルダのIDを渡す。「フォルダなし」を選んだ場合はnil（未分類に戻す）
     let onMoveToFolder: (UUID?) -> Void
+    /// 「⋯」メニューの「選択」または長押しで呼ばれる。このプロジェクトを選択済みの状態で選択モードへ入る
+    let onEnterSelection: () -> Void
+    /// 選択モード中にセルをタップしたときの選択/解除トグル
+    let onToggleSelection: () -> Void
     @State private var showingDeleteConfirmation = false
     @State private var showingFolderPicker = false
 
@@ -413,31 +548,52 @@ private struct ProjectCell: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            NavigationLink(value: ProjectListRoute.project(project)) {
-                thumbnail
+            Group {
+                if isSelecting {
+                    Button(action: onToggleSelection) {
+                        thumbnail
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    NavigationLink(value: ProjectListRoute.project(project)) {
+                        thumbnail
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .buttonStyle(.plain)
             .accessibilityIdentifier(displayTitle)
-
-            Menu {
-                Button {
-                    showingFolderPicker = true
-                } label: {
-                    Label("フォルダへ移動", systemImage: "folder")
-                }
-                Button(role: .destructive) {
-                    showingDeleteConfirmation = true
-                } label: {
-                    Label("削除", systemImage: "trash")
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle.fill")
-                    .font(.title3)
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, .black.opacity(0.35))
-                    .padding(6)
+            .selectionHighlight(isSelecting && isSelected, in: RoundedRectangle(cornerRadius: 12))
+            .onLongPressGesture(minimumDuration: 0.5) {
+                guard !isSelecting else { return }
+                onEnterSelection()
             }
-            .accessibilityIdentifier("projectList.menu")
+
+            if !isSelecting {
+                Menu {
+                    Button {
+                        onEnterSelection()
+                    } label: {
+                        Label("選択", systemImage: "checkmark.circle")
+                    }
+                    Button {
+                        showingFolderPicker = true
+                    } label: {
+                        Label("フォルダへ移動", systemImage: "folder")
+                    }
+                    Button(role: .destructive) {
+                        showingDeleteConfirmation = true
+                    } label: {
+                        Label("削除", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle.fill")
+                        .font(.title3)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, .black.opacity(0.35))
+                        .padding(6)
+                }
+                .accessibilityIdentifier("projectList.menu")
+            }
         }
         // 注: ここで .accessibilityIdentifier を付けると子（NavigationLink）へ伝播して
         // タイトルidentifierを上書きしてしまうため付けない（UIテストはタイトルでタップする）
@@ -623,6 +779,145 @@ private struct FolderPickerCard: View {
             }
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// 複数選択モード中の下部フローティングバー（キャンセル／フォルダを設定／削除）。
+/// `PageOverviewView.overviewControls`と同じ`.ultraThinMaterial`ピルの見た目に揃える。
+/// 「Recent」グリッドとフォルダ詳細グリッドの両方で同じ選択モードUIを提供するため共有する。
+private struct ProjectSelectionBar: View {
+    let count: Int
+    /// 画面ごとにaccessibilityIdentifierを分けるためのプレフィックス
+    let idPrefix: String
+    let onCancel: () -> Void
+    let onSetFolder: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            actionButton("キャンセル", systemImage: "xmark", action: onCancel)
+                .accessibilityIdentifier("\(idPrefix).cancel")
+            actionButton("フォルダを設定", systemImage: "folder", action: onSetFolder)
+                .disabled(count == 0)
+                .accessibilityIdentifier("\(idPrefix).setFolder")
+            actionButton("削除", systemImage: "trash", tint: .red, action: onDelete)
+                .disabled(count == 0)
+                .accessibilityIdentifier("\(idPrefix).delete")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(.ultraThinMaterial)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8)
+        )
+        .shadow(color: .black.opacity(0.14), radius: 16, y: 8)
+    }
+
+    private func actionButton(_ title: String, systemImage: String, tint: Color = .primary, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 18))
+                Text(title)
+                    .font(.caption2)
+            }
+            .foregroundStyle(tint)
+            .frame(minWidth: 64)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// 複数選択モードの「まとめて削除」確認シート。単体削除確認シート（拡大サムネイル付き）と違い
+/// 複数の異なるレイアウトが対象のためサムネイルは持たず、件数のみを示す。
+private struct BulkDeleteConfirmationSheet: View {
+    let count: Int
+    let idPrefix: String
+    let onConfirm: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack {
+            Spacer(minLength: 24)
+
+            VStack(spacing: 20) {
+                Image(systemName: "trash.fill")
+                    .font(.system(size: 56))
+                    .foregroundStyle(.red)
+
+                VStack(spacing: 6) {
+                    Text("選択した\(count)件を削除しますか？")
+                        .font(.headline)
+                    Text("削除すると元に戻せません")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.horizontal, 24)
+
+                VStack(spacing: 12) {
+                    Button(role: .destructive, action: onConfirm) {
+                        Text("削除").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                    .accessibilityIdentifier("\(idPrefix).confirm")
+
+                    Button(action: onCancel) {
+                        Text("キャンセル").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("\(idPrefix).cancel")
+                }
+                .padding(.horizontal, 24)
+            }
+
+            Spacer(minLength: 24)
+        }
+        .presentationDetents([.medium])
+    }
+}
+
+/// 複数選択モードの「フォルダを設定」ピッカー。既存の単体「フォルダへ移動」ピッカーと同じ
+/// グリッド・カード見た目を流用するが、対象が複数プロジェクトで所属先がまちまちのため
+/// 現在の所属先のハイライトは付けない（`isSelected`は常にfalse）。
+private struct BulkFolderPickerSheet: View {
+    let folders: [FolderEntity]
+    let idPrefix: String
+    let onSelect: (UUID?) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVGrid(columns: gridColumns, spacing: 12) {
+                    FolderPickerCard(title: "フォルダなし", systemImage: "tray", isSelected: false) {
+                        onSelect(nil)
+                    }
+                    .accessibilityIdentifier("\(idPrefix).none")
+
+                    ForEach(folders) { folder in
+                        FolderPickerCard(title: folder.name, systemImage: "folder.fill", isSelected: false) {
+                            onSelect(folder.id)
+                        }
+                        .accessibilityIdentifier("\(idPrefix).\(folder.name)")
+                    }
+                }
+                .padding(12)
+            }
+            .navigationTitle("フォルダを設定")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
 
