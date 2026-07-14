@@ -392,7 +392,7 @@ private struct FolderDetailView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        ZStack(alignment: .bottomTrailing) {
             Group {
                 if projects.isEmpty {
                     ContentUnavailableView(
@@ -438,13 +438,17 @@ private struct FolderDetailView: View {
             .frame(maxHeight: .infinity)
 
             if isSelecting {
-                ProjectSelectionBar(
-                    count: selection.count,
-                    idPrefix: "projectList.folderDetail.selection",
-                    onCancel: exitSelection,
-                    onSetFolder: { showingBulkFolderPicker = true },
-                    onDelete: { showingBulkDeleteConfirmation = true }
-                )
+                HStack {
+                    Spacer()
+                    ProjectSelectionBar(
+                        count: selection.count,
+                        idPrefix: "projectList.folderDetail.selection",
+                        onCancel: exitSelection,
+                        onSetFolder: { showingBulkFolderPicker = true },
+                        onDelete: { showingBulkDeleteConfirmation = true }
+                    )
+                    Spacer()
+                }
                 .padding(.bottom, 12)
             } else {
                 newProjectButton
@@ -489,8 +493,9 @@ private struct FolderDetailView: View {
         selection = []
     }
 
-    /// `ProjectListView.bottomFloatingMenu`と同じ見た目・位置の＋のみの版。フォルダ作成ボタンは
-    /// ここでは不要（既にフォルダの中にいるため）。
+    /// 「最近」の`addMenuButton`と同じ見た目・右下配置の単独丸＋FAB（背景パネルなし）。
+    /// フォルダ内にフォルダは作れないため2択メニューは挟まず、タップで直接
+    /// 用紙サイズ選択シート（プロジェクト作成）を開く。
     private var newProjectButton: some View {
         Button {
             showingNewProjectSheet = true
@@ -498,20 +503,14 @@ private struct FolderDetailView: View {
             Image(systemName: "plus")
                 .font(.system(size: 22, weight: .bold))
                 .foregroundStyle(.white)
-                .frame(width: 52, height: 52)
+                .frame(width: 56, height: 56)
                 .background(Circle().fill(Color.accentColor))
                 .shadow(color: Color.accentColor.opacity(0.28), radius: 12, y: 4)
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .padding(10)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8)
-        )
-        .shadow(color: .black.opacity(0.14), radius: 16, y: 8)
-        .padding(.bottom, 8)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 12)
         .accessibilityIdentifier("projectList.folderDetail.add")
     }
 
