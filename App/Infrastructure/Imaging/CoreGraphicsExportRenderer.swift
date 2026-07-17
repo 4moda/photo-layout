@@ -66,6 +66,16 @@ final class CoreGraphicsExportRenderer: ImageExporting {
                     path.lineWidth = lineWidthPx
                     uiColor(color).setStroke()
                     path.stroke()
+
+                case .drawText(let text, let originX, let originY, let fontSizePx, let color):
+                    let attributes: [NSAttributedString.Key: Any] = [
+                        .font: UIFont.systemFont(ofSize: CGFloat(fontSizePx)),
+                        .foregroundColor: uiColor(color)
+                    ]
+                    (text as NSString).draw(
+                        at: CGPoint(x: CGFloat(originX), y: CGFloat(originY)),
+                        withAttributes: attributes
+                    )
                 }
             }
         }

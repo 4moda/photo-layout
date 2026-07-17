@@ -7,6 +7,7 @@ public struct ProjectEntity: Hashable, Codable, Sendable, Identifiable {
     public var platformPreset: PlatformPreset?
     public var pages: [PageEntity]
     public var placements: [PlacementEntity]
+    public var textItems: [TextItemEntity]
     public var defaultPhotoFrame: PhotoFrameStyle
     /// 所属フォルダ。nil = 未分類（既存データ・入れ子非対応の前提）
     public var folderID: UUID?
@@ -19,6 +20,7 @@ public struct ProjectEntity: Hashable, Codable, Sendable, Identifiable {
         platformPreset: PlatformPreset? = nil,
         pages: [PageEntity] = [],
         placements: [PlacementEntity] = [],
+        textItems: [TextItemEntity] = [],
         defaultPhotoFrame: PhotoFrameStyle = .none,
         folderID: UUID? = nil,
         createdAt: Date = Date(),
@@ -29,6 +31,7 @@ public struct ProjectEntity: Hashable, Codable, Sendable, Identifiable {
         self.platformPreset = platformPreset
         self.pages = pages
         self.placements = placements
+        self.textItems = textItems
         self.defaultPhotoFrame = defaultPhotoFrame
         self.folderID = folderID
         self.createdAt = createdAt
@@ -48,6 +51,16 @@ public struct ProjectEntity: Hashable, Codable, Sendable, Identifiable {
     /// 指定ページに属する配置（sortIndex順）
     public func placements(onPage pageIndex: Int) -> [PlacementEntity] {
         orderedPlacements.filter { $0.pageIndex == pageIndex }
+    }
+
+    /// sortIndex順に整列したテキスト項目列
+    public var orderedTextItems: [TextItemEntity] {
+        textItems.sorted { $0.sortIndex < $1.sortIndex }
+    }
+
+    /// 指定ページに属するテキスト項目（sortIndex順）
+    public func textItems(onPage pageIndex: Int) -> [TextItemEntity] {
+        orderedTextItems.filter { $0.pageIndex == pageIndex }
     }
 
     public func page(at index: Int) -> PageEntity? {
@@ -81,6 +94,9 @@ public struct ProjectEntity: Hashable, Codable, Sendable, Identifiable {
         for i in placements.indices where placements[i].pageIndex >= clamped {
             placements[i].pageIndex += 1
         }
+        for i in textItems.indices where textItems[i].pageIndex >= clamped {
+            textItems[i].pageIndex += 1
+        }
         pages.append(PageEntity(
             index: clamped,
             aspect: template?.aspect ?? AspectRatio(width: 4, height: 5),
@@ -106,6 +122,9 @@ public struct ProjectEntity: Hashable, Codable, Sendable, Identifiable {
         for i in placements.indices {
             placements[i].pageIndex = mapping[placements[i].pageIndex] ?? placements[i].pageIndex
         }
+        for i in textItems.indices {
+            textItems[i].pageIndex = mapping[textItems[i].pageIndex] ?? textItems[i].pageIndex
+        }
     }
 
     /// ページを削除し、そのページの配置も一緒に消す。後続ページのindexは詰める。
@@ -114,11 +133,15 @@ public struct ProjectEntity: Hashable, Codable, Sendable, Identifiable {
         guard pages.count > 1, page(at: index) != nil else { return }
         pages.removeAll { $0.index == index }
         placements.removeAll { $0.pageIndex == index }
+        textItems.removeAll { $0.pageIndex == index }
         for i in pages.indices where pages[i].index > index {
             pages[i].index -= 1
         }
         for i in placements.indices where placements[i].pageIndex > index {
             placements[i].pageIndex -= 1
+        }
+        for i in textItems.indices where textItems[i].pageIndex > index {
+            textItems[i].pageIndex -= 1
         }
     }
 }

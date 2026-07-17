@@ -34,6 +34,7 @@ public struct ExportPageUseCase: Sendable {
         return try await render(
             page: page,
             placements: SpreadGeometry.visiblePlacements(onPage: pageIndex, project: project),
+            textItems: project.textItems(onPage: pageIndex),
             defaultFrame: project.defaultPhotoFrame,
             format: format,
             resolution: resolution
@@ -69,6 +70,7 @@ public struct ExportPageUseCase: Sendable {
         return try await renderData(
             page: page,
             placements: SpreadGeometry.visiblePlacements(onPage: pageIndex, project: project),
+            textItems: project.textItems(onPage: pageIndex),
             defaultFrame: project.defaultPhotoFrame,
             format: format,
             resolution: resolution
@@ -127,6 +129,7 @@ public struct ExportPageUseCase: Sendable {
     private func render(
         page: PageEntity,
         placements: [PlacementEntity],
+        textItems: [TextItemEntity] = [],
         defaultFrame: PhotoFrameStyle,
         format: ExportFormat,
         resolution: ExportResolution
@@ -134,6 +137,7 @@ public struct ExportPageUseCase: Sendable {
         let rendered = try await renderData(
             page: page,
             placements: placements,
+            textItems: textItems,
             defaultFrame: defaultFrame,
             format: format,
             resolution: resolution
@@ -146,6 +150,7 @@ public struct ExportPageUseCase: Sendable {
     private func renderData(
         page: PageEntity,
         placements: [PlacementEntity],
+        textItems: [TextItemEntity] = [],
         defaultFrame: PhotoFrameStyle,
         format: ExportFormat,
         resolution: ExportResolution
@@ -155,6 +160,7 @@ public struct ExportPageUseCase: Sendable {
         let plan = RenderPlanBuilder.build(
             page: page,
             placements: placements,
+            textItems: textItems,
             defaultFrame: defaultFrame,
             pagePixelSize: pixelSize
         )

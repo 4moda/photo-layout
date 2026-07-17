@@ -29,6 +29,8 @@ final class PageEditorViewModel {
 
     var currentPageIndex = 0
     var selectedPlacementID: UUID?
+    /// 選択中のテキスト項目。写真選択と排他（一方を選ぶと他方の選択は外れる）
+    var selectedTextItemID: UUID?
     /// non-nil = クロップモード（ダブルタップで枠を固定し中身を動かす）
     var cropModePlacementID: UUID?
     /// スナップ発生中に表示するガイド線（配置領域の正規化座標）
@@ -68,6 +70,7 @@ final class PageEditorViewModel {
 
     var page: PageEntity? { project.page(at: currentPageIndex) }
     var pagePlacements: [PlacementEntity] { project.placements(onPage: currentPageIndex) }
+    var pageTextItems: [TextItemEntity] { project.textItems(onPage: currentPageIndex) }
     var pageCount: Int { project.pages.count }
     var hasPhoto: Bool { !project.placements.isEmpty }
     var currentPageHasPhoto: Bool { !pagePlacements.isEmpty }
@@ -131,6 +134,7 @@ final class PageEditorViewModel {
         overviewBase = project
         isOverviewMode = true
         selectedPlacementID = nil
+        selectedTextItemID = nil
         cropModePlacementID = nil
         activeGuides = []
     }
@@ -305,6 +309,7 @@ final class PageEditorViewModel {
 
     func select(_ placementID: UUID?) {
         selectedPlacementID = placementID
+        selectedTextItemID = nil
         // 選択した写真の所属スライドを現在ページにする（選択枠・四隅ハンドルが必ず画面内に出るように）
         if let id = placementID, let p = project.placements.first(where: { $0.id == id }) {
             currentPageIndex = p.pageIndex
@@ -317,8 +322,54 @@ final class PageEditorViewModel {
     /// 選択解除（写真の選択を外す＝スライド編集コンテキストへ戻る）
     func deselectAll() {
         selectedPlacementID = nil
+        selectedTextItemID = nil
         cropModePlacementID = nil
         activeGuides = []
+    }
+
+    // MARK: - テキスト（追加・選択・移動・削除。内容編集・サイズ/色UIは対象外＝次のIssue）
+
+    /// フッターの「テキスト」操作: 既定文字列のテキストを現在ページへ追加し、選択状態にする
+    func addText() async {
+        record()
+        let id = project.addTextItem(toPage: currentPageIndex)
+        selectedTextItemID = id
+        selectedPlacementID = nil
+        cropModePlacementID = nil
+        await persist(refreshImages: false)
+    }
+
+    func selectText(_ textItemID: UUID?) {
+        selectedTextItemID = textItemID
+        if textItemID != nil {
+            selectedPlacementID = nil
+            cropModePlacementID = nil
+        }
+    }
+
+    func deleteSelectedText() async {
+        guard let id = selectedTextItemID else { return }
+        record()
+        project.removeTextItem(id: id)
+        selectedTextItemID = nil
+        await persist(refreshImages: false)
+    }
+
+    /// テキストのドラッグ移動。translationは配置領域の正規化座標の累積移動量（写真のupdateMoveと同じ考え方）
+    func updateTextMove(textItemID: UUID, translationX: Double, translationY: Double) {
+        guard let base = baseTextItem(textItemID) else { return }
+        setTextPosition(x: base.x + translationX, y: base.y + translationY, for: textItemID)
+    }
+
+    private func baseTextItem(_ textItemID: UUID) -> TextItemEntity? {
+        if gestureBase == nil { gestureBase = project }
+        return gestureBase?.textItems.first { $0.id == textItemID }
+    }
+
+    private func setTextPosition(x: Double, y: Double, for textItemID: UUID) {
+        guard let index = project.textItems.firstIndex(where: { $0.id == textItemID }) else { return }
+        project.textItems[index].x = x
+        project.textItems[index].y = y
     }
 
     // MARK: - スライドのスタイル・レイヤー（スライド編集コンテキスト）
@@ -354,6 +405,7 @@ final class PageEditorViewModel {
     /// ダブルタップ: クロップモードの入/切。ロック中の写真は選択のみ行い、クロップモードには入らない
     func toggleCropMode(_ placementID: UUID) {
         selectedPlacementID = placementID
+        selectedTextItemID = nil
         guard let placement = project.placements.first(where: { $0.id == placementID }),
               placement.allowsGeometryGesture else {
             cropModePlacementID = nil
@@ -496,6 +548,7 @@ final class PageEditorViewModel {
         guard let previous = history.undo(current: project) else { return }
         project = previous
         selectedPlacementID = nil
+        selectedTextItemID = nil
         cropModePlacementID = nil
         activeGuides = []
         currentPageIndex = min(currentPageIndex, max(pageCount - 1, 0))
@@ -506,6 +559,7 @@ final class PageEditorViewModel {
         guard let next = history.redo(current: project) else { return }
         project = next
         selectedPlacementID = nil
+        selectedTextItemID = nil
         cropModePlacementID = nil
         activeGuides = []
         currentPageIndex = min(currentPageIndex, max(pageCount - 1, 0))

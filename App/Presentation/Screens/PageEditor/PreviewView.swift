@@ -20,6 +20,7 @@ struct PreviewView: View {
                         CanvasRenderView(
                             page: page,
                             placements: placements,
+                            textItems: viewModel.project.textItems(onPage: page.index),
                             defaultFrame: viewModel.project.defaultPhotoFrame,
                             images: viewModel.previewImages
                         )

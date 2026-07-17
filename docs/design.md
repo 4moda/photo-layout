@@ -40,6 +40,12 @@ ProjectEntity              # 下書き1件。pages と placements を持つ（pl
 │   ├── cropRotation       # クロップ窓内でサンプリングする画素の回転角度（度数法、既定0）。destRectは回転しない
 │   ├── frameOverride?     # 写真ごとの枠（色・太さ・角丸）
 │   └── isLocked           # ロック中はジオメトリ操作（移動/拡縮/クロップ突入）と削除を禁止（既定false）。
+├── textItems: [TextItemEntity]  # ページ直付きの短いテキスト（フィルム銘柄・撮影日等）
+│   ├── sortIndex          # テキスト同士の重なり順（placementsとは別の採番空間）
+│   ├── pageIndex          # 所属ページ
+│   ├── x, y                # 配置領域内の正規化(0..1)原点位置（左上）
+│   ├── fontSizeRatio      # 出力解像度の短辺に対する比率（borderWidthRatio等と同じ規約）
+│   └── color
 ├── defaultPhotoFrame
 └── folderID?              # 所属フォルダ（nil=未分類）。FolderEntityへの単純参照、埋め込みではない
 
@@ -90,7 +96,7 @@ FolderEntity                # プロジェクトのグルーピング（v1: 入�
 
 ## プレビューと書き出しの一致（最重要の構造保証）
 
-`RenderPlanBuilder.build(page:placements:defaultFrame:pagePixelSize:) -> [DrawCommand]` が「どの矩形に何を描くか」を一度だけ決める純粋関数。SwiftUI `Canvas`（プレビュー）も CoreGraphics（書き出し）も**同じコマンド列を解釈するだけ**なので、構造的に乖離しえない。
+`RenderPlanBuilder.build(page:placements:textItems:defaultFrame:pagePixelSize:) -> [DrawCommand]` が「どの矩形に何を描くか」を一度だけ決める純粋関数。SwiftUI `Canvas`（プレビュー）も CoreGraphics（書き出し）も**同じコマンド列を解釈するだけ**なので、構造的に乖離しえない。
 
 - 枠・余白・角丸は出力解像度に対する**比率**で保持し、px化は `RenderPlanBuilder` / `PageGeometry` 内のみ
 - 書き出しは目標ピクセルサイズ・`scale=1` の CGContext で構築する。`ImageRenderer(content:).scale` は**使用禁止**（低解像度出力の原因）
@@ -100,7 +106,7 @@ FolderEntity                # プロジェクトのグルーピング（v1: 入�
 | 型 | 役割 |
 |---|---|
 | `RenderPlanBuilder` | ページ→`[DrawCommand]`。プレビューも書き出しも唯一これを解釈 |
-| `DrawCommand` | fillRect / drawImage(sourceRect,destRect,clipRect,rotationDegrees) / strokeBorder。px単位の描画命令。sourceRect/destRectはクロップ窓全体（未クリップ）、clipRectが実際に見える範囲 |
+| `DrawCommand` | fillRect / drawImage(sourceRect,destRect,clipRect,rotationDegrees) / strokeBorder / drawText(originX,originY,fontSizePx,color)。px単位の描画命令。sourceRect/destRectはクロップ窓全体（未クリップ）、clipRectが実際に見える範囲。drawTextは写真・枠より後（最前面）に生成される |
 | `PageGeometry` | contentRect（余白差引）と destRect→px矩形。描画とジェスチャで共有 |
 | `SpreadGeometry` | ページ隙間なし連結座標。原点/矩形/ページ⇄スプレッド変換・スプレッドX→ページindex |
 | `PlacementGesture` | ジェスチャ→ジオメトリ純粋計算。move / scale / scaleAnchored(対角固定) / stretchEdge(枠比率) / panCrop / zoomCrop / cropRotationFromDrag(回転バー)。状態は持たない。ロック中の禁止判定は`PlacementEntity.allowsGeometryGesture`が担い、呼び出し側（`PageEditorViewModel`）が各エントリポイント呼び出し前にガードする |

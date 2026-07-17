@@ -20,6 +20,9 @@ final class ProjectModel {
     @Relationship(deleteRule: .cascade, inverse: \PlacementModel.project)
     var placements: [PlacementModel] = []
 
+    @Relationship(deleteRule: .cascade, inverse: \TextItemModel.project)
+    var textItems: [TextItemModel] = []
+
     init(
         id: UUID,
         title: String?,
@@ -118,5 +121,47 @@ final class PlacementModel {
         self.cropRotation = cropRotation
         self.frameOverrideData = frameOverrideData
         self.isLocked = isLocked
+    }
+}
+
+@Model
+final class TextItemModel {
+    @Attribute(.unique) var id: UUID
+    var pageIndex: Int
+    var sortIndex: Int
+    var content: String
+    var x: Double
+    var y: Double
+    var fontSizeRatio: Double
+    var colorRed: Double
+    var colorGreen: Double
+    var colorBlue: Double
+    var colorAlpha: Double
+    var project: ProjectModel?
+
+    init(
+        id: UUID,
+        pageIndex: Int,
+        sortIndex: Int,
+        content: String,
+        x: Double,
+        y: Double,
+        fontSizeRatio: Double,
+        colorRed: Double,
+        colorGreen: Double,
+        colorBlue: Double,
+        colorAlpha: Double
+    ) {
+        self.id = id
+        self.pageIndex = pageIndex
+        self.sortIndex = sortIndex
+        self.content = content
+        self.x = x
+        self.y = y
+        self.fontSizeRatio = fontSizeRatio
+        self.colorRed = colorRed
+        self.colorGreen = colorGreen
+        self.colorBlue = colorBlue
+        self.colorAlpha = colorAlpha
     }
 }
