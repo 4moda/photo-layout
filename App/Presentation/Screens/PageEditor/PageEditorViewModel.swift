@@ -35,6 +35,9 @@ final class PageEditorViewModel {
     private(set) var activeGuides: [SnapEngine.Guide] = []
     /// ジェスチャ開始時点のスナップショット。累積translation/magnificationの基準
     private var gestureBase: ProjectEntity?
+    /// 枠シートのスライダー/色選択の操作開始時点のスナップショット（ロック中の写真も編集対象なので
+    /// ジオメトリ用の`gestureBase`/`basePlacement`とは別に持つ）
+    private var frameGestureBase: ProjectEntity?
     /// undo/redo履歴（操作の確定単位で積む。ジェスチャ中の中間状態は積まない）
     private var history = EditHistory()
 
@@ -328,6 +331,23 @@ final class PageEditorViewModel {
         guard let id = selectedPlacementID else { return }
         record()
         project.setPlacementFrame(frame, placementID: id)
+        await persist(refreshImages: false)
+    }
+
+    /// 選択中の写真の枠（縁）をライブ更新（枠シートのスライダー/色選択の操作中プレビュー用）。
+    /// undo記録・永続化はせず、確定は`endFrameSheetGesture()`で行う
+    func updateSelectedPhotoFrameLive(_ frame: PhotoFrameStyle?) {
+        guard let id = selectedPlacementID else { return }
+        if frameGestureBase == nil { frameGestureBase = project }
+        project.setPlacementFrame(frame, placementID: id)
+    }
+
+    /// 枠シートのスライダー/色選択の操作終了: 変更があれば確定してundo履歴へ積み、永続化する
+    func endFrameSheetGesture() async {
+        if let base = frameGestureBase, base != project {
+            history.push(base)
+        }
+        frameGestureBase = nil
         await persist(refreshImages: false)
     }
 
