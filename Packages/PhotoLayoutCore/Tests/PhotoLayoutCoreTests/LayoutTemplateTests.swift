@@ -57,6 +57,19 @@ struct LayoutTemplateTests {
         #expect(template.slotCount == 3)
         #expect(template.recommendedAspect == AspectRatio(width: 16, height: 9))
     }
+
+    @Test("インスタント写真風テンプレートは下広の非対称マットで単位正方形に収まる")
+    func singleInstantSlotIsAsymmetricMatteWithinUnit() {
+        let rect = LayoutTemplateTable.singleInstant.slots[0].rect
+        #expect(LayoutRect.unit.contains(rect))
+        #expect((1 - rect.maxY) > rect.y)
+        #expect(abs(rect.x - (1 - rect.maxX)) < 1e-9)
+    }
+
+    @Test("インスタント写真風テンプレートはselectableに含まれる")
+    func singleInstantIsSelectable() {
+        #expect(LayoutTemplateTable.selectable.contains { $0.id == LayoutTemplateTable.singleInstant.id })
+    }
 }
 
 @Suite("テンプレート適用")
@@ -97,6 +110,17 @@ struct ApplyTemplateTests {
         let template = LayoutTemplateTable.fourUp()[0] // 4スロット
         project.applyTemplate(template, toPage: 0)
         #expect(project.placements(onPage: 0).count == 1)
+        #expect(project.placements(onPage: 0)[0].destRect.isApproximatelyEqual(to: template.slots[0].rect))
+    }
+
+    @Test("インスタント写真風テンプレート適用後、destRectがスロットrectと一致する", arguments: [
+        AspectRatio(width: 1, height: 1),
+        AspectRatio(width: 4, height: 5)
+    ])
+    func singleInstantPlacementMatchesSlotRect(pageAspect: AspectRatio) {
+        var project = makeProject(photoCount: 1, pageAspect: pageAspect)
+        let template = LayoutTemplateTable.singleInstant
+        project.applyTemplate(template, toPage: 0)
         #expect(project.placements(onPage: 0)[0].destRect.isApproximatelyEqual(to: template.slots[0].rect))
     }
 }
