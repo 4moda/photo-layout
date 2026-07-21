@@ -10,6 +10,7 @@ struct TermsOfServiceView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(20)
         }
+        .background(PLColor.background)
         .navigationTitle("利用規約")
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("termsOfService.scroll")

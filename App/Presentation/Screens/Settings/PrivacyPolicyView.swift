@@ -10,6 +10,7 @@ struct PrivacyPolicyView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(20)
         }
+        .background(PLColor.background)
         .navigationTitle("プライバシーポリシー")
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("privacyPolicy.scroll")

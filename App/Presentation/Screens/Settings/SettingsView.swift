@@ -15,6 +15,7 @@ struct SettingsView: View {
                 } label: {
                     Text("プライバシーポリシー")
                 }
+                .listRowBackground(PLColor.surface)
                 .accessibilityIdentifier("settings.privacyPolicy")
 
                 NavigationLink {
@@ -22,6 +23,7 @@ struct SettingsView: View {
                 } label: {
                     Text("利用規約")
                 }
+                .listRowBackground(PLColor.surface)
                 .accessibilityIdentifier("settings.terms")
             }
 
@@ -32,10 +34,13 @@ struct SettingsView: View {
                     Text(appVersion)
                         .foregroundStyle(.secondary)
                 }
+                .listRowBackground(PLColor.surface)
                 .accessibilityIdentifier("settings.version")
             }
         }
         .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(PLColor.background)
         .navigationTitle("設定")
         .navigationBarTitleDisplayMode(.inline)
     }
