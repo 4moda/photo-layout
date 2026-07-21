@@ -21,6 +21,10 @@ struct PageEditorView: View {
     @State private var pendingSlotFill: (page: Int, slot: Int)?
     // フッターから開くビジュアル選択シート（テンプレ/枠比率/レイヤー/枠）は1枚に集約
     @State private var activeSheet: EditorSheet?
+    // 枠シート（S02-F16）の微調整ドラフト値。プリセットタップで初期化し、スライダー/色選択で更新する
+    @State private var frameSheetBorderWidthRatio: Double = 0
+    @State private var frameSheetCornerRadiusRatio: Double = 0
+    @State private var frameSheetColor: LayoutColor = .white
     // 書き出しプレビュー画面
     @State private var previewPresented = false
 
@@ -1134,7 +1138,8 @@ struct PageEditorView: View {
         }
     }
 
-    /// 写真1枚の枠（縁）プリセット（写真選択コンテキスト）
+    /// 写真1枚の枠（縁）プリセット（写真選択コンテキスト）。タップすると太さ・角丸・縁色の
+    /// 微調整（`frameSheetBorderWidthRatio`等）の起点として使われる
     private static let photoFrameChoices: [(label: String, frame: PhotoFrameStyle?)] = [
         ("なし", nil),
         ("白フチ", PhotoFrameStyle(borderColor: .white, borderWidthRatio: 0.012, cornerRadiusRatio: 0)),
@@ -1142,6 +1147,16 @@ struct PageEditorView: View {
         ("黒太フチ", PhotoFrameStyle(borderColor: .black, borderWidthRatio: 0.02, cornerRadiusRatio: 0)),
         ("角丸", PhotoFrameStyle(borderColor: .clear, borderWidthRatio: 0, cornerRadiusRatio: 0.05))
     ]
+
+    /// 縁色の3択（白/黒/クリーム）。太さ0の間も選択状態を保持し、太さを上げた時点で反映される
+    private static let frameColorChoices: [(identifier: String, label: String, color: LayoutColor)] = [
+        ("white", "白", .white),
+        ("black", "黒", .black),
+        ("cream", "クリーム", .cream)
+    ]
+
+    private static let maxFrameBorderWidthRatio: Double = 0.06
+    private static let maxFrameCornerRadiusRatio: Double = 0.5
 
     /// スライド編集メニュー（=既定/何も選択なし）。
     /// 写真追加は中央のフローティング +、書き出しは右上ツールバーへ移動。
@@ -1201,35 +1216,132 @@ struct PageEditorView: View {
         }
     }
 
-    /// 選択中の写真の枠（縁）をプレビューで選ぶシート（写真選択）
+    /// 選択中の写真の枠（縁）をプリセット＋微調整（太さ・角丸スライダー、縁色）で選ぶシート（写真選択）
     private var framePickerSheet: some View {
         NavigationStack {
             ScrollView {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 3), spacing: 16) {
-                    ForEach(Self.photoFrameChoices, id: \.label) { choice in
-                        Button {
-                            activeSheet = nil
-                            Task { await viewModel.setSelectedPhotoFrame(choice.frame) }
-                        } label: {
-                            VStack(spacing: 6) {
-                                FrameSwatch(frame: choice.frame)
-                                    .selectionHighlight(
-                                        viewModel.currentFrameOverride == choice.frame,
-                                        in: RoundedRectangle(cornerRadius: 6)
-                                    )
-                                Text(choice.label).font(.caption2).foregroundStyle(.secondary)
-                                    .lineLimit(1).minimumScaleFactor(0.7)
+                VStack(alignment: .leading, spacing: 28) {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 3), spacing: 16) {
+                        ForEach(Self.photoFrameChoices, id: \.label) { choice in
+                            Button {
+                                applyFramePreset(choice.frame)
+                            } label: {
+                                VStack(spacing: 6) {
+                                    FrameSwatch(frame: choice.frame)
+                                        .selectionHighlight(
+                                            viewModel.currentFrameOverride == choice.frame,
+                                            in: RoundedRectangle(cornerRadius: 6)
+                                        )
+                                    Text(choice.label).font(.caption2).foregroundStyle(.secondary)
+                                        .lineLimit(1).minimumScaleFactor(0.7)
+                                }
                             }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
+
+                    frameAdjustmentControls
                 }
                 .padding(20)
             }
             .navigationTitle("枠").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("閉じる") { activeSheet = nil } } }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
+        .onAppear {
+            let base = viewModel.currentFrameOverride ?? .none
+            frameSheetBorderWidthRatio = base.borderWidthRatio
+            frameSheetCornerRadiusRatio = base.cornerRadiusRatio
+            frameSheetColor = base.borderColor.alpha > 0 ? base.borderColor : .white
+        }
+    }
+
+    /// 枠シートの微調整UI: 太さ・角丸スライダーと縁色（白/黒/クリーム）選択。プレビューはドラフト値へ即追従する
+    private var frameAdjustmentControls: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            FrameSwatch(frame: frameSheetDraft)
+                .frame(width: 100, height: 100)
+                .accessibilityIdentifier("pageEditor.frameSheetPreview")
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("太さ").font(.caption).foregroundStyle(.secondary)
+                Slider(
+                    value: Binding(
+                        get: { frameSheetBorderWidthRatio },
+                        set: { newValue in
+                            frameSheetBorderWidthRatio = newValue
+                            viewModel.updateSelectedPhotoFrameLive(frameSheetDraft)
+                        }
+                    ),
+                    in: 0...Self.maxFrameBorderWidthRatio
+                ) { editing in
+                    if !editing { Task { await viewModel.endFrameSheetGesture() } }
+                }
+                .accessibilityIdentifier("pageEditor.frameBorderWidthSlider")
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("角丸").font(.caption).foregroundStyle(.secondary)
+                Slider(
+                    value: Binding(
+                        get: { frameSheetCornerRadiusRatio },
+                        set: { newValue in
+                            frameSheetCornerRadiusRatio = newValue
+                            viewModel.updateSelectedPhotoFrameLive(frameSheetDraft)
+                        }
+                    ),
+                    in: 0...Self.maxFrameCornerRadiusRatio
+                ) { editing in
+                    if !editing { Task { await viewModel.endFrameSheetGesture() } }
+                }
+                .accessibilityIdentifier("pageEditor.frameCornerRadiusSlider")
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("縁色").font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: 16) {
+                    ForEach(Self.frameColorChoices, id: \.identifier) { choice in
+                        Button {
+                            selectFrameColor(choice.color)
+                        } label: {
+                            Circle()
+                                .fill(choice.color.swiftUIColor)
+                                .frame(width: 32, height: 32)
+                                .overlay(Circle().stroke(Color(.systemGray3), lineWidth: 1))
+                                .selectionHighlight(frameSheetColor == choice.color, in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("pageEditor.frameColor.\(choice.identifier)")
+                        .accessibilityLabel(choice.label)
+                    }
+                }
+            }
+        }
+    }
+
+    /// 枠シートの微調整ドラフト値から組み立てた現在の枠。太さ0・角丸0でも明示的な上書きとして扱う
+    private var frameSheetDraft: PhotoFrameStyle {
+        PhotoFrameStyle(
+            borderColor: frameSheetColor,
+            borderWidthRatio: frameSheetBorderWidthRatio,
+            cornerRadiusRatio: frameSheetCornerRadiusRatio
+        )
+    }
+
+    /// プリセットタップ: 太さ・角丸・縁色をそのプリセットの値へ初期化し、選択中写真へ確定反映する
+    private func applyFramePreset(_ frame: PhotoFrameStyle?) {
+        let base = frame ?? .none
+        frameSheetBorderWidthRatio = base.borderWidthRatio
+        frameSheetCornerRadiusRatio = base.cornerRadiusRatio
+        frameSheetColor = base.borderColor.alpha > 0 ? base.borderColor : .white
+        Task { await viewModel.setSelectedPhotoFrame(frame) }
+    }
+
+    /// 縁色タップ: 太さが0の間も選択状態を保持しつつ、選択中写真の枠へ即確定反映する
+    private func selectFrameColor(_ color: LayoutColor) {
+        frameSheetColor = color
+        viewModel.updateSelectedPhotoFrameLive(frameSheetDraft)
+        Task { await viewModel.endFrameSheetGesture() }
     }
 
     /// レイヤー順（重なり）の並べ替えシート: 現在スライドの写真を前面順で並べ、ドラッグまたは上下ボタンで入替。
@@ -1435,7 +1547,7 @@ private struct FrameSwatch: View {
                 .fill(Color.gray.opacity(0.55))
                 .overlay(
                     RoundedRectangle(cornerRadius: radius)
-                        .strokeBorder(color(f.borderColor), lineWidth: lineWidth)
+                        .strokeBorder(f.borderColor.swiftUIColor, lineWidth: lineWidth)
                 )
                 .padding(8)
         }
@@ -1443,8 +1555,10 @@ private struct FrameSwatch: View {
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(.systemGray4), lineWidth: 0.5))
     }
+}
 
-    private func color(_ c: LayoutColor) -> Color {
-        Color(red: c.red, green: c.green, blue: c.blue, opacity: c.alpha)
+extension LayoutColor {
+    fileprivate var swiftUIColor: Color {
+        Color(red: red, green: green, blue: blue, opacity: alpha)
     }
 }

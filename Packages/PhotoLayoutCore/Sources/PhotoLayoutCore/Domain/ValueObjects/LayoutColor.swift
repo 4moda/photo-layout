@@ -15,4 +15,5 @@ public struct LayoutColor: Hashable, Codable, Sendable {
     public static let white = LayoutColor(red: 1, green: 1, blue: 1)
     public static let black = LayoutColor(red: 0, green: 0, blue: 0)
     public static let clear = LayoutColor(red: 0, green: 0, blue: 0, alpha: 0)
+    public static let cream = LayoutColor(red: 0.96, green: 0.92, blue: 0.82)
 }

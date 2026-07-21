@@ -390,6 +390,17 @@ final class ScreenshotSmokeTests: XCTestCase {
         if app.buttons["pageEditor.frameButton"].waitForExistence(timeout: 3) {
             app.buttons["pageEditor.frameButton"].tap()
             if app.buttons["白フチ"].waitForExistence(timeout: 5) {
+                // プリセットタップで太さ・角丸スライダーと縁色選択の初期値が入る
+                app.buttons["白フチ"].tap()
+                sleep(1)
+                // 太さスライダーと縁色（クリーム）を操作し、微調整UIが反映された状態を撮る
+                let borderWidthSlider = app.sliders["pageEditor.frameBorderWidthSlider"]
+                if borderWidthSlider.waitForExistence(timeout: 3) {
+                    borderWidthSlider.adjust(toNormalizedSliderPosition: 0.6)
+                }
+                if app.buttons["pageEditor.frameColor.cream"].waitForExistence(timeout: 3) {
+                    app.buttons["pageEditor.frameColor.cream"].tap()
+                }
                 sleep(1)
                 snapshot("S02-F16-frame-preset-sheet")
             }
