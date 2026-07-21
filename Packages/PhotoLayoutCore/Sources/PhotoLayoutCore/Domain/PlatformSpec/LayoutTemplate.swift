@@ -44,6 +44,12 @@ public enum LayoutTemplateTable {
         )
     }
 
+    /// インスタント写真風（1枚・下だけ広い非対称マット。左右8%・上8%・下24%の余白）
+    public static let singleInstant = LayoutTemplate(
+        id: "single-instant", name: "インスタント写真風",
+        slots: [LayoutRect(x: 0.08, y: 0.08, width: 0.84, height: 0.68)]
+    )
+
     /// 2枚: 左右50:50 / 上下50:50 / 大小(非対称6:4)
     public static func twoUp(gutter: Double = 0.01) -> [LayoutTemplate] {
         let g = gutter
@@ -125,7 +131,7 @@ public enum LayoutTemplateTable {
     /// スロット先行UIで選べる型枠一覧（写真の有無に依存しない）。
     /// 空ページにも敷けるよう、1〜4スロットの代表レイアウトを並べる。
     public static var selectable: [LayoutTemplate] {
-        [single] + twoUp() + threeUp() + fourUp()
+        [single, singleInstant] + twoUp() + threeUp() + fourUp()
     }
 
     /// 枚数に対する代表テンプレート一覧（UIのピッカー用）

@@ -63,7 +63,7 @@ SNAPSHOT_LABELS = {
     "S02-F14-template-sheet": "テンプレート選択シート（型枠ビジュアル一覧）",
     "S02-F14-four-grid-empty-slots": "田の字を適用（空スロット4つ・グレー範囲）",
     "S02-F15-layer-order-sheet": "レイヤー順シート（重なり順）",
-    "S02-F16-frame-preset-sheet": "枠プリセット一覧シート",
+    "S02-F16-frame-preset-sheet": "枠プリセット＋微調整シート（太さ・角丸スライダー、縁色）",
     "S03-slide-overview": "スライド一覧（俯瞰）",
     "S03-slide-overview-three-pages": "スライド一覧（3スライド）",
     "S03-F03-append-slide": "スライドを追加（2スライドに増える）",
