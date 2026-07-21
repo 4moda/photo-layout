@@ -82,6 +82,13 @@ struct ProjectListView: View {
             .navigationTitle(isSelectingRecent ? "\(recentSelection.count)件選択中" : "PhotoLayout")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // ワードマークのみ刻印体（PLFont）。選択中の件数表示はnavigationTitleの標準表示のまま
+                // （システムのアクセシビリティ・戻るボタンラベルはnavigationTitleの文字列を使い続ける）
+                if !isSelectingRecent {
+                    ToolbarItem(placement: .principal) {
+                        Text("PhotoLayout").plStamp(size: 17)
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink(value: ProjectListRoute.settings) {
                         Image(systemName: "gearshape")
