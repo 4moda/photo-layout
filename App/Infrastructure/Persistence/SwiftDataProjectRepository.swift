@@ -43,6 +43,7 @@ final class SwiftDataProjectRepository: ProjectRepository {
         modelContext.insert(model)
         model.pages = try project.pages.map(pageModel(from:))
         model.placements = try project.placements.map(placementModel(from:))
+        model.textItems = project.textItems.map(textItemModel(from:))
         try modelContext.save()
     }
 
@@ -105,6 +106,25 @@ final class SwiftDataProjectRepository: ProjectRepository {
                         isLocked: placement.isLocked
                     )
                 },
+            textItems: model.textItems
+                .sorted { $0.sortIndex < $1.sortIndex }
+                .map { textItem in
+                    TextItemEntity(
+                        id: textItem.id,
+                        pageIndex: textItem.pageIndex,
+                        sortIndex: textItem.sortIndex,
+                        content: textItem.content,
+                        x: textItem.x,
+                        y: textItem.y,
+                        fontSizeRatio: textItem.fontSizeRatio,
+                        color: LayoutColor(
+                            red: textItem.colorRed,
+                            green: textItem.colorGreen,
+                            blue: textItem.colorBlue,
+                            alpha: textItem.colorAlpha
+                        )
+                    )
+                },
             defaultPhotoFrame: try decoder.decode(PhotoFrameStyle.self, from: model.defaultFrameData),
             folderID: model.folderID,
             createdAt: model.createdAt,
@@ -139,6 +159,22 @@ final class SwiftDataProjectRepository: ProjectRepository {
             cropRotation: placement.cropRotation,
             frameOverrideData: try placement.frameOverride.map { try encoder.encode($0) },
             isLocked: placement.isLocked
+        )
+    }
+
+    private func textItemModel(from textItem: TextItemEntity) -> TextItemModel {
+        TextItemModel(
+            id: textItem.id,
+            pageIndex: textItem.pageIndex,
+            sortIndex: textItem.sortIndex,
+            content: textItem.content,
+            x: textItem.x,
+            y: textItem.y,
+            fontSizeRatio: textItem.fontSizeRatio,
+            colorRed: textItem.color.red,
+            colorGreen: textItem.color.green,
+            colorBlue: textItem.color.blue,
+            colorAlpha: textItem.color.alpha
         )
     }
 }

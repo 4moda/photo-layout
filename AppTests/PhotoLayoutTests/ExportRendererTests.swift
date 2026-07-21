@@ -66,6 +66,32 @@ final class ExportRendererTests: XCTestCase {
         XCTAssertEqual(Int(exported.size.height), 1250)
     }
 
+    func testExportRendersTextWithoutCrashing() async throws {
+        let page = PageEntity(
+            index: 0,
+            aspect: AspectRatio(width: 4, height: 5),
+            background: FramePreset.whiteMargin.background
+        )
+        var project = ProjectEntity(pages: [page])
+        let textID = project.addTextItem(toPage: 0, content: "フィルムA / 2026-07-17")
+        let pixelSize = LayoutSize(width: 400, height: 500)
+        let plan = RenderPlanBuilder.build(
+            page: page,
+            placements: [],
+            textItems: project.textItems(onPage: 0),
+            defaultFrame: project.defaultPhotoFrame,
+            pagePixelSize: pixelSize
+        )
+        XCTAssertTrue(project.textItems.contains { $0.id == textID })
+
+        let data = try await renderer.render(plan: plan, pixelSize: pixelSize, format: .jpeg(quality: 0.9))
+
+        XCTAssertEqual(data.prefix(2), Data([0xFF, 0xD8]))
+        let exported = try XCTUnwrap(UIImage(data: data))
+        XCTAssertEqual(Int(exported.size.width), 400)
+        XCTAssertEqual(Int(exported.size.height), 500)
+    }
+
     func testExportPageUseCaseEndToEnd() async throws {
         let photoRef = try await store.store(imageData: makeTestImageData(width: 3200, height: 2400))
         var project = ProjectEntity(

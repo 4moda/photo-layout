@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import UIKit
 import PhotoLayoutCore
 
 /// ページ編集画面。プロジェクト種別で編集面が変わる:
@@ -49,6 +50,7 @@ struct PageEditorView: View {
 
     private enum SpreadDragMode {
         case photo(id: UUID, isCrop: Bool, denom: CGSize)
+        case text(id: UUID, denom: CGSize)
         case pan(base: CGSize)
         case suppressed // 角ハンドル付近から始まったドラッグはハンドル側に譲る
     }
@@ -191,6 +193,7 @@ struct PageEditorView: View {
                             page: page,
                             // 隣スライドからはみ出して重なる写真も描く（プロジェクト配置モデル）
                             placements: SpreadGeometry.visiblePlacements(onPage: page.index, project: project),
+                            textItems: project.textItems(onPage: page.index),
                             defaultFrame: project.defaultPhotoFrame,
                             images: viewModel.previewImages
                         )
@@ -215,6 +218,7 @@ struct PageEditorView: View {
                 }
                 emptySlotOverlay(stripHeight: stripHeight)
                 stripSelectionOverlay(stripHeight: stripHeight, viewportHeight: geo.size.height)
+                textSelectionOverlay(stripHeight: stripHeight, viewportHeight: geo.size.height)
             }
             .frame(width: stripWidth, height: stripHeight, alignment: .topLeading)
             .offset(panOffset)
@@ -265,6 +269,46 @@ struct PageEditorView: View {
                 stripHeight: stripHeight, viewportHeight: viewportHeight
             )
         }
+    }
+
+    /// 選択中のテキストの枠＋削除ボタン（スプレッド座標）。ドラッグでの移動はキャンバスのドラッグが直接受ける
+    @ViewBuilder
+    private func textSelectionOverlay(stripHeight: CGFloat, viewportHeight: CGFloat) -> some View {
+        if let selectedID = viewModel.selectedTextItemID,
+           let item = viewModel.project.textItems.first(where: { $0.id == selectedID }),
+           let rect = textRect(for: item, pageIndex: item.pageIndex, stripHeight: stripHeight) {
+            let layoutRect = LayoutRect(
+                x: Double(rect.minX), y: Double(rect.minY),
+                width: Double(rect.width), height: Double(rect.height)
+            )
+            Rectangle()
+                .stroke(Color.accentColor, lineWidth: 2)
+                .frame(width: rect.width, height: rect.height)
+                .position(x: rect.midX, y: rect.midY)
+                .allowsHitTesting(false)
+                .accessibilityIdentifier("pageEditor.textSelectionOverlay")
+            textHoverMenu(rect: layoutRect, stripHeight: stripHeight, viewportHeight: viewportHeight)
+        }
+    }
+
+    /// 選択中テキストの直上に出す削除ボタン（内容編集・サイズ/色UIは対象外＝次のIssue）
+    private func textHoverMenu(rect: LayoutRect, stripHeight: CGFloat, viewportHeight: CGFloat) -> some View {
+        HStack(spacing: 2) {
+            hoverMenuButton(
+                systemImage: "trash", tint: .red,
+                identifier: "pageEditor.hover.deleteText"
+            ) {
+                Task { await viewModel.deleteSelectedText() }
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8))
+        .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
+        .position(hoverMenuPosition(
+            rect: rect, isLocked: false,
+            stripHeight: stripHeight, viewportHeight: viewportHeight))
     }
 
     /// 選択写真の直上に出す小型のフローティングメニュー（ロック/複製/削除）。
@@ -518,6 +562,50 @@ struct PageEditorView: View {
         return contentRectInStrip(pageIndex: placement.pageIndex, stripHeight: stripHeight)
     }
 
+    /// ページのピクセル基準（出力解像度の短辺に相当）。フォントサイズ比率のpx化に使う
+    /// （RenderPlanBuilderの`pagePixelSize.referenceDimension`と同じ式）
+    private func pageReferenceDimension(pageIndex: Int, stripHeight: CGFloat) -> Double? {
+        guard let page = viewModel.project.page(at: pageIndex) else { return nil }
+        let pageSize = LayoutSize(width: page.aspect.ratio * stripHeight, height: stripHeight)
+        return pageSize.referenceDimension
+    }
+
+    /// テキスト項目の描画矩形（スプレッド空間のpt）。選択枠・ヒットテストに使う。
+    /// CanvasRenderView/CoreGraphicsExportRendererと同じ左上原点・システムフォントサイズで
+    /// NSString計測するため、見た目の大きさとズレない
+    private func textRect(for textItem: TextItemEntity, pageIndex: Int, stripHeight: CGFloat) -> CGRect? {
+        guard let content = contentRectInStrip(pageIndex: pageIndex, stripHeight: stripHeight),
+              let ref = pageReferenceDimension(pageIndex: pageIndex, stripHeight: stripHeight)
+        else { return nil }
+        let fontSizePx = CGFloat(textItem.fontSizeRatio * ref)
+        let origin = CGPoint(
+            x: CGFloat(content.x + textItem.x * content.width),
+            y: CGFloat(content.y + textItem.y * content.height)
+        )
+        let size = (textItem.content as NSString).size(withAttributes: [.font: UIFont.systemFont(ofSize: fontSizePx)])
+        return CGRect(origin: origin, size: size)
+    }
+
+    /// 指定ページ内で、指定点（スプレッド空間、pan未反映）に当たる最前面のテキストを返す
+    private func textHit(atStripPoint point: CGPoint, pageIndex: Int, stripHeight: CGFloat) -> TextItemEntity? {
+        viewModel.project.textItems(onPage: pageIndex).reversed().first { item in
+            guard let rect = textRect(for: item, pageIndex: pageIndex, stripHeight: stripHeight) else { return false }
+            return rect.insetBy(dx: -8, dy: -8).contains(point)
+        }
+    }
+
+    /// 画面点 →（ページindex, ヒットしたテキスト）。パン/ズームを反映したビューポート座標を受け取る
+    private func textHit(at point: CGPoint, geo: GeometryProxy) -> (pageIndex: Int, item: TextItemEntity)? {
+        let stripHeight = geo.size.height * viewZoom
+        let sp = CGPoint(x: point.x - panOffset.width, y: point.y - panOffset.height)
+        guard sp.y >= 0, sp.y <= stripHeight else { return nil }
+        let spreadX = Double(sp.x / stripHeight)
+        guard let pageIndex = SpreadGeometry.pageIndex(atSpreadX: spreadX, project: viewModel.project),
+              let hit = textHit(atStripPoint: sp, pageIndex: pageIndex, stripHeight: stripHeight)
+        else { return nil }
+        return (pageIndex, hit)
+    }
+
     // MARK: - キャンバス座標変換
 
     /// 画面点 →（ページindex, 配置領域の正規化座標）
@@ -602,22 +690,28 @@ struct PageEditorView: View {
 
     private func stripSingleTap(geo: GeometryProxy) -> some Gesture {
         SpatialTapGesture().onEnded { value in
-            guard let loc = locate(value.location, geo: geo) else {
-                // スライドの外（暗い地）をタップ → 何も選択なし（カルーセル視点）
-                if viewModel.cropModePlacementID != nil {
+            // クロップ中はテキストのタップを無視し、クロップ対象の写真かどうかだけで判定する
+            if viewModel.cropModePlacementID != nil {
+                let loc = locate(value.location, geo: geo)
+                let hit = loc.flatMap { viewModel.placement(atNormalizedX: $0.nx, y: $0.ny, onPage: $0.pageIndex) }
+                if hit?.id != viewModel.cropModePlacementID {
                     viewModel.exitCropMode()
-                } else {
-                    viewModel.deselectAll()
                 }
                 return
             }
+            // テキストは最前面に描かれるため、写真より先にヒット判定する
+            if let textHit = textHit(at: value.location, geo: geo) {
+                viewModel.focusPage(textHit.pageIndex)
+                viewModel.selectText(textHit.item.id)
+                return
+            }
+            guard let loc = locate(value.location, geo: geo) else {
+                // スライドの外（暗い地）をタップ → 何も選択なし（カルーセル視点）
+                viewModel.deselectAll()
+                return
+            }
             viewModel.focusPage(loc.pageIndex)
-            let hit = viewModel.placement(atNormalizedX: loc.nx, y: loc.ny, onPage: loc.pageIndex)
-            if let cropID = viewModel.cropModePlacementID {
-                if hit?.id != cropID {
-                    viewModel.exitCropMode()
-                }
-            } else if let hit {
+            if let hit = viewModel.placement(atNormalizedX: loc.nx, y: loc.ny, onPage: loc.pageIndex) {
                 viewModel.select(hit.id)
             } else if let slot = viewModel.emptySlot(atNormalizedX: loc.nx, y: loc.ny, onPage: loc.pageIndex) {
                 // 空スロットのタップ → そのスロットへ当てはめる写真を選ぶ
@@ -662,6 +756,12 @@ struct PageEditorView: View {
                             translationY: value.translation.height / denom.height
                         )
                     }
+                case .text(let id, let denom):
+                    viewModel.updateTextMove(
+                        textItemID: id,
+                        translationX: value.translation.width / denom.width,
+                        translationY: value.translation.height / denom.height
+                    )
                 case .pan(let base):
                     didUserAdjustViewport = true
                     panOffset = clampedPan(
@@ -679,6 +779,9 @@ struct PageEditorView: View {
                 if case .photo = dragMode {
                     Task { await viewModel.endGesture() }
                 }
+                if case .text = dragMode {
+                    Task { await viewModel.endGesture() }
+                }
                 if case .pan = dragMode {
                     focusCenterPage(geo: geo)
                 }
@@ -691,6 +794,17 @@ struct PageEditorView: View {
         if let corners = selectedCornersInViewport(geo: geo),
            corners.contains(where: { hypot($0.x - start.x, $0.y - start.y) < 24 }) {
             return .suppressed
+        }
+        // テキストは最前面に描かれるため、写真より先にヒット判定する（クロップ中は対象外）
+        if viewModel.cropModePlacementID == nil, let textHit = textHit(at: start, geo: geo) {
+            viewModel.focusPage(textHit.pageIndex)
+            viewModel.selectText(textHit.item.id)
+            guard let content = contentRectInStrip(
+                pageIndex: textHit.pageIndex, stripHeight: geo.size.height * viewZoom
+            ) else {
+                return .pan(base: panOffset)
+            }
+            return .text(id: textHit.item.id, denom: CGSize(width: content.width, height: content.height))
         }
         guard let loc = locate(start, geo: geo),
               let hit = viewModel.placement(atNormalizedX: loc.nx, y: loc.ny, onPage: loc.pageIndex),
@@ -923,6 +1037,8 @@ struct PageEditorView: View {
         Group {
             if viewModel.selectedPlacementID != nil {
                 photoControls
+            } else if viewModel.selectedTextItemID != nil {
+                textControls
             } else {
                 slideControls
             }
@@ -1138,6 +1254,16 @@ struct PageEditorView: View {
         }
     }
 
+    /// テキスト選択中のメニュー（削除のみ。移動はドラッグ、内容編集・サイズ/色UIは対象外＝次のIssue）
+    private var textControls: some View {
+        toolbarStrip(itemCount: 1) { itemWidth in
+            toolButton("削除", systemImage: "trash", role: .destructive,
+                       identifier: "pageEditor.deleteText", width: itemWidth) {
+                Task { await viewModel.deleteSelectedText() }
+            }
+        }
+    }
+
     /// 写真1枚の枠（縁）プリセット（写真選択コンテキスト）。タップすると太さ・角丸・縁色の
     /// 微調整（`frameSheetBorderWidthRatio`等）の起点として使われる
     private static let photoFrameChoices: [(label: String, frame: PhotoFrameStyle?)] = [
@@ -1167,6 +1293,9 @@ struct PageEditorView: View {
                     templateButton
                     toolButton("レイヤー", systemImage: "square.stack.3d.up", identifier: "pageEditor.layerButton") {
                         activeSheet = .layers
+                    }
+                    toolButton("テキスト", systemImage: "textformat", identifier: "pageEditor.addText") {
+                        Task { await viewModel.addText() }
                     }
                 }
                 Spacer(minLength: 0)

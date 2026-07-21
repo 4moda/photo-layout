@@ -22,4 +22,8 @@ public enum DrawCommand: Equatable, Sendable {
     )
     /// rect（px、線の中心線）に沿って枠線を描く
     case strokeBorder(color: LayoutColor, lineWidthPx: Double, cornerRadiusPx: Double, rect: LayoutRect)
+    /// テキストを(originX, originY)（px、左上基準）から描く。フォントはシステムフォント固定
+    /// （種別の選択はスコープ外）。ジオメトリ（位置・フォントサイズ）はRenderPlanBuilderが
+    /// 比率からpx化済みで、レンダラ側は計算しない
+    case drawText(text: String, originX: Double, originY: Double, fontSizePx: Double, color: LayoutColor)
 }

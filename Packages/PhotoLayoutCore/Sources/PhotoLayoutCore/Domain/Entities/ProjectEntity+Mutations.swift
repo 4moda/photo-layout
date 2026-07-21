@@ -48,6 +48,43 @@ extension ProjectEntity {
         }
     }
 
+    /// テキストを追加する。既定文字列・既定フォントサイズでページ中央付近に置く。
+    /// 同じページに複数追加すると完全には重ならないよう少しずつずらす（写真の追加と同じ考え方）。
+    /// - Returns: 追加したテキスト項目のid（呼び出し側が選択状態にするために使う）
+    @discardableResult
+    public mutating func addTextItem(toPage pageIndex: Int = 0, content: String = "テキスト") -> UUID {
+        let cascade = textItems(onPage: pageIndex).count
+        let shift = Double(cascade % 5) * 0.05
+        let item = TextItemEntity(
+            pageIndex: pageIndex,
+            sortIndex: textItems.count,
+            content: content,
+            x: 0.1 + shift,
+            y: 0.1 + shift
+        )
+        textItems.append(item)
+        return item.id
+    }
+
+    /// テキストの位置を移動する（配置領域内の正規化座標、左上原点）
+    public mutating func moveTextItem(id: UUID, x: Double, y: Double) {
+        guard let index = textItems.firstIndex(where: { $0.id == id }) else { return }
+        textItems[index].x = x
+        textItems[index].y = y
+    }
+
+    /// テキストを削除し、sortIndexを0からの連番に詰め直す
+    public mutating func removeTextItem(id: UUID) {
+        guard textItems.contains(where: { $0.id == id }) else { return }
+        textItems.removeAll { $0.id == id }
+        let orderedIDs = orderedTextItems.map(\.id)
+        for (newIndex, itemID) in orderedIDs.enumerated() {
+            if let index = textItems.firstIndex(where: { $0.id == itemID }) {
+                textItems[index].sortIndex = newIndex
+            }
+        }
+    }
+
     /// 重なり順: 同一ページ内で1段前面へ（sortIndexを隣と入替）。最前面なら何もしない
     public mutating func bringForward(placementID: UUID) {
         guard let placement = placements.first(where: { $0.id == placementID }) else { return }
@@ -184,6 +221,7 @@ extension ProjectEntity {
         copy.id = UUID()
         for i in copy.pages.indices { copy.pages[i].id = UUID() }
         for i in copy.placements.indices { copy.placements[i].id = UUID() }
+        for i in copy.textItems.indices { copy.textItems[i].id = UUID() }
         copy.createdAt = date
         copy.updatedAt = date
         return copy
@@ -210,6 +248,7 @@ extension ProjectEntity {
         let newIndex = pageIndex + 1
         for i in pages.indices where pages[i].index >= newIndex { pages[i].index += 1 }
         for i in placements.indices where placements[i].pageIndex >= newIndex { placements[i].pageIndex += 1 }
+        for i in textItems.indices where textItems[i].pageIndex >= newIndex { textItems[i].pageIndex += 1 }
         var newPage = source
         newPage.id = UUID()
         newPage.index = newIndex
@@ -222,6 +261,15 @@ extension ProjectEntity {
             copy.sortIndex = nextSort
             nextSort += 1
             placements.append(copy)
+        }
+        var nextTextSort = (textItems.map(\.sortIndex).max() ?? -1) + 1
+        for original in textItems(onPage: pageIndex) {
+            var copy = original
+            copy.id = UUID()
+            copy.pageIndex = newIndex
+            copy.sortIndex = nextTextSort
+            nextTextSort += 1
+            textItems.append(copy)
         }
     }
 

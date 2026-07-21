@@ -7,11 +7,13 @@ public enum RenderPlanBuilder {
     /// - Parameters:
     ///   - page: 対象ページ
     ///   - placements: このページに属する配置（destRectは配置領域の正規化0..1座標）
+    ///   - textItems: このページに属するテキスト項目（写真・枠より前面＝最後に描く）
     ///   - defaultFrame: placement.frameOverrideがnilのときに使うフレーム
     ///   - pagePixelSize: 出力先のピクセル（またはポイント）サイズ。ページのアスペクト比と一致している前提
     public static func build(
         page: PageEntity,
         placements: [PlacementEntity],
+        textItems: [TextItemEntity] = [],
         defaultFrame: PhotoFrameStyle,
         pagePixelSize: LayoutSize
     ) -> [DrawCommand] {
@@ -75,6 +77,16 @@ public enum RenderPlanBuilder {
                     )
                 ))
             }
+        }
+
+        for textItem in textItems.sorted(by: { $0.sortIndex < $1.sortIndex }) {
+            commands.append(.drawText(
+                text: textItem.content,
+                originX: contentRect.x + textItem.x * contentRect.width,
+                originY: contentRect.y + textItem.y * contentRect.height,
+                fontSizePx: textItem.fontSizeRatio * ref,
+                color: textItem.color
+            ))
         }
         return commands
     }

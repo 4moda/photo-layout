@@ -7,15 +7,31 @@ import PhotoLayoutCore
 struct CanvasRenderView: View {
     let page: PageEntity
     let placements: [PlacementEntity]
+    let textItems: [TextItemEntity]
     let defaultFrame: PhotoFrameStyle
     /// 配置ID→フル画像（sourceRect未適用）。クロップはsourceRectの写像で描画時に適用する
     let images: [UUID: UIImage]
+
+    init(
+        page: PageEntity,
+        placements: [PlacementEntity],
+        textItems: [TextItemEntity] = [],
+        defaultFrame: PhotoFrameStyle,
+        images: [UUID: UIImage]
+    ) {
+        self.page = page
+        self.placements = placements
+        self.textItems = textItems
+        self.defaultFrame = defaultFrame
+        self.images = images
+    }
 
     var body: some View {
         Canvas { context, size in
             let plan = RenderPlanBuilder.build(
                 page: page,
                 placements: placements,
+                textItems: textItems,
                 defaultFrame: defaultFrame,
                 pagePixelSize: LayoutSize(width: size.width, height: size.height)
             )
@@ -55,6 +71,18 @@ struct CanvasRenderView: View {
                         Path(roundedRect: cgRect(rect), cornerRadius: cornerRadiusPx),
                         with: .color(swiftUIColor(color)),
                         lineWidth: lineWidthPx
+                    )
+
+                case .drawText(let text, let originX, let originY, let fontSizePx, let color):
+                    let resolved = context.resolve(
+                        Text(text)
+                            .font(.system(size: CGFloat(fontSizePx)))
+                            .foregroundColor(swiftUIColor(color))
+                    )
+                    context.draw(
+                        resolved,
+                        at: CGPoint(x: CGFloat(originX), y: CGFloat(originY)),
+                        anchor: .topLeading
                     )
                 }
             }

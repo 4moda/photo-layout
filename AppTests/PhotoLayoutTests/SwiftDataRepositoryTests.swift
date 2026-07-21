@@ -14,7 +14,7 @@ final class SwiftDataRepositoryTests: XCTestCase {
     override func setUp() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         container = try ModelContainer(
-            for: ProjectModel.self, PageModel.self, PlacementModel.self,
+            for: ProjectModel.self, PageModel.self, PlacementModel.self, TextItemModel.self,
             configurations: config
         )
         repository = SwiftDataProjectRepository(modelContext: container.mainContext)
@@ -46,6 +46,17 @@ final class SwiftDataRepositoryTests: XCTestCase {
                     pageIndex: 2,
                     photo: PhotoRef(fileName: "b.jpg", pixelWidth: 6000, pixelHeight: 4000),
                     destRect: LayoutRect(x: 1, y: 0, width: 1, height: 1)
+                )
+            ],
+            textItems: [
+                TextItemEntity(
+                    pageIndex: 0,
+                    sortIndex: 0,
+                    content: "フィルムA / 2026-07-17",
+                    x: 0.1,
+                    y: 0.85,
+                    fontSizeRatio: 0.045,
+                    color: LayoutColor(red: 1, green: 1, blue: 1, alpha: 0.9)
                 )
             ],
             defaultPhotoFrame: FramePreset.thinBlackBorder.photoFrame,
