@@ -358,18 +358,12 @@ final class PageEditorViewModel {
     /// テキストのドラッグ移動。translationは配置領域の正規化座標の累積移動量（写真のupdateMoveと同じ考え方）
     func updateTextMove(textItemID: UUID, translationX: Double, translationY: Double) {
         guard let base = baseTextItem(textItemID) else { return }
-        setTextPosition(x: base.x + translationX, y: base.y + translationY, for: textItemID)
+        project.moveTextItem(id: textItemID, x: base.x + translationX, y: base.y + translationY)
     }
 
     private func baseTextItem(_ textItemID: UUID) -> TextItemEntity? {
         if gestureBase == nil { gestureBase = project }
         return gestureBase?.textItems.first { $0.id == textItemID }
-    }
-
-    private func setTextPosition(x: Double, y: Double, for textItemID: UUID) {
-        guard let index = project.textItems.firstIndex(where: { $0.id == textItemID }) else { return }
-        project.textItems[index].x = x
-        project.textItems[index].y = y
     }
 
     // MARK: - スライドのスタイル・レイヤー（スライド編集コンテキスト）
