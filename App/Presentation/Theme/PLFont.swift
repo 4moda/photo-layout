@@ -22,10 +22,13 @@ enum PLFont {
 
 extension View {
     /// 見出し・ワードマークの「刻印」スタイル: 等幅＋大文字＋トラッキング。
-    /// 本文中で多用するとうるさくなるため、画面タイトル・ワードマークなど限られた箇所にのみ使う
+    /// 本文中で多用するとうるさくなるため、画面タイトル・ワードマークなど限られた箇所にのみ使う。
+    /// トラッキングで幅が伸びるため、長い和文タイトルでも折り返し・はみ出しをせず縮小に倒す
     func plStamp(size: CGFloat, weight: Font.Weight = .bold) -> some View {
         font(PLFont.stamp(size, weight: weight))
             .textCase(.uppercase)
             .tracking(size * 0.08)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
     }
 }

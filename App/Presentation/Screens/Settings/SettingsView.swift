@@ -43,5 +43,10 @@ struct SettingsView: View {
         .background(PLColor.background)
         .navigationTitle("設定")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("設定").plStamp(size: 17)
+            }
+        }
     }
 }

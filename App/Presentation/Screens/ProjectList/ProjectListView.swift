@@ -352,6 +352,9 @@ private struct NewProjectAspectSheet: View {
             .navigationTitle("用紙サイズを選んで新規作成")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("用紙サイズを選んで新規作成").plStamp(size: 15)
+                }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル") { dismiss() }
                 }
@@ -448,6 +451,15 @@ private struct FolderDetailView: View {
         .background(PLColor.background)
         .navigationTitle(isSelecting ? "\(selection.count)件選択中" : folder.name)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // フォルダ名は利用者が自由入力するため長さが読めない。plStampのlineLimit+
+            // minimumScaleFactorに任せて折り返し・はみ出しを防ぐ
+            if !isSelecting {
+                ToolbarItem(placement: .principal) {
+                    Text(folder.name).plStamp(size: 17)
+                }
+            }
+        }
         .sheet(isPresented: $showingNewProjectSheet) {
             NewProjectAspectSheet { aspect in
                 createAndOpen(aspect: aspect)
@@ -642,6 +654,9 @@ private struct ProjectCell: View {
             .navigationTitle("フォルダへ移動")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("フォルダへ移動").plStamp(size: 16)
+                }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル") { showingFolderPicker = false }
                         .accessibilityIdentifier("projectList.moveToFolder.cancel")
@@ -916,6 +931,9 @@ private struct BulkFolderPickerSheet: View {
             .navigationTitle("フォルダを設定")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("フォルダを設定").plStamp(size: 16)
+                }
                 ToolbarItem(placement: .cancellationAction) {
                     // 背後の選択モードバーにも「キャンセル」があるため、UIテストが
                     // 一意にタップできるようidentifierを付ける

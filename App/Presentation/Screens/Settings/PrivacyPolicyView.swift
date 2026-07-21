@@ -13,6 +13,11 @@ struct PrivacyPolicyView: View {
         .background(PLColor.background)
         .navigationTitle("プライバシーポリシー")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("プライバシーポリシー").plStamp(size: 14)
+            }
+        }
         .accessibilityIdentifier("privacyPolicy.scroll")
     }
 

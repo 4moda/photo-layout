@@ -13,6 +13,11 @@ struct TermsOfServiceView: View {
         .background(PLColor.background)
         .navigationTitle("利用規約")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("利用規約").plStamp(size: 17)
+            }
+        }
         .accessibilityIdentifier("termsOfService.scroll")
     }
 

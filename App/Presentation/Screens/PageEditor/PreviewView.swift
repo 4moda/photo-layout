@@ -47,6 +47,9 @@ struct PreviewView: View {
             .navigationTitle("プレビュー")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("プレビュー").plStamp(size: 17)
+                }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("閉じる") { dismiss() }
                 }

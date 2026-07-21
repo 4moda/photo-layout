@@ -51,6 +51,9 @@ struct PageOverviewView: View {
             .navigationTitle("スライド")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("スライド").plStamp(size: 17)
+                }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル") { viewModel.cancelOverview() }
                         .accessibilityIdentifier("overview.cancel")
@@ -310,6 +313,9 @@ struct PageOverviewView: View {
             .navigationTitle("比率")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("比率").plStamp(size: 17)
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("閉じる") { activePicker = nil }
                 }
@@ -344,6 +350,9 @@ struct PageOverviewView: View {
             .navigationTitle("背景色")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("背景色").plStamp(size: 17)
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("閉じる") { activePicker = nil }
                 }

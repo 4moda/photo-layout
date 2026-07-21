@@ -1588,6 +1588,11 @@ struct PageEditorView: View {
             .navigationTitle("スライド \(viewModel.currentPageIndex + 1) のレイアウト")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    // 長め＋動的な文字列（ページ番号を含む）のためplStampのminimumScaleFactorで
+                    // 幅が足りない場合に自動縮小させる
+                    Text("スライド \(viewModel.currentPageIndex + 1) のレイアウト").plStamp(size: 17)
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("閉じる") { activeSheet = nil }
                 }
