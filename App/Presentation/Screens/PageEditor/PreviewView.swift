@@ -29,7 +29,7 @@ struct PreviewView: View {
                         .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
 
                         if viewModel.pageCount > 1 {
-                            PageDotsIndicator(pageCount: viewModel.pageCount, currentIndex: currentPage)
+                            FrameCounterIndicator(pageCount: viewModel.pageCount, currentIndex: currentPage)
                         }
 
                         let size = ExportSizeCalculator.pageSize(
@@ -183,17 +183,26 @@ struct PreviewView: View {
 
 /// Instagramの投稿ページネーションを模した、現在表示中のページ位置を示すドットインジケーター。
 /// カルーセルのスワイプ位置（`currentPage`）に連動する。
-private struct PageDotsIndicator: View {
+/// フレームカウンター（現在ページ/総ページ数）。「01 / 03」とフィルムのコマ数表示を模す。
+/// ページ数は実際に数えられる内容なので、装飾のドットではなく数値で示す
+private struct FrameCounterIndicator: View {
     let pageCount: Int
     let currentIndex: Int
 
     var body: some View {
-        HStack(spacing: 6) {
-            ForEach(0..<pageCount, id: \.self) { index in
-                Circle()
-                    .fill(index == currentIndex ? Color.primary : Color.secondary.opacity(0.35))
-                    .frame(width: index == currentIndex ? 7 : 5, height: index == currentIndex ? 7 : 5)
-            }
+        HStack(spacing: 4) {
+            Text(padded(currentIndex + 1))
+                .font(PLFont.data(15, weight: .bold))
+                .foregroundStyle(PLColor.accent)
+            Text("/ \(padded(pageCount))")
+                .font(PLFont.data(13, weight: .medium))
+                .foregroundStyle(PLColor.textSecondary)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("ページ\(currentIndex + 1) / \(pageCount)")
+    }
+
+    private func padded(_ n: Int) -> String {
+        n < 10 ? "0\(n)" : "\(n)"
     }
 }
