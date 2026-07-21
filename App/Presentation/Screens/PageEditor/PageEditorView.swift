@@ -1375,7 +1375,14 @@ struct PageEditorView: View {
             }
             .background(PLColor.surface)
             .navigationTitle("枠").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("閉じる") { activeSheet = nil } } }
+            .toolbar {
+                // 和文タイトルへの刻印体（PLFont）試験導入。S01のワードマークで見た目を確認済みだが、
+                // トラッキング付きの和文は未検証のため、まずこの1画面だけで試す
+                ToolbarItem(placement: .principal) {
+                    Text("枠").plStamp(size: 17)
+                }
+                ToolbarItem(placement: .confirmationAction) { Button("閉じる") { activeSheet = nil } }
+            }
         }
         .presentationDetents([.medium, .large])
         .onAppear {
