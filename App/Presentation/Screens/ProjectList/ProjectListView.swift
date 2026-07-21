@@ -171,7 +171,7 @@ struct ProjectListView: View {
         } label: {
             Text(title)
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(mode == target ? .white : .secondary)
+                .foregroundStyle(mode == target ? PLColor.accentText : .secondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
                 .background(Capsule().fill(mode == target ? Color.accentColor : .clear))
@@ -282,7 +282,7 @@ struct ProjectListView: View {
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(PLColor.accentText)
                 .frame(width: 56, height: 56)
                 .background(Circle().fill(Color.accentColor))
                 .shadow(color: Color.accentColor.opacity(0.28), radius: 12, y: 4)
@@ -484,7 +484,7 @@ private struct FolderDetailView: View {
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(PLColor.accentText)
                 .frame(width: 56, height: 56)
                 .background(Circle().fill(Color.accentColor))
                 .shadow(color: Color.accentColor.opacity(0.28), radius: 12, y: 4)
@@ -707,7 +707,7 @@ private struct ProjectCell: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color(.systemGray5), lineWidth: 0.5)
+                .stroke(PLColor.hairline, lineWidth: 0.5)
         )
     }
 
@@ -751,14 +751,14 @@ private struct FolderPickerCard: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(isSelected ? Color.accentColor : Color(.systemGray5), lineWidth: isSelected ? 2 : 0.5)
+                            .stroke(isSelected ? Color.accentColor : PLColor.hairline, lineWidth: isSelected ? 2 : 0.5)
                     )
 
                     if isSelected {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.title3)
                             .symbolRenderingMode(.palette)
-                            .foregroundStyle(.white, Color.accentColor)
+                            .foregroundStyle(PLColor.accentText, Color.accentColor)
                             .padding(6)
                     }
                 }
@@ -1014,7 +1014,7 @@ private struct FolderCell: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color(.systemGray5), lineWidth: 0.5)
+                .stroke(PLColor.hairline, lineWidth: 0.5)
         )
     }
 

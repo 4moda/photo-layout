@@ -42,7 +42,7 @@ struct PageOverviewView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(white: 0.11).ignoresSafeArea()
+                PLColor.graphite.ignoresSafeArea()
                 carousel
                     .safeAreaInset(edge: .bottom, spacing: 0) {
                         overviewControls
@@ -361,6 +361,6 @@ private struct BackgroundColorSwatch: View {
             .fill(Color(red: color.red, green: color.green, blue: color.blue, opacity: color.alpha))
             .frame(width: diameter, height: diameter)
             // 白・薄グレーがシート地に同化しないよう、輪郭線は全色にはっきり付ける
-            .overlay(Circle().strokeBorder(Color(.systemGray3), lineWidth: 1))
+            .overlay(Circle().strokeBorder(PLColor.hairline, lineWidth: 1))
     }
 }

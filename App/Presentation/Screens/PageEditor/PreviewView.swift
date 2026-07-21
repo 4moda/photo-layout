@@ -25,7 +25,7 @@ struct PreviewView: View {
                             images: viewModel.previewImages
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 10))
-                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(.systemGray4), lineWidth: 0.5))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(PLColor.hairline, lineWidth: 0.5))
                         .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
 
                         if viewModel.pageCount > 1 {
@@ -43,6 +43,7 @@ struct PreviewView: View {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
+            .background(PLColor.background)
             .navigationTitle("プレビュー")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

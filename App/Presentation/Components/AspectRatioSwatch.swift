@@ -18,9 +18,9 @@ struct AspectRatioSwatch: View {
 
             ZStack {
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(Color(.systemGray5))
+                    .fill(PLColor.surfaceSecondary)
                 RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(Color(.systemGray4), lineWidth: 0.5)
+                    .strokeBorder(PLColor.hairline, lineWidth: 0.5)
 
                 RoundedRectangle(cornerRadius: 5)
                     .fill(Color.accentColor.opacity(0.22))

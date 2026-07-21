@@ -48,8 +48,11 @@ enum PLColor {
     /// 唯一のアクセント。ライト/ダークで色自体は変えない（セーフライトは暗室でも印画紙の上でも同じ色で機能する）
     static let accent = safelight
     static let accentPressed = safelightPressed
-    /// アクセントで塗った面（ボタン等）の上のテキスト・アイコン色
-    static let accentText = adaptive(light: print3, dark: plColor(0x24, 0x17, 0x13))
+    /// アクセントで塗った面（ボタン等）の上のテキスト・アイコン色。
+    /// accent自体がライト/ダークで変わらないため、こちらも固定色にする
+    /// （以前はadaptiveにしていたが、safelight上ではダーク側の暗い色より白の方が
+    /// コントラストが高い＝ライト/ダークで変える理由がないミスだった。白地4.87:1 vs 旧ダーク値3.57:1）
+    static let accentText = Color.white
 
     static let hairline = adaptive(
         light: plColor(0x21, 0x1D, 0x18, opacity: 0.13),

@@ -224,7 +224,7 @@ struct PageEditorView: View {
             .offset(panOffset)
             .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
             // ページ内（白）とページ外を明確に区別するため、キャンバス地を暗くする
-            .background(Color(white: 0.11))
+            .background(PLColor.graphite)
             .clipped()
             .contentShape(Rectangle())
             .gesture(stripDoubleTap(geo: geo).exclusively(before: stripSingleTap(geo: geo)))
@@ -1314,7 +1314,7 @@ struct PageEditorView: View {
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(PLColor.accentText)
                 .frame(width: 52, height: 52)
                 .background(
                     Circle()
@@ -1339,7 +1339,7 @@ struct PageEditorView: View {
             } label: {
                 Image(systemName: "square.and.arrow.down")
             }
-            .foregroundStyle(viewModel.hasPhoto ? Color.accentColor : Color.gray)
+            .foregroundStyle(viewModel.hasPhoto ? Color.accentColor : PLColor.textSecondary)
             .disabled(!viewModel.hasPhoto)
             .accessibilityIdentifier("pageEditor.export")
         }
@@ -1436,7 +1436,7 @@ struct PageEditorView: View {
                             Circle()
                                 .fill(choice.color.swiftUIColor)
                                 .frame(width: 32, height: 32)
-                                .overlay(Circle().stroke(Color(.systemGray3), lineWidth: 1))
+                                .overlay(Circle().stroke(PLColor.hairline, lineWidth: 1))
                                 .selectionHighlight(frameSheetColor == choice.color, in: Circle())
                         }
                         .buttonStyle(.plain)
@@ -1486,7 +1486,7 @@ struct PageEditorView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
                         } else {
                             RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.gray.opacity(0.2)).frame(width: 64, height: 64)
+                                .fill(PLColor.surfaceSecondary).frame(width: 64, height: 64)
                         }
                         Spacer()
                         Button { Task { await viewModel.toggleLock(placementID: placement.id) } } label: {
@@ -1657,7 +1657,7 @@ private struct TemplateThumbnail: View {
         }
         .aspectRatio(1, contentMode: .fit)
         .background(
-            RoundedRectangle(cornerRadius: 6).fill(Color.gray.opacity(0.12))
+            RoundedRectangle(cornerRadius: 6).fill(PLColor.surfaceSecondary)
         )
     }
 }
