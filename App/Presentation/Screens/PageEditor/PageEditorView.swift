@@ -1050,6 +1050,21 @@ struct PageEditorView: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.8)
         )
+        // フィルムのパーフォレーション（ミシン目）を模した、上端に沿う控えめなドット列。
+        // シグネチャーモチーフの初回導入箇所。アイコンより手前に出さずヒットテストも奪わない
+        .overlay(alignment: .top) {
+            HStack(spacing: 0) {
+                ForEach(0..<6, id: \.self) { index in
+                    Circle()
+                        .fill(Color.white.opacity(0.14))
+                        .frame(width: 4, height: 4)
+                    if index < 5 { Spacer(minLength: 0) }
+                }
+            }
+            .padding(.horizontal, 28)
+            .padding(.top, 7)
+            .allowsHitTesting(false)
+        }
         .shadow(color: .black.opacity(0.14), radius: 16, y: 8)
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
