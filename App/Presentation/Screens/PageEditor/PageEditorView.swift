@@ -1532,6 +1532,9 @@ struct PageEditorView: View {
             .navigationTitle("レイヤー順")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("レイヤー順").plStamp(size: 17)
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("閉じる") { activeSheet = nil }
                 }
@@ -1636,6 +1639,9 @@ struct PageEditorView: View {
             .navigationTitle("枠比率")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("枠比率").plStamp(size: 17)
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("閉じる") { activeSheet = nil }
                 }
