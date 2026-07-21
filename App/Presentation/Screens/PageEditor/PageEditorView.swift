@@ -1373,6 +1373,7 @@ struct PageEditorView: View {
                 }
                 .padding(20)
             }
+            .background(PLColor.surface)
             .navigationTitle("枠").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("閉じる") { activeSheet = nil } } }
         }
@@ -1519,6 +1520,8 @@ struct PageEditorView: View {
                     Text("このスライドに写真はありません").foregroundStyle(.secondary)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(PLColor.surface)
             .navigationTitle("レイヤー順")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1571,6 +1574,7 @@ struct PageEditorView: View {
                 }
                 .padding(16)
             }
+            .background(PLColor.surface)
             .navigationTitle("スライド \(viewModel.currentPageIndex + 1) のレイアウト")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1621,6 +1625,7 @@ struct PageEditorView: View {
                 }
                 .padding(20)
             }
+            .background(PLColor.surface)
             .navigationTitle("枠比率")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

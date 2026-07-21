@@ -306,6 +306,7 @@ struct PageOverviewView: View {
                 }
                 .padding(20)
             }
+            .background(PLColor.surface)
             .navigationTitle("比率")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -339,6 +340,7 @@ struct PageOverviewView: View {
                 }
                 .padding(20)
             }
+            .background(PLColor.surface)
             .navigationTitle("背景色")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

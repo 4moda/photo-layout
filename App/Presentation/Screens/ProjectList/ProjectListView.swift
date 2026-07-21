@@ -78,6 +78,7 @@ struct ProjectListView: View {
                     addMenuButton
                 }
             }
+            .background(PLColor.background)
             .navigationTitle(isSelectingRecent ? "\(recentSelection.count)件選択中" : "PhotoLayout")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -159,7 +160,7 @@ struct ProjectListView: View {
             modeButton(.folder, title: "フォルダ")
         }
         .padding(4)
-        .background(Color(.secondarySystemBackground), in: Capsule())
+        .background(PLColor.surfaceSecondary, in: Capsule())
         .padding(.horizontal, 16)
         .padding(.top, 8)
     }
@@ -340,6 +341,7 @@ private struct NewProjectAspectSheet: View {
                 }
                 .padding(20)
             }
+            .background(PLColor.surface)
             .navigationTitle("用紙サイズを選んで新規作成")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -436,6 +438,7 @@ private struct FolderDetailView: View {
                 newProjectButton
             }
         }
+        .background(PLColor.background)
         .navigationTitle(isSelecting ? "\(selection.count)件選択中" : folder.name)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingNewProjectSheet) {
@@ -628,6 +631,7 @@ private struct ProjectCell: View {
                 }
                 .padding(12)
             }
+            .background(PLColor.surface)
             .navigationTitle("フォルダへ移動")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -901,6 +905,7 @@ private struct BulkFolderPickerSheet: View {
                 }
                 .padding(12)
             }
+            .background(PLColor.surface)
             .navigationTitle("フォルダを設定")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
