@@ -5,6 +5,7 @@ struct PhotoLayoutApp: App {
     var body: some Scene {
         WindowGroup {
             AppComposition.makeRootView()
+                .tint(PLColor.accent)
         }
     }
 }
