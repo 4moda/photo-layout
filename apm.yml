@@ -1,0 +1,7 @@
+name: photo-layout
+version: 1.0.0
+targets: [claude]
+dependencies:
+  apm:
+    - nextlevelbuilder/ui-ux-pro-max-skill
+    - anthropics/claude-code/plugins/frontend-design
